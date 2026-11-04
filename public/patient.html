@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>薬歴</title>
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/assets/css/app.css">
+<link rel="stylesheet" href="/assets/css/tour.css">
+<link rel="stylesheet" href="/assets/css/patient.css">
+<script type="module" src="/assets/js/patient.js"></script>
+</head>
+<body class="app">
+<nav class="sidebar"></nav>
+<div class="main">
+  <header class="topbar"></header>
+  <nav class="crumbs"></nav>
+  <section class="panel patient-band band-top" id="band"></section>
+  <main class="content split">
+    <aside class="panel summary" id="summary">
+      <div class="panel-head">この患者の要点<span class="spacer"></span><button type="button" class="btn btn-small" id="add-note">メモを追加（Alt+M）</button></div>
+      <div class="summary-body" id="summary-body"></div>
+    </aside>
+    <section class="panel history" id="history">
+      <div class="panel-head history-head">
+        <div class="tabs" role="tablist" aria-label="薬歴の表示">
+          <button type="button" role="tab" id="tab-timeline" aria-controls="timeline" aria-selected="true">経過</button>
+          <button type="button" role="tab" id="tab-matrix" aria-controls="matrix-view" aria-selected="false" tabindex="-1">処方の推移</button>
+        </div>
+        <span class="count" id="visit-count"></span>
+        <span class="spacer"></span>
+        <span class="hint" id="history-hint"></span>
+      </div>
+      <div class="timeline" id="timeline" role="tabpanel" aria-labelledby="tab-timeline" tabindex="0"></div>
+      <div class="matrix-view" id="matrix-view" role="tabpanel" aria-labelledby="tab-matrix" hidden></div>
+    </section>
+  </main>
+  <footer class="actionbar">
+    <div class="keys"><span><kbd>↑</kbd><kbd>↓</kbd>来局を選ぶ</span><span><kbd>Alt</kbd>+<kbd>K</kbd>指導記録を記載</span><span><kbd>Alt</kbd>+<kbd>M</kbd>メモを追加</span></div>
+    <span class="spacer"></span>
+    <a class="btn" id="to-logs">閲覧記録</a>
+    <button type="button" class="btn" id="do-rx" disabled>選んだ処方でDo（Alt+D）</button>
+    <a class="btn btn-primary" id="new-rx">新規処方（Alt+N）</a>
+  </footer>
+</div>
+
+<dialog id="note-dialog" aria-labelledby="note-dialog-title">
+  <form id="note-form" novalidate>
+    <div class="panel-head" id="note-dialog-title">患者メモを追加</div>
+    <div class="dialog-body">
+      <div class="field">
+        <span class="label" id="note-category-label">分類</span>
+        <div class="radio-row wrap" role="radiogroup" aria-labelledby="note-category-label" id="note-categories"></div>
+        <span class="error-text" data-error="category"></span>
+      </div>
+      <div class="field">
+        <label for="note-body">内容</label>
+        <textarea class="input textarea" id="note-body" name="body" rows="4" maxlength="300" placeholder="例：セフェム系抗菌薬で発疹（2019年、他院）"></textarea>
+        <span class="hint counter" data-counter="note-body"></span>
+        <span class="error-text" data-error="body"></span>
+      </div>
+      <p class="hint">メモは来局をまたいで、この患者の要点にずっと表示されます。追記のみで、消せません。</p>
+    </div>
+    <div class="dialog-foot">
+      <button type="button" class="btn" data-close>キャンセル（Esc）</button>
+      <button type="submit" class="btn btn-primary">追加（Ctrl+Enter）</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="record-dialog" class="wide" aria-labelledby="record-dialog-title">
+  <form id="record-form" novalidate>
+    <div class="panel-head" id="record-dialog-title">指導記録を記載</div>
+    <div class="dialog-body">
+      <div class="record-context" id="record-context"></div>
+      <div class="soap-grid" id="soap-fields"></div>
+      <div class="record-checks">
+        <div class="field">
+          <span class="label" id="leftover-label">残薬</span>
+          <div class="radio-row" role="radiogroup" aria-labelledby="leftover-label" id="leftover"></div>
+        </div>
+        <div class="field">
+          <span class="label" id="notebook-label">お薬手帳</span>
+          <div class="radio-row" role="radiogroup" aria-labelledby="notebook-label" id="notebook"></div>
+        </div>
+      </div>
+      <span class="error-text" data-error="subjective"></span>
+      <p class="hint">記載した薬剤師の名前と日時は自動で残ります。追記のみで、消せません。</p>
+    </div>
+    <div class="dialog-foot">
+      <button type="button" class="btn" data-close>キャンセル（Esc）</button>
+      <button type="submit" class="btn btn-primary">保存（Ctrl+Enter）</button>
+    </div>
+  </form>
+</dialog>
+</body>
+</html>

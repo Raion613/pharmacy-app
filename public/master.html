@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>マスター取込</title>
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/assets/css/app.css">
+<link rel="stylesheet" href="/assets/css/tour.css">
+<link rel="stylesheet" href="/assets/css/master.css">
+<script type="module" src="/assets/js/master.js"></script>
+</head>
+<body class="app">
+<nav class="sidebar"></nav>
+<div class="main">
+  <header class="topbar"></header>
+  <nav class="crumbs"></nav>
+  <main class="content split">
+    <section class="panel history" id="history">
+      <div class="panel-head">取り込み済みのマスター<span class="count" id="import-count"></span></div>
+      <div class="history-scroll">
+        <table class="grid">
+          <thead><tr><th>公表日</th><th>マスター</th><th>ファイル</th><th class="num">取り込んだ行</th><th class="num">履歴に書いた行</th><th>取り込み</th></tr></thead>
+          <tbody id="import-rows"></tbody>
+        </table>
+      </div>
+      <div class="upcoming" id="upcoming">
+        <div class="upcoming-head">これから効く変更（薬価・調剤報酬の点数）</div>
+        <ul id="upcoming-list"></ul>
+      </div>
+    </section>
+    <section class="panel importer" id="importer">
+      <div class="panel-head">新しいマスターを取り込む</div>
+      <div class="importer-body">
+        <p class="notice notice-ng" id="unsupported" hidden></p>
+        <div class="drop" id="drop">
+          <div class="drop-icon" id="drop-icon"></div>
+          <div class="drop-text">
+            <b>支払基金の医薬品マスター・調剤行為マスター（.zip / .csv）をここにドロップ</b>
+            <span class="hint">医薬品マスターは全件（y_ALL….zip）も改定分（y_….csv）も、調剤行為マスターは全件（m….csv）を、ダウンロードしたまま入れられます。</span>
+          </div>
+          <button type="button" class="btn" id="pick" autofocus>ファイルを選ぶ</button>
+          <input type="file" id="file" accept=".zip,.csv" hidden>
+        </div>
+        <p class="file-status" id="file-status" hidden></p>
+
+        <div class="field published-field">
+          <label for="published-on">マスターの公表日</label>
+          <input class="input" id="published-on" type="date">
+          <span class="hint">ファイル名の日付（y_ALL<b>20261013</b>.zip）から自動で入ります。品目ごとの適用開始日は、マスターの変更年月日をそのまま使います。</span>
+        </div>
+
+        <div class="progress" id="progress" hidden><div class="bar"><i id="progress-bar"></i></div><span id="progress-text"></span></div>
+        <div class="preview" id="preview"></div>
+      </div>
+    </section>
+  </main>
+  <footer class="actionbar">
+    <div class="keys"><span><kbd>Ctrl</kbd>+<kbd>Enter</kbd>反映する</span><span><kbd>Esc</kbd>中止</span></div>
+    <span class="spacer"></span>
+    <button type="button" class="btn" id="cancel" hidden>中止（Esc）</button>
+    <button type="button" class="btn btn-primary" id="commit" disabled>反映する</button>
+  </footer>
+</div>
+</body>
+</html>

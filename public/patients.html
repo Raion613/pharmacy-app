@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>患者一覧</title>
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/assets/css/app.css">
+<link rel="stylesheet" href="/assets/css/tour.css">
+<link rel="stylesheet" href="/assets/css/patients.css">
+<script type="module" src="/assets/js/patients.js"></script>
+</head>
+<body class="app">
+<nav class="sidebar"></nav>
+<div class="main">
+  <header class="topbar"></header>
+  <nav class="crumbs"></nav>
+  <main class="content split">
+    <section class="panel filter" id="filter">
+      <div class="panel-head">検索条件</div>
+      <div class="panel-body filter-body">
+        <div class="field">
+          <label for="q">患者番号・氏名・カナ</label>
+          <div class="input-icon" id="q-icon"><input class="input" id="q" type="search" autocomplete="off" autofocus placeholder="例：あおき、000001"></div>
+        </div>
+        <p class="hint">カナはひらがなでも探せます。<br><kbd>↓</kbd> で一覧へ移り、<kbd>Enter</kbd> で開きます。</p>
+        <button type="button" class="btn btn-primary" id="new-patient"></button>
+      </div>
+    </section>
+    <section class="panel results" id="results">
+      <div class="panel-head"><span id="result-title">最近来局した患者</span><span class="count" id="result-count"></span></div>
+      <div class="results-scroll" tabindex="-1">
+        <table class="grid" id="patients">
+          <thead><tr><th>患者番号</th><th>氏名</th><th>生年月日</th><th>性別</th><th>注意</th><th class="num">最終来局日</th></tr></thead>
+          <tbody></tbody>
+        </table>
+        <p class="empty" id="no-result" hidden>該当する患者はいません。</p>
+      </div>
+    </section>
+  </main>
+  <footer class="actionbar">
+    <div class="keys"><span><kbd>↑</kbd><kbd>↓</kbd>選択</span><span><kbd>Enter</kbd>開く</span><span><kbd>/</kbd>検索欄へ</span><span><kbd>Alt</kbd>+<kbd>N</kbd>新規患者登録</span></div>
+  </footer>
+</div>
+
+<dialog id="patient-dialog" aria-labelledby="patient-dialog-title">
+  <form id="patient-form" novalidate>
+    <div class="panel-head" id="patient-dialog-title">新規患者登録</div>
+    <div class="dialog-body">
+      <div class="field">
+        <label for="p-name">氏名</label>
+        <input class="input" id="p-name" name="name" autocomplete="off" placeholder="例：上田　花子">
+        <span class="error-text" data-error="name"></span>
+      </div>
+      <div class="field">
+        <label for="p-kana">カナ</label>
+        <input class="input" id="p-kana" name="kana" autocomplete="off" placeholder="例：ウエダ　ハナコ（ひらがなでも可）">
+        <span class="error-text" data-error="kana"></span>
+      </div>
+      <div class="field">
+        <label for="p-birth">生年月日</label>
+        <input class="input" id="p-birth" name="birthDate" type="date" min="1900-01-01">
+        <span class="error-text" data-error="birthDate"></span>
+      </div>
+      <div class="field">
+        <span class="label" id="p-sex-label">性別</span>
+        <div class="radio-row" role="radiogroup" aria-labelledby="p-sex-label">
+          <label><input type="radio" name="sex" value="M">男</label>
+          <label><input type="radio" name="sex" value="F">女</label>
+        </div>
+        <span class="error-text" data-error="sex"></span>
+      </div>
+      <div class="field">
+        <span class="label" id="p-burden-label">負担割合（保険証の割合）</span>
+        <div class="radio-row" role="radiogroup" aria-labelledby="p-burden-label">
+          <label><input type="radio" name="burdenPercent" value="10">1割</label>
+          <label><input type="radio" name="burdenPercent" value="20">2割</label>
+          <label><input type="radio" name="burdenPercent" value="30">3割</label>
+        </div>
+        <span class="error-text" data-error="burdenPercent"></span>
+      </div>
+      <p class="hint">デモ環境です。実在の方の情報は入力しないでください。</p>
+    </div>
+    <div class="dialog-foot">
+      <button type="button" class="btn" id="cancel-patient">キャンセル（Esc）</button>
+      <button type="submit" class="btn btn-primary">登録（Enter）</button>
+    </div>
+  </form>
+</dialog>
+</body>
+</html>

@@ -1,0 +1,159 @@
+.rx-form { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.dates { gap: 14px; flex-wrap: wrap; font-weight: 400; }
+.date-field { display: flex; align-items: center; gap: 6px; }
+.date-field label { font-size: 12px; font-weight: 700; color: var(--sub); }
+.date-field .input { width: 150px; height: 30px; }
+.rps { flex: 1; min-height: 0; overflow: auto; padding: 12px; display: grid; gap: 12px; align-content: start; }
+.add-rp-row { padding: 10px 12px; border-top: 1px solid var(--border); }
+
+/* 剤 */
+.rp-edit { border: 1px solid var(--border-strong); border-radius: var(--radius); background: #fff; }
+.rp-edit:focus-within { border-color: var(--accent-line); box-shadow: 0 0 0 1px var(--accent-line); }
+.rp-edit table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.rp-edit th {
+  font-size: 11px; color: var(--sub); font-weight: 700; text-align: left; padding: 5px 8px;
+  background: #f7f9fa; border-bottom: 1px solid var(--border);
+}
+.rp-edit th.rp-no-col { width: 52px; }
+.rp-edit th.qty-col { width: 130px; }
+.rp-edit th.price-col { width: 150px; }
+.rp-edit th.cost-col { width: 96px; }
+.rp-edit th.del-col { width: 34px; }
+.rp-edit td { padding: 5px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+.rp-edit .rp-no { font-weight: 700; color: var(--accent-strong); padding-top: 11px; }
+.drug-input { width: 100%; font-weight: 700; }
+.drug-input.picked { border-color: transparent; background: #f4f8fa; }
+.drug-input.picked:focus { background: #fff; }
+.drug-meta { min-height: 18px; margin-top: 2px; font-size: 12px; color: var(--sub); display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.drug-meta .ng { color: var(--danger); font-weight: 700; }
+.qty-wrap { display: flex; align-items: center; gap: 4px; }
+.qty-wrap .input { width: 76px; }
+.qty-wrap .unit { font-size: 13px; color: var(--sub); }
+.price, .cost { padding-top: 11px !important; }
+.price .per { font-size: 11px; color: var(--sub); }
+.price .old { display: block; font-size: 11px; color: var(--sub); text-decoration: line-through; }
+.row-remove {
+  width: 26px; height: 26px; margin-top: 3px; border: 0; background: transparent; color: var(--sub); cursor: pointer; border-radius: 3px;
+}
+.row-remove:hover { background: var(--danger-soft); color: var(--danger); }
+
+/* 剤の下段：用法・日数・計算結果（入力の順に左から） */
+.rp-foot-edit { display: flex; align-items: center; gap: 10px; padding: 7px 8px 7px 60px; background: #fbfcfc; flex-wrap: wrap; }
+.rp-foot-edit label { font-size: 12px; font-weight: 700; color: var(--sub); }
+.rp-foot-edit .usage { width: 190px; }
+.rp-foot-edit .days { width: 64px; }
+.rp-calc { margin-left: auto; font-size: 13px; }
+.rp-calc strong { font-size: 16px; }
+.rp-calc .pending { color: var(--sub); }
+.rp-calc .old-points { color: var(--sub); text-decoration: line-through; margin-right: 6px; }
+
+/* 比較中：変わった薬を強調し、変わらない薬は下げる（強調だけだと目立たないため対にする） */
+.comparing tr.item.changed td { background: var(--changed); }
+.comparing tr.item.changed td:first-child { box-shadow: inset 3px 0 0 var(--changed-line); }
+.comparing tr.item.unchanged td { opacity: .45; }
+
+/* 候補一覧 */
+.suggest {
+  position: fixed; z-index: 30; margin: 0; padding: 0; list-style: none; width: 600px; max-height: 340px; overflow: auto;
+  background: #fff; border: 1px solid var(--border-strong); border-radius: var(--radius); box-shadow: 0 8px 24px rgba(0, 0, 0, .16);
+}
+.suggest li { display: grid; grid-template-columns: 1fr auto; gap: 0 12px; padding: 6px 10px; border-bottom: 1px solid var(--border); cursor: pointer; }
+.suggest li:last-child { border-bottom: 0; }
+.suggest .s-name { font-weight: 700; }
+.suggest .s-sub { grid-column: 1; font-size: 12px; color: var(--sub); }
+.suggest .s-price { grid-row: 1 / span 2; grid-column: 2; align-self: center; text-align: right; font-variant-numeric: tabular-nums; }
+.suggest .s-price .per { font-size: 11px; }
+.suggest li[aria-selected="true"] { background: var(--accent); color: #fff; }
+.suggest li[aria-selected="true"] .s-sub, .suggest li[aria-selected="true"] .per { color: #e3f4fb; }
+.suggest li[aria-selected="true"] .tag { background: transparent; color: #fff; border-color: #bfe6f6; }
+.suggest li[aria-disabled="true"] { cursor: default; background: #f7f7f7; }
+.suggest li[aria-disabled="true"] > * { opacity: .55; }
+.suggest .s-ng { color: var(--danger); font-size: 12px; font-weight: 700; }
+.suggest .s-empty { display: block; padding: 12px; color: var(--sub); cursor: default; }
+
+/* 右側の集計 */
+.rx-summary { width: 320px; flex-shrink: 0; display: flex; flex-direction: column; overflow: auto; }
+.summary-body { display: grid; gap: 12px; }
+.total-box { display: flex; align-items: baseline; gap: 8px; padding-bottom: 8px; border-bottom: 2px solid var(--accent); }
+.total-box .label { font-weight: 700; }
+.total-box .total { font-size: 30px; font-weight: 700; color: var(--accent-strong); margin-left: auto; line-height: 1.1; }
+.total-box .yen { color: var(--sub); }
+.rp-points { margin: 0; padding: 0; list-style: none; display: grid; gap: 2px; font-size: 13px; }
+.rp-points li { display: flex; justify-content: space-between; padding: 3px 0; border-bottom: 1px dotted var(--border); }
+.rp-points .usage { color: var(--sub); margin-left: 6px; }
+.compare { border-top: 1px solid var(--border); padding-top: 12px; display: grid; gap: 10px; }
+.compare .btn[aria-pressed="true"] { border-color: var(--changed-line); background: var(--changed); font-weight: 700; }
+.compare-body { display: grid; gap: 8px; }
+.compare-result { margin: 0; display: grid; gap: 4px; }
+.compare-result div { display: flex; justify-content: space-between; align-items: baseline; }
+.compare-result dt { font-size: 12px; color: var(--sub); }
+.compare-result dd { margin: 0; font-weight: 700; font-size: 16px; }
+.compare-result .diff dd { font-size: 20px; }
+.compare-result .up { color: var(--danger); }
+.compare-result .down { color: var(--ok); }
+.errors { border: 1px solid #e3a19a; background: var(--danger-soft); border-radius: var(--radius); padding: 8px 10px; }
+.errors-head { font-weight: 700; color: var(--danger); margin-bottom: 4px; }
+.errors ul { margin: 0; padding-left: 18px; font-size: 13px; }
+.errors li { cursor: pointer; }
+.errors li:hover { text-decoration: underline; }
+
+/* 1024幅のタブレット横向きでも薬品名の欄を確保する：右の集計と数値の列を詰める */
+@media (max-width: 1200px) {
+  .rx-summary { width: 240px; }
+  .total-box .total { font-size: 24px; }
+  .rp-edit th.rp-no-col { width: 44px; }
+  .rp-edit th.qty-col { width: 112px; }
+  .rp-edit th.price-col { width: 112px; }
+  .rp-edit th.cost-col { width: 76px; }
+  .qty-wrap .input { width: 64px; }
+  .rp-foot-edit { padding-left: 52px; }
+  .rp-foot-edit .usage { width: 160px; }
+}
+
+@media (max-width: 900px) {
+  .rx-summary { width: auto; }
+  .suggest { width: calc(100vw - 80px); }
+}
+
+/* 選定療養（患者希望）の薬：価格差と、特別の料金 */
+.drug-meta .sentei { color: #7a5400; }
+.special-fee { border: 1px solid #e0b44a; border-left-width: 4px; border-radius: var(--radius); background: #fff7df; padding: 8px 10px; display: grid; gap: 2px; }
+.special-fee-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-size: 13px; font-weight: 700; color: #7a5400; }
+.special-fee-head .num { font-size: 18px; }
+.special-fee .hint { margin: 0; }
+
+/* 処方箋の記載と違う薬・量を調剤したとき */
+.drug-meta .rx-diff { border: 1px solid var(--border-strong); background: #fff; border-radius: 10px; padding: 0 8px; font-size: 11px; color: var(--sub); cursor: pointer; }
+.drug-meta .rx-diff[aria-pressed="true"] { border-color: #e0b44a; background: #fff7df; color: #7a5400; font-weight: 700; }
+.rx-row td { background: #fffbef; border-top: 0; }
+.rx-diff-fields { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 2px 0 6px; }
+.rx-diff-fields .rx-label { font-size: 12px; font-weight: 700; color: #7a5400; }
+.rx-diff-fields .rx-name { flex: 1; min-width: 220px; }
+.rx-diff-fields .rx-qty { width: 70px; }
+/* 調剤した日数（処方箋より減らしたとき） */
+.rp-foot-edit .disp-label { color: var(--sub); }
+.rp-foot-edit .disp-days::placeholder { color: #9aa6ae; }
+.rp-foot-edit .days-change { width: auto; border-color: #e0b44a; background: #fff7df; }
+
+/* 疑義照会 */
+.inquiries { margin: 12px 0 4px; border-top: 1px solid var(--border); padding-top: 10px; display: grid; gap: 8px; }
+.inq-head { display: flex; align-items: baseline; gap: 10px; }
+.inq-head .spacer { flex: 1; }
+.inquiry { border: 1px solid var(--border); border-left: 4px solid var(--accent); border-radius: var(--radius); padding: 8px 10px; display: grid; gap: 6px; background: #fbfdfe; animation: inquiry-in .2s ease-out; }
+@keyframes inquiry-in { from { opacity: 0; transform: translateY(-4px); } }
+.inq-row { display: flex; align-items: center; gap: 10px; }
+.inq-row .spacer { flex: 1; }
+.inq-changed { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; }
+
+/* 会計 */
+.bill { border: 1px solid var(--border); border-radius: var(--radius); padding: 8px 10px; display: grid; gap: 6px; }
+.bill-sections { margin: 0; display: grid; gap: 2px; }
+.bill-sections div { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; }
+.bill-sections dt { color: var(--sub); }
+.bill-sections dd { margin: 0; }
+.bill-sections .sum { border-top: 1px solid var(--border); padding-top: 3px; font-weight: 700; }
+.bill-sections .charge { border-top: 2px solid var(--accent); margin-top: 4px; padding-top: 5px; font-weight: 700; font-size: 15px; }
+.bill-sections .charge dd { color: var(--accent-strong); font-size: 18px; }
+.bill-lines summary { cursor: pointer; font-size: 12px; color: var(--accent-strong); }
+.bill-lines ul { margin: 4px 0 0; padding: 0; list-style: none; display: grid; gap: 2px; font-size: 12px; }
+.bill-lines li { display: flex; justify-content: space-between; gap: 8px; }

@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>薬価照会</title>
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/assets/css/app.css">
+<link rel="stylesheet" href="/assets/css/tour.css">
+<link rel="stylesheet" href="/assets/css/drugs.css">
+<script type="module" src="/assets/js/drugs.js"></script>
+</head>
+<body class="app">
+<nav class="sidebar"></nav>
+<div class="main">
+  <header class="topbar"></header>
+  <nav class="crumbs"></nav>
+  <main class="content split">
+    <section class="panel drug-results">
+      <div class="panel-head search-head">
+        <div class="input-icon" id="q-icon"><input class="input" id="q" type="search" autocomplete="off" autofocus placeholder="品名・一般名（ひらがな可）・医薬品コード"></div>
+        <div class="date-field">
+          <label for="on">基準日</label>
+          <input class="input" id="on" type="date">
+        </div>
+        <span class="count" id="count"></span>
+      </div>
+      <div class="results-scroll" tabindex="-1">
+        <table class="grid" id="drugs">
+          <thead><tr><th>品名</th><th>区分</th><th class="num">基準日の薬価</th></tr></thead>
+          <tbody></tbody>
+        </table>
+        <p class="empty" id="empty">薬品名を入力してください。<br>例：のるばすく、アムロジピン、612170710</p>
+      </div>
+    </section>
+    <section class="panel drug-detail" id="detail">
+      <div class="panel-head">薬価の履歴</div>
+      <p class="empty">一覧から薬を選ぶと、改定ごとの薬価が出ます。</p>
+    </section>
+  </main>
+  <footer class="actionbar">
+    <div class="keys"><span><kbd>↑</kbd><kbd>↓</kbd>選択</span><span><kbd>/</kbd>検索欄へ</span></div>
+    <span class="spacer"></span>
+    <span id="revisions"></span>
+  </footer>
+</div>
+</body>
+</html>

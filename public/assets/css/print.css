@@ -1,0 +1,47 @@
+/* 領収証・明細書・お薬手帳（印刷する画面） */
+body.print-page { background: var(--bg); min-height: 100vh; }
+.print-bar { position: sticky; top: 0; display: flex; align-items: center; gap: 12px; padding: 10px 16px; background: #fff; border-bottom: 1px solid var(--border); z-index: 1; }
+.print-bar .spacer { flex: 1; }
+.sheet { max-width: 820px; margin: 16px auto 40px; display: grid; gap: 18px; }
+.sheet section { background: #fff; border: 1px solid var(--border); padding: 22px 26px; }
+.sheet h1 { margin: 0 0 12px; text-align: center; font-size: 20px; letter-spacing: .4em; }
+.sheet small { font-size: 11px; margin-left: 1px; color: var(--sub); }
+.sheet table { width: 100%; border-collapse: collapse; }
+.sheet th, .sheet td { border: 1px solid #9aa6ae; padding: 6px 8px; font-size: 13px; }
+.sheet th { background: #f2f5f7; font-weight: 700; color: #3b464f; }
+.r-head .name { font-size: 16px; font-weight: 700; }
+.r-sections { margin-top: 10px; }
+.r-sections caption { text-align: left; font-size: 12px; color: var(--sub); padding-bottom: 2px; }
+.r-sections td { text-align: right; font-variant-numeric: tabular-nums; font-size: 15px; }
+.r-sections .total { background: #eef6fb; font-weight: 700; }
+.r-money { margin-top: 10px; width: 60% !important; margin-left: auto; }
+.r-money th { text-align: left; }
+.r-money td { text-align: right; font-variant-numeric: tabular-nums; }
+.r-money .detail th, .r-money .detail td { font-weight: 400; font-size: 12px; color: var(--sub); }
+.r-money .grand th, .r-money .grand td { font-size: 17px; background: #eef6fb; }
+.sheet .note { font-size: 11px; color: var(--sub); margin: 10px 0 0; }
+.sheet .meta { font-size: 13px; margin: 0 0 8px; }
+.issuer { display: flex; justify-content: flex-end; align-items: center; gap: 14px; margin-top: 12px; font-size: 13px; }
+.issuer .stamp { width: 64px; height: 64px; border: 1px dashed #9aa6ae; display: grid; place-items: center; font-size: 11px; color: var(--sub); }
+.s-lines td:nth-child(2) { width: 70%; }
+.s-lines .drug { font-size: 12px; color: #3b464f; padding-left: 1em; }
+.s-lines tfoot td { font-weight: 700; }
+
+/* お薬手帳：シール（幅 90mm 前後）と QR コード */
+.techo { display: flex; gap: 24px; align-items: flex-start; flex-wrap: wrap; }
+.sticker { width: 90mm; border: 1px solid #333; padding: 6px 8px; font-size: 12px; background: #fff; }
+.sticker header { display: flex; justify-content: space-between; border-bottom: 1px solid #333; padding-bottom: 3px; margin-bottom: 4px; }
+.t-rp { padding: 3px 0; border-bottom: 1px dotted #999; }
+.t-drug { display: flex; justify-content: space-between; gap: 8px; }
+.t-usage { padding-left: 1em; }
+.sticker footer { margin-top: 4px; font-size: 11px; }
+.qr-block { display: grid; gap: 4px; justify-items: start; }
+.qr-block p { margin: 0; font-size: 13px; }
+.qr-block .raw pre { max-width: 420px; white-space: pre-wrap; font-size: 11px; background: #f6f8f9; padding: 6px; }
+
+@media print {
+  body.print-page { background: #fff; }
+  .print-bar, .qr-block .raw { display: none; }
+  .sheet { margin: 0; max-width: none; }
+  .sheet section { border: 0; padding: 0; break-after: page; }
+}

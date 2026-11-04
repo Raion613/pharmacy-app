@@ -1,0 +1,20 @@
+{
+  "name": "pharmacy-app",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test",
+    "dev": "wrangler pages dev public --port 8788",
+    "db:init": "wrangler d1 execute pharmacy --local --file=db/schema.sql",
+    "db:import": "node scripts/import-master.js && wrangler d1 execute pharmacy --local --file=db/generated/master.sql",
+    "db:seed": "node scripts/seed-demo.js && wrangler d1 execute pharmacy --local --file=db/generated/seed.sql",
+    "db:reset": "npm run db:init && npm run db:import && npm run db:seed",
+    "e2e": "node e2e/keyboard-flow.js",
+    "e2e:master": "node e2e/master-import.js"
+  },
+  "devDependencies": {
+    "playwright-core": "^1.64.1",
+    "wrangler": "^4.157.0"
+  }
+}

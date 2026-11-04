@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>処方入力</title>
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/assets/css/app.css">
+<link rel="stylesheet" href="/assets/css/tour.css">
+<link rel="stylesheet" href="/assets/css/patient.css">
+<link rel="stylesheet" href="/assets/css/rx.css">
+<script type="module" src="/assets/js/rx.js"></script>
+</head>
+<body class="app">
+<nav class="sidebar"></nav>
+<div class="main">
+  <header class="topbar"></header>
+  <nav class="crumbs"></nav>
+  <section class="panel patient-band band-top" id="band"></section>
+  <main class="content split">
+    <section class="panel rx-form">
+      <div class="panel-head dates">
+        <div class="date-field">
+          <label for="prescribed-on">処方日</label>
+          <input class="input" type="date" id="prescribed-on">
+        </div>
+        <div class="date-field">
+          <label for="dispensed-on">調剤日</label>
+          <input class="input" type="date" id="dispensed-on">
+        </div>
+        <div class="date-field">
+          <label for="handbook">お薬手帳</label>
+          <select class="input" id="handbook">
+            <option value="paper">提示あり（紙）</option>
+            <option value="electronic">提示あり（電子版）</option>
+            <option value="none">提示なし</option>
+          </select>
+        </div>
+        <span class="tag tag-warn" id="revision-tag" hidden></span>
+        <span class="error-text" id="date-error"></span>
+        <span class="spacer"></span>
+        <span class="hint" id="do-note" hidden></span>
+      </div>
+      <div class="rps" id="rps"></div>
+      <div class="add-rp-row">
+        <button type="button" class="btn" id="add-rp">剤を追加（Alt+R）</button>
+      </div>
+      <section class="inquiries" id="inquiries-box">
+        <div class="inq-head"><b>疑義照会</b><span class="hint">処方医に問い合わせたときに記録します（残薬調整・重複投薬・相互作用など）</span>
+          <span class="spacer"></span><button type="button" class="btn btn-small" id="add-inquiry">照会を追加（Alt+Q）</button></div>
+        <div id="inquiries"></div>
+      </section>
+    </section>
+
+    <aside class="panel rx-summary">
+      <div class="panel-head">会計</div>
+      <div class="panel-body summary-body">
+        <div class="total-box">
+          <span class="label">薬剤料</span>
+          <span class="total num" id="total">—</span>
+          <span class="yen num" id="total-yen"></span>
+        </div>
+        <p class="hint" id="total-note">調剤日の薬価で計算します。</p>
+        <div class="special-fee" id="special-fee" hidden>
+          <div class="special-fee-head"><span>特別の料金（選定療養・消費税込み）</span><span class="num" id="special-fee-yen"></span></div>
+          <p class="hint" id="special-fee-how"></p>
+          <p class="hint">保険の薬剤料とは別に、患者から受け取ります。</p>
+        </div>
+        <ol class="rp-points" id="rp-points"></ol>
+
+        <div class="bill" id="bill">
+          <dl class="bill-sections">
+            <div><dt>調剤技術料</dt><dd class="num" id="bill-tech">—</dd></div>
+            <div><dt>薬学管理料</dt><dd class="num" id="bill-mgmt">—</dd></div>
+            <div><dt>薬剤料</dt><dd class="num" id="bill-drug">—</dd></div>
+            <div><dt>その他</dt><dd class="num" id="bill-other">—</dd></div>
+            <div class="sum"><dt>合計</dt><dd class="num" id="bill-total">—</dd></div>
+            <div><dt id="bill-burden-label">一部負担金</dt><dd class="num" id="bill-copay">—</dd></div>
+            <div><dt>保険外（選定療養）</dt><dd class="num" id="bill-special">—</dd></div>
+            <div class="charge"><dt>窓口で受け取る額</dt><dd class="num" id="bill-charge">—</dd></div>
+          </dl>
+          <details class="bill-lines"><summary>算定する項目</summary><ul id="bill-lines"></ul></details>
+          <p class="hint" id="bill-note"></p>
+        </div>
+
+        <div class="compare">
+          <button type="button" class="btn" id="compare-toggle" aria-pressed="false">改定をまたいで比べる（Alt+C）</button>
+          <div class="compare-body" id="compare-body" hidden>
+            <div class="date-field">
+              <label for="compare-on">比べる日付</label>
+              <input class="input" type="date" id="compare-on">
+            </div>
+            <dl class="compare-result">
+              <div><dt id="compare-label">比較日</dt><dd class="num" id="compare-total">—</dd></div>
+              <div><dt>調剤日</dt><dd class="num" id="compare-current">—</dd></div>
+              <div class="diff"><dt>差</dt><dd class="num" id="compare-diff">—</dd></div>
+            </dl>
+            <p class="hint">薬価が変わった薬を黄色で示し、変わらない薬は薄く表示します。</p>
+          </div>
+        </div>
+
+        <div class="errors" id="errors" hidden>
+          <div class="errors-head">保存できません</div>
+          <ul id="error-list"></ul>
+        </div>
+      </div>
+    </aside>
+  </main>
+  <footer class="actionbar">
+    <div class="keys">
+      <span><kbd>Enter</kbd>次へ／候補を確定</span>
+      <span><kbd>↑</kbd><kbd>↓</kbd>候補</span>
+      <span>空欄で<kbd>Enter</kbd>用法・日数へ</span>
+      <span><kbd>Ctrl</kbd>+<kbd>Del</kbd>行を削除</span>
+      <span><kbd>Alt</kbd>+<kbd>H</kbd>処方箋と違う</span>
+      <span><kbd>Alt</kbd>+<kbd>Q</kbd>疑義照会</span>
+    </div>
+    <span class="spacer"></span>
+    <a class="btn" id="back">薬歴へ戻る</a>
+    <button type="button" class="btn btn-primary" id="save">保存（Ctrl+Enter）</button>
+  </footer>
+</div>
+
+<datalist id="usages">
+  <option value="1日1回朝食後"></option>
+  <option value="1日1回夕食後"></option>
+  <option value="1日1回就寝前"></option>
+  <option value="1日2回朝夕食後"></option>
+  <option value="1日3回毎食後"></option>
+  <option value="1日3回毎食前"></option>
+  <option value="1日3回毎食間"></option>
+</datalist>
+<ul class="suggest" id="suggest" role="listbox" hidden></ul>
+</body>
+</html>

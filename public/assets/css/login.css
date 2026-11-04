@@ -1,0 +1,19 @@
+body.login { display: grid; place-items: center; padding: 24px; background: #e9eef1; }
+.login-box { width: 380px; max-width: 100%; display: grid; gap: 14px; }
+.login-title { display: flex; align-items: center; gap: 12px; }
+.login-title .mark {
+  width: 44px; height: 44px; display: grid; place-items: center; border-radius: 8px;
+  background: var(--accent); color: #fff; font-weight: 700; font-size: 22px;
+}
+.login-title h1 { font-size: 19px; }
+.login-title p { margin: 0; font-size: 12px; color: var(--sub); }
+.login-fields { display: grid; gap: 12px; padding: 18px; }
+.login-fields .btn { height: 38px; margin-top: 4px; }
+.demo-note { padding: 10px 14px; border: 1px dashed var(--accent-line); border-radius: var(--radius); background: #f6fbfd; }
+.demo-note h2 { font-size: 12px; color: var(--accent-strong); }
+.demo-note p { margin: 2px 0 4px; }
+.demo-note code { padding: 0 4px; background: #fff; border: 1px solid var(--border); border-radius: 2px; font-size: 13px; }
+.demo-note .btn { height: 26px; padding: 0 8px; font-size: 12px; }
+.data-note { margin: 0; font-size: 12px; color: var(--sub); }
+.login-title .tour-button { margin-left: auto; height: 28px; padding: 0 10px; font-size: 12px; border-color: var(--accent-line); color: var(--accent-strong); }
+.login-title .tour-button:hover { background: var(--accent-soft); }

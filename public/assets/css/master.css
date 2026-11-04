@@ -1,0 +1,60 @@
+.history { flex: 1.15; min-width: 0; display: flex; flex-direction: column; }
+.history-scroll { flex: 1; min-height: 0; overflow: auto; }
+.history .grid tbody tr { cursor: default; }
+.history .grid tr.latest td { background: var(--accent-soft); font-weight: 700; }
+.history .grid tr.latest td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+.upcoming { border-top: 1px solid var(--border); padding: 8px 12px 10px; }
+.upcoming-head { font-size: 12px; font-weight: 700; color: var(--sub); margin-bottom: 4px; }
+.upcoming ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 3px; font-size: 13px; }
+.upcoming .sub { color: var(--sub); }
+
+.importer { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.importer-body { padding: 14px; overflow: auto; display: grid; gap: 14px; align-content: start; }
+
+/* ドロップ先。ファイルを持って重ねると青く、読み込み中は点滅、読めたら緑の線 */
+.drop {
+  display: flex; align-items: center; gap: 14px; padding: 22px 18px; border: 2px dashed var(--border-strong);
+  border-radius: 6px; background: #fafbfc; transition: border-color .15s, background .15s, transform .15s;
+}
+.drop-icon { color: var(--sub); transition: color .15s, transform .15s; }
+.drop-text { flex: 1; display: grid; gap: 4px; }
+.drop.over { border-color: var(--accent); background: var(--accent-soft); transform: scale(1.01); }
+.drop.over .drop-icon { color: var(--accent); transform: translateY(-3px); }
+.drop.reading { animation: drop-reading 1s ease-in-out infinite alternate; }
+@keyframes drop-reading { from { background: #fafbfc; } to { background: var(--accent-soft); } }
+.drop.loaded { border-style: solid; border-color: #7fc59a; background: #f6fbf7; }
+.drop.loaded .drop-icon { color: var(--ok); }
+.file-status { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: -6px 0 0; font-size: 13px; }
+.file-status .sub { color: var(--sub); font-size: 12px; }
+
+.published-field { max-width: 560px; }
+.published-field .input { width: 170px; }
+
+.progress { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--sub); }
+.progress .bar { flex: 1; max-width: 320px; height: 8px; border-radius: 4px; background: var(--head); overflow: hidden; }
+.progress .bar i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .2s ease-out; }
+
+.notice { margin: 0; padding: 9px 12px; border-radius: var(--radius); border: 1px solid; font-size: 13px; font-weight: 700; display: block; }
+.notice-ng { border-color: #e3a19a; background: var(--danger-soft); color: var(--danger); }
+.notice-warn { border-color: #e0b44a; background: #fff7df; color: #7a5400; }
+.notice-ok { border-color: #7fc59a; background: var(--ok-soft); color: var(--ok); }
+
+.preview { display: grid; gap: 10px; }
+.preview.shown { animation: preview-in .25s ease-out; }
+@keyframes preview-in { from { opacity: 0; transform: translateY(6px); } }
+.preview-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
+.preview-head b { font-size: 16px; }
+.preview-head span { color: var(--sub); font-size: 13px; }
+.tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.tile { display: grid; gap: 2px; padding: 8px 10px; border: 1px solid var(--border); border-top-width: 3px; border-radius: var(--radius); }
+.tile span { font-size: 12px; color: var(--sub); }
+.tile b { font-size: 20px; font-variant-numeric: tabular-nums; }
+.tile.t-add { border-top-color: var(--accent); }
+.tile.t-change { border-top-color: var(--changed-line); }
+.tile.t-remove { border-top-color: var(--danger); }
+.scheduled { margin: 0; display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 13px; }
+.examples-title { font-size: 12px; font-weight: 700; color: var(--sub); margin-bottom: 2px; }
+.examples table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.examples td { padding: 4px 6px; border-bottom: 1px solid var(--border); }
+.examples .sub { color: var(--sub); font-size: 12px; }
+.examples .arrow { width: 1em; color: var(--sub); text-align: center; }
