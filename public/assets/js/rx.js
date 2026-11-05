@@ -8,14 +8,18 @@ import { calcRp, parseQuantity, formatQuantity, dailyCost, formatYen, formatSen,
 import { calcFees, copayYen } from "./chozai-fee.js";
 import { icon } from "./icons.js";
 import { setTour, autoStartTour } from "./tour.js";
+import { checkPediatricDose, CHILD_AGE_LIMIT } from "./pediatric-dose.js";
+import { latestByItem, labText } from "./lab-items.js";
+import { ageOn } from "./guidance-suggest.js";
 
 const params = new URLSearchParams(location.search);
 const patientId = params.get("patient");
 const fromId = params.get("from");
+const receptionId = params.get("reception") === null ? null : Number(params.get("reception")); // 受付状況の画面から入力したとき
 
 renderShell({ page: "patients", title: "処方入力", crumbs: [{ label: "患者一覧", href: "/patients" }, { label: "処方入力" }] });
 
-const { patient, notes, prescriptions } = await api(`/api/patients/${patientId}?purpose=rx`);
+const { patient, notes, prescriptions, measurements } = await api(`/api/patients/${patientId}?purpose=rx`);
 setCrumbs([
   { label: "患者一覧", href: "/patients" },
   { label: `${patient.name}（${patient.patientNo}）`, href: `/patient?id=${patient.id}` },
@@ -280,6 +284,7 @@ function updateSummary() {
   $("#total-note").textContent = pending ? "入力途中の剤は合計に含めていません。" : `調剤日 ${formatDate(state.dispensedOn)} の薬価で計算しています。`;
   updateSpecialFee(done);
   updateBill(infos, done, pending);
+  updatePediatric();
   $("#rp-points").innerHTML = state.rps.map((rp, r) => {
     const x = infos[r];
     if (x.state === "empty") return "";
@@ -287,6 +292,50 @@ function updateSummary() {
   }).join("");
   if (state.compare) updateCompareSummary(infos);
 }
+
+// ---------- 小児の分量 ----------
+// 調剤日の年齢が15歳未満なら、薬ごとに体重当たりの量を添付文書の小児の用量と比べる（pediatric-dose.js）
+const PEDS_LABEL = { ok: "範囲内", low: "少ない", high: "多い", over: "上限超え", check: "確認" };
+
+function updatePediatric() {
+  const box = $("#peds");
+  box.hidden = ageOn(patient.birthDate, state.dispensedOn) >= CHILD_AGE_LIMIT;
+  if (box.hidden) return;
+  const weight = latestByItem(measurements, state.dispensedOn).weight ?? null;
+  $("#peds-weight").textContent = weight
+    ? `${ageOn(patient.birthDate, state.dispensedOn)}歳・体重 ${labText("weight", weight.valueMilli)}（${formatDate(weight.measuredOn)}）`
+    : `${ageOn(patient.birthDate, state.dispensedOn)}歳・体重の記録なし`;
+  const rows = [];
+  for (const rp of state.rps) {
+    for (const it of rp.items) {
+      const info = itemInfo(it);
+      if (info.state !== "ok") continue;
+      const r = checkPediatricDose({ drug: it.drug, dailyQtyMilli: info.calc.dailyQtyMilli, usage: rp.usage, weightMilli: weight?.valueMilli ?? null });
+      if (r) rows.push({ name: it.drug.name, r });
+    }
+  }
+  $("#peds-list").innerHTML = rows.length
+    ? rows.map(({ name, r }) => `<li class="peds-${r.status}"><span class="tag">${PEDS_LABEL[r.status]}</span><b>${escapeHtml(name)}</b>
+        <div>${escapeHtml(r.message)}</div>${r.rangeText ? `<div class="hint">${escapeHtml(r.ingredient)}：${escapeHtml(r.rangeText)}（${escapeHtml(r.source)}）</div>` : ""}</li>`).join("")
+    : '<li class="none">確かめる対象の薬はまだありません</li>';
+}
+
+$("#peds-weight-save").addEventListener("click", async () => {
+  const input = $("#peds-weight-input");
+  try {
+    const list = await api(`/api/patients/${patient.id}/measurements`, {
+      method: "POST", body: { measuredOn: today(), source: "manual", values: [{ item: "weight", value: input.value }] },
+    });
+    measurements.splice(0, measurements.length, ...list);
+    input.value = "";
+    updatePediatric();
+    toast("体重を保存しました");
+  } catch (err) {
+    if (!(err instanceof ApiError) || err.status !== 422) throw err;
+    toast(err.details[0].message, "error");
+    input.focus();
+  }
+});
 
 function updateCompareSummary(infos) {
   const cmp = state.rps.map((rp) => rpInfo(rp, comparePriceOf));
@@ -856,7 +905,7 @@ async function save() {
   clearErrors();
 
   const body = {
-    patientId: patient.id, prescribedOn: state.prescribedOn, dispensedOn: state.dispensedOn, handbook: state.handbook, rps: [],
+    patientId: patient.id, prescribedOn: state.prescribedOn, dispensedOn: state.dispensedOn, handbook: state.handbook, rps: [], receptionId,
     inquiries: state.inquiries.map((q) => ({ kind: q.kind, content: q.content, answer: q.answer, changed: q.changed, shortReason: q.shortReason })),
   };
   const elementOf = new Map([["prescribedOn", prescribedInput], ["dispensedOn", dispensedInput], ["handbook", $("#handbook")]]);
@@ -902,7 +951,7 @@ async function save() {
     const saved = await api("/api/prescriptions", { method: "POST", body });
     state.dirty = false;
     toastNext(`処方を保存しました（合計 ${pointsText(saved.totalPoints)}・窓口で ${(saved.copayYen + (saved.specialFeeYen ?? 0)).toLocaleString()}円）`);
-    location.href = `/patient?id=${patient.id}&saved=${saved.id}`;
+    location.href = receptionId === null ? `/patient?id=${patient.id}&saved=${saved.id}` : "/board";
   } catch (err) {
     state.saving = false;
     $("#save").disabled = false;
@@ -1049,6 +1098,14 @@ setTour("rx", [
     title: "改定をまたいで比べる",
     body: `<p><kbd>Alt</kbd>+<kbd>C</kbd> で、同じ処方を別の日付の薬価で計算して並べます。比べる日付は、選んだ薬の薬価が変わる日（調剤日より後に無ければ、直前に変わった日の前日）になります。</p>
       <p>薬価が変わった薬は<strong>黄色</strong>で示し、変わらない薬は薄く表示します。</p>`,
+  },
+  {
+    target: "#peds",
+    optional: true,
+    placement: "left",
+    title: "小児の分量",
+    body: `<p>15歳未満の患者だけに出ます。薬ごとに、1日量を成分の量（mg）に直し、<strong>体重1kg当たりの量</strong>を添付文書の小児の用量と比べます。</p>
+      <p>範囲内は緑、少ない・多いは黄、上限を超えると赤です。体重はこの欄から保存できます（薬歴の検査値と同じ記録）。保存は止めません。判断は薬剤師がします。</p>`,
   },
   {
     target: "#save",

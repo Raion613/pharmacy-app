@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>調剤監査</title>
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/assets/css/app.css">
+<link rel="stylesheet" href="/assets/css/tour.css">
+<link rel="stylesheet" href="/assets/css/features.css">
+<script type="module" src="/assets/js/inspect.js"></script>
+</head>
+<body class="app">
+<nav class="sidebar"></nav>
+<div class="main">
+  <header class="topbar"></header>
+  <nav class="crumbs"></nav>
+  <section class="panel patient-band band-top" id="band"></section>
+  <main class="content split inspect-page">
+    <section class="panel inspect-items">
+      <div class="panel-head">処方の薬<span class="count" id="item-count"></span><span class="spacer"></span><span class="hint" id="rx-date"></span></div>
+      <ul class="check-items" id="check-items"></ul>
+    </section>
+    <section class="panel inspect-scan">
+      <div class="panel-head">バーコードを読む</div>
+      <div class="panel-body scan-body">
+        <div class="field">
+          <label for="scan-input">取り出した薬の箱のバーコード（読み取り機で読むと、ここに入って自動で照合します）</label>
+          <div class="input-icon"><span id="scan-icon"></span><input class="input scan-input" id="scan-input" autocomplete="off" spellcheck="false" placeholder="(01)14987…(17)…(10)…"></div>
+          <span class="error-text" id="scan-error"></span>
+        </div>
+        <div class="demo-scan" id="demo-scan">
+          <span class="hint">デモ用（手元に薬の箱が無いとき）：</span>
+        </div>
+        <ol class="scan-log" id="scan-log"></ol>
+        <section class="past" id="past" hidden></section>
+      </div>
+    </section>
+  </main>
+  <footer class="actionbar">
+    <div class="keys"><span>読み取り機は <kbd>Enter</kbd> まで送ってきます</span><span><kbd>Ctrl</kbd>+<kbd>Enter</kbd>監査を保存</span></div>
+    <span class="spacer"></span>
+    <a class="btn" id="back">戻る</a>
+    <button type="button" class="btn btn-primary" id="save" disabled>監査を保存（Ctrl+Enter）</button>
+  </footer>
+</div>
+</body>
+</html>

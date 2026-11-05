@@ -1,0 +1,75 @@
+/* 薬歴画面に足した部品：検査値、会話の文字起こし、指導記録を書く画面の右側（会話・提案・メッセージ）、検査値の入力 */
+
+/* 左：検査値・メッセージ・トレーシングレポート */
+.labs ul, .line-summary ul, .tracing-summary ul { margin: 0; padding: 0; list-style: none; border: 1px solid var(--border); border-radius: var(--radius); }
+.labs li { display: grid; grid-template-columns: 1fr auto; gap: 0 8px; padding: 4px 8px; border-bottom: 1px solid var(--border); }
+.labs li:last-child, .line-summary li:last-child, .tracing-summary li:last-child { border-bottom: 0; }
+.labs .name { font-weight: 700; font-size: 12.5px; }
+.labs .value { font-weight: 700; }
+.labs .trend { margin-left: 4px; color: var(--sub); cursor: help; }
+.labs .since { grid-column: 1 / -1; font-size: 11px; color: var(--sub); }
+.labs .none { font-size: 12px; color: var(--sub); padding: 3px 8px; border: 1px dashed var(--border); border-radius: var(--radius); }
+.line-summary li, .tracing-summary li { padding: 5px 8px; border-bottom: 1px solid var(--border); font-size: 13px; }
+.line-summary li { background: #f3fbf4; }
+.line-summary .meta { display: block; font-size: 11px; color: var(--sub); }
+.line-summary h3 a { margin-left: auto; font-size: 11px; }
+.home-flag a { text-decoration: none; }
+
+/* 経過のカード：会話 */
+.conv { border: 1px solid var(--border); border-radius: var(--radius); background: #fafcfd; margin-bottom: 6px; }
+.conv summary { cursor: pointer; padding: 4px 8px; font-size: 12.5px; font-weight: 700; color: var(--accent-strong); display: flex; align-items: center; gap: 5px; }
+.conv summary .meta { margin-left: auto; font-weight: 400; color: var(--sub); font-size: 11px; }
+.conv .transcript { border-top: 1px solid var(--border); }
+.transcript { padding: 6px 8px; max-height: 220px; overflow: auto; font-size: 12.5px; display: grid; gap: 3px; background: #fff; }
+.transcript p { margin: 0; }
+.transcript p b { display: inline-block; min-width: 3.6em; margin-right: 4px; font-size: 11px; color: var(--sub); }
+.transcript p.pt b { color: #1d6b3a; }
+.transcript .meta { font-size: 11px; color: var(--sub); }
+
+/* 指導記録を書く画面：左に S・O・A・P、右に支援 */
+dialog.assist-dialog { width: 1180px; }
+.assist-layout { display: grid; grid-template-columns: minmax(0, 1fr) 400px; max-height: calc(100vh - 140px); }
+.assist-layout > .dialog-body { overflow: auto; }
+.record-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.record-tools .input-small { height: 26px; font-size: 12px; max-width: 180px; }
+.assist { border-left: 1px solid var(--border); background: #f7f9fa; overflow: auto; padding: 12px; display: grid; gap: 12px; align-content: start; }
+.assist h3 { font-size: 12.5px; color: var(--sub); display: flex; gap: 6px; align-items: baseline; margin-bottom: 4px; }
+.assist h3 .sub, .assist h4 .sub { font-weight: 400; font-size: 11px; }
+.assist h4 { margin: 8px 0 4px; font-size: 12px; display: flex; gap: 6px; align-items: baseline; }
+.assist .hint { margin: 4px 0; }
+.conv-actions { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+#rec-toggle.recording { background: var(--danger); border-color: var(--danger); color: #fff; }
+.rec-time { color: var(--danger); font-weight: 700; animation: blink 1s steps(2, start) infinite; }
+@keyframes blink { to { visibility: hidden; } }
+.assist .transcript { border: 1px solid var(--border); border-radius: var(--radius); }
+.check-row { display: flex; gap: 6px; align-items: baseline; padding: 4px 6px; font-size: 12.5px; border: 1px solid var(--border); border-radius: var(--radius); background: #fff; margin-bottom: 3px; cursor: pointer; }
+.check-row:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
+.suggestions, .line-list { margin: 0; padding: 0; list-style: none; display: grid; gap: 5px; }
+.suggestions li { background: #fff; border: 1px solid var(--border); border-radius: var(--radius); padding: 5px 8px; font-size: 12.5px; }
+.suggestions li.sg-patient { box-shadow: inset 3px 0 0 var(--danger); }
+.suggestions li.sg-history { box-shadow: inset 3px 0 0 var(--accent); }
+.suggestions li.none { color: var(--sub); border-style: dashed; }
+.sg-head { display: flex; align-items: center; gap: 6px; }
+.sg-head b { flex: 1; }
+.sg-plan { margin-top: 2px; }
+.sg-reason { font-size: 11px; color: var(--sub); }
+.line-list li { background: #f3fbf4; border: 1px solid #bfe3c8; border-radius: var(--radius); padding: 5px 8px; font-size: 12.5px; display: grid; gap: 2px; }
+.line-list .meta { font-size: 11px; color: var(--sub); }
+.line-list .btn { justify-self: end; }
+textarea.flash { animation: flash 1.1s ease-out; }
+
+/* 検査値の入力 */
+.lab-top { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; }
+.lab-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px 14px; }
+.lab-cell { display: grid; gap: 2px; }
+.lab-cell label { font-size: 12px; font-weight: 700; color: var(--sub); }
+.lab-input { display: flex; align-items: center; gap: 4px; }
+.lab-input .input { width: 100%; }
+.lab-input .unit { font-size: 11px; color: var(--sub); white-space: nowrap; min-width: 5.5em; }
+.lab-input .input.flash { animation: flash 1.6s ease-out; }
+.labs.flash { animation: flash 1.6s ease-out; }
+
+@media (max-width: 1200px) {
+  .assist-layout { grid-template-columns: minmax(0, 1fr) 320px; }
+  .lab-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

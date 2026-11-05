@@ -34,6 +34,17 @@
       <button class="btn btn-primary" type="submit">ログイン</button>
     </div>
   </form>
+  <form id="mfa-form" class="panel" novalidate hidden>
+    <div class="panel-body login-fields">
+      <div class="field">
+        <label for="mfa-code">認証アプリの6桁</label>
+        <input class="input" id="mfa-code" name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6">
+      </div>
+      <p class="hint">多要素認証を設定したアカウントです。スマホの認証アプリに出ている数字を入れてください（5分以内）。</p>
+      <p class="error-text" id="mfa-error" role="alert" hidden></p>
+      <button class="btn btn-primary" type="submit">確かめてログイン</button>
+    </div>
+  </form>
   <section class="demo-note">
     <h2>デモ用アカウント</h2>
     <p>ログインID <code>demo</code> ／ パスワード <code>pharmacy-demo</code></p>

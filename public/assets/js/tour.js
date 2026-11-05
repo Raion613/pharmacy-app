@@ -7,7 +7,7 @@
 //     placement: "bottom",    … 吹き出しを置きたい向き（入らなければ他の向きに回す）
 //     optional: true }        … 部品が無ければ飛ばす（例：薬歴が0件の患者）
 
-const VERSION = "2"; // 説明の中身を大きく変えたら上げる（見た人にも、初回扱いでもう一度流す）
+const VERSION = "3"; // 説明の中身を大きく変えたら上げる（見た人にも、初回扱いでもう一度流す）
 const storageKey = (page) => `tour:${page}`;
 
 let page = null;

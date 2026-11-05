@@ -4,7 +4,7 @@ import { HttpError, isDate, todayJst, daysBetween, nowIso } from "./http.js";
 import { pricesAt, STATUS_MESSAGE } from "./prices.js";
 import { feeContext, feeLookup } from "./fees.js";
 import { auditStatement } from "./audit.js";
-import { recordsByPrescription } from "./records.js";
+import { recordsByPrescription, conversationsByPrescription } from "./records.js";
 
 const MAX_RPS = 20;
 const MAX_ITEMS_PER_RP = 15;
@@ -47,6 +47,8 @@ export function validatePrescription(body, today = todayJst()) {
     }
   }
   if (!HANDBOOK.includes(body.handbook)) err("handbook", "お薬手帳の提示を選んでください");
+  const receptionId = body.receptionId ?? null;
+  if (receptionId !== null && !Number.isInteger(receptionId)) err("receptionId", "受付の指定が不正です");
 
   const inquiries = [];
   if (!Array.isArray(body.inquiries)) err("inquiries", "疑義照会の形が不正です");
@@ -126,7 +128,7 @@ export function validatePrescription(body, today = todayJst()) {
   }
 
   if (errors.length > 0) throw new HttpError(422, "入力に誤りがあります", errors);
-  return { patientId: body.patientId, prescribedOn, dispensedOn, handbook: body.handbook, rps, inquiries };
+  return { patientId: body.patientId, prescribedOn, dispensedOn, handbook: body.handbook, rps, inquiries, receptionId };
 }
 
 function quantity(value, path, err) {
@@ -142,6 +144,13 @@ function quantity(value, path, err) {
 // 調剤日時点の薬価と点数表で計算し、処方・剤・明細・疑義照会・算定項目・アクセスログを1つのトランザクションで保存する。
 export async function createPrescription(db, user, body) {
   const rx = validatePrescription(body);
+  if (rx.receptionId !== null) {
+    const r = await db.prepare(
+      "SELECT patient_id, (SELECT 1 FROM prescriptions WHERE reception_id = ?1) AS used FROM receptions WHERE id = ?1",
+    ).bind(rx.receptionId).first();
+    if (!r || r.patient_id !== rx.patientId) throw new HttpError(422, "入力に誤りがあります", [{ path: "receptionId", message: "この患者の受付ではありません" }]);
+    if (r.used) throw new HttpError(422, "入力に誤りがあります", [{ path: "receptionId", message: "この受付の処方はもう入力されています" }]);
+  }
   const bill = await billPrescription(db, rx);
 
   // ID を先に採番しておけば、親子の行を1回の batch でまとめて入れられる。
@@ -151,11 +160,15 @@ export async function createPrescription(db, user, body) {
   const statements = [
     db.prepare(
       `INSERT INTO prescriptions (id, patient_id, prescribed_on, dispensed_on, handbook, drug_points, total_points, burden_percent,
-                                  copay_yen, special_fee_yen, special_fee_method, created_at, created_by)
-       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)`,
+                                  copay_yen, special_fee_yen, special_fee_method, reception_id, created_at, created_by)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)`,
     ).bind(id, rx.patientId, rx.prescribedOn, rx.dispensedOn, rx.handbook, bill.drugPoints, bill.totalPoints, bill.burdenPercent,
-      bill.copayYen, bill.special?.yen ?? null, bill.special?.method ?? null, now, user.id),
+      bill.copayYen, bill.special?.yen ?? null, bill.special?.method ?? null, rx.receptionId, now, user.id),
   ];
+  // 受付から入力したときは、業務の進み具合に「入力済み」を足す
+  if (rx.receptionId !== null) {
+    statements.push(db.prepare("INSERT INTO reception_steps (reception_id, step, at, user_id) VALUES (?1, 'entered', ?2, ?3)").bind(rx.receptionId, now, user.id));
+  }
   bill.rps.forEach((rp, i) => {
     const rpId = crypto.randomUUID();
     statements.push(
@@ -257,7 +270,7 @@ export async function prescriptionsOf(db, patientId) {
         WHERE p.patient_id = ?1 ORDER BY r.rp_no`,
     ).bind(patientId),
     db.prepare(
-      `SELECT i.*, d.name, d.unit, d.sentei, d.yj_code FROM prescription_items i
+      `SELECT i.*, d.name, d.unit, d.sentei, d.yj_code, d.general_name, d.generic FROM prescription_items i
          JOIN prescription_rps r ON r.id = i.rp_id
          JOIN prescriptions p ON p.id = r.prescription_id
          JOIN drugs d ON d.code = i.drug_code
@@ -274,6 +287,7 @@ export async function prescriptionsOf(db, patientId) {
   ]);
 
   const records = await recordsByPrescription(db, patientId);
+  const conversations = await conversationsByPrescription(db, patientId);
   const itemsByRp = Map.groupBy(items.results, (it) => it.rp_id);
   const rpsByRx = Map.groupBy(rps.results, (rp) => rp.prescription_id);
   const inquiriesByRx = Map.groupBy(inquiries.results, (q) => q.prescription_id);
@@ -291,7 +305,9 @@ export async function prescriptionsOf(db, patientId) {
     specialFeeMethod: rx.special_fee_method,
     createdAt: rx.created_at,
     createdBy: rx.created_by_name,
+    receptionId: rx.reception_id,
     records: records.get(rx.id) ?? [], // 指導記録がまだ無い来局は空
+    conversations: conversations.get(rx.id) ?? [],
     inquiries: (inquiriesByRx.get(rx.id) ?? []).map((q) => ({
       kind: q.kind, content: q.content, answer: q.answer, changed: q.changed === 1, shortReason: q.short_reason,
       createdAt: q.created_at, createdBy: q.created_by_name,
@@ -311,6 +327,8 @@ export async function prescriptionsOf(db, patientId) {
         drugCode: it.drug_code,
         yjCode: it.yj_code,
         name: it.name,
+        generalName: it.general_name,
+        generic: it.generic === 1,
         unit: it.unit,
         sentei: it.sentei,
         dailyQtyMilli: it.daily_qty_milli,

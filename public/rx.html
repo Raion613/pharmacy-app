@@ -99,6 +99,17 @@
           </div>
         </div>
 
+        <section class="peds" id="peds" hidden>
+          <div class="peds-head">小児の分量<span class="hint" id="peds-weight"></span></div>
+          <div class="peds-weight-form" id="peds-weight-form">
+            <label for="peds-weight-input">体重</label>
+            <input class="input num" id="peds-weight-input" inputmode="decimal" autocomplete="off"><span>kg</span>
+            <button type="button" class="btn btn-small" id="peds-weight-save">体重を保存</button>
+          </div>
+          <ul id="peds-list"></ul>
+          <p class="hint">添付文書の小児の用量（体重1kg当たり）と比べます。対象は表に入れた成分（アセトアミノフェン・アモキシシリン・カルボシステイン・クラリスロマイシン）だけです。保存は止めません。</p>
+        </section>
+
         <div class="errors" id="errors" hidden>
           <div class="errors-head">保存できません</div>
           <ul id="error-list"></ul>

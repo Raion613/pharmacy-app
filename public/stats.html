@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>薬局の数字</title>
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/assets/css/app.css">
+<link rel="stylesheet" href="/assets/css/tour.css">
+<link rel="stylesheet" href="/assets/css/features.css">
+<script type="module" src="/assets/js/stats.js"></script>
+</head>
+<body class="app">
+<nav class="sidebar"></nav>
+<div class="main">
+  <header class="topbar"></header>
+  <nav class="crumbs"></nav>
+  <main class="content stats-page">
+    <div class="stats-filter">
+      <div class="field"><label for="to-month">いつまで（12か月分）</label><input class="input" type="month" id="to-month"></div>
+      <p class="hint">保存した処方から集計します。デモの患者は数人なので、数字は小さくなります。</p>
+    </div>
+    <section class="stat-tiles" id="tiles"></section>
+    <section class="charts" id="charts"></section>
+    <section class="panel stats-table">
+      <div class="panel-head">月ごとの数字（表）</div>
+      <div class="scroll"><table class="grid" id="table"></table></div>
+      <p class="hint stats-note">処方箋単価＝調剤報酬の合計点数 × 10円 ÷ 処方箋の枚数（保険の分。選定療養の特別の料金は含めない）。<br>
+        後発医薬品の使用割合（数量ベース）＝ 後発医薬品の数量 ÷（後発医薬品のある先発医薬品の数量 ＋ 後発医薬品の数量）。数量は薬価基準の規格単位の数（1日量 × 日数）。
+        後発医薬品は支払基金の医薬品マスターの後発品区分、「後発医薬品のある先発医薬品」は厚生労働省の薬価基準収載品目リスト（令和8年11月1日適用）の欄で見分けます。</p>
+    </section>
+    <div class="chart-tip" id="tip" role="tooltip" hidden></div>
+  </main>
+</div>
+</body>
+</html>

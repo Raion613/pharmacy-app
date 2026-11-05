@@ -6,7 +6,11 @@ import { openD1 } from "../src/dev/sqlite-d1.js";
 import { hashPassword, randomHex, ITERATIONS } from "../src/server/password.js";
 import { createPatient } from "../src/server/patients.js";
 import { createPrescription } from "../src/server/prescriptions.js";
-import { createNote, createRecord } from "../src/server/records.js";
+import { createNote, createRecord, createTemplate } from "../src/server/records.js";
+import { createMeasurements } from "../src/server/measurements.js";
+import { createTracing } from "../src/server/tracing.js";
+import { registerHomePatient, createPlan, createSchedule, createVisitRecord } from "../src/server/homecare.js";
+import { composeReport } from "../public/assets/js/home-visit-rules.js";
 
 export const DEMO_LOGIN = { loginId: "demo", password: "pharmacy-demo" };
 
@@ -28,6 +32,9 @@ const D = {
   calonal: "620002023",    // カロナール錠２００       6.70円 → 6.50円
   magmitt: "610463198",    // マグミット錠３３０ｍｇ   6.30円
   kakkonto: "615101406",   // ツムラ葛根湯エキス顆粒（医療用） 13.40円（1g当たり）
+  calonalFine: "620002022", // カロナール細粒２０％（1g当たり）
+  widecillin: "621073001", // ワイドシリン細粒２０％（1g当たり）
+  mucodyneDs: "621989901", // ムコダインＤＳ５０％（1g当たり）
 };
 
 // rx：処方箋の記載が調剤した薬と違うときだけ { name, dailyQty, reason }
@@ -45,6 +52,9 @@ const soap = (s, o, a, p, leftover = "none", notebook = "used") =>
 const PATIENTS = [
   {
     name: "青木　誠", kana: "アオキ　マコト", birthDate: "1958-06-14", sex: "M", burdenPercent: 30, registeredOn: "2026-02-19",
+    // 指導記録の O に書いた値と同じ検査値（4月の検査結果の用紙）
+    labs: [{ on: "2026-04-16", source: "photo", values: [{ item: "ldl", value: "168" }] }],
+    messages: [{ at: "2026-05-02T00:40:00Z", body: "コレステロールの薬を飲み始めてから、少し足がだるい気がします。様子を見ていて大丈夫でしょうか" }],
     notes: [
       { on: "2026-02-19", category: "adverse", body: "アムロジピン10mgで下肢のむくみ（2025年秋、内科で5mgに減量後は消失）" },
       { on: "2026-02-19", category: "disease", body: "高血圧症・脂質異常症（内科で治療中）" },
@@ -81,6 +91,10 @@ const PATIENTS = [
   },
   {
     name: "石川　美咲", kana: "イシカワ　ミサキ", birthDate: "1990-11-02", sex: "F", burdenPercent: 30, registeredOn: "2026-03-25",
+    messages: [
+      { at: "2026-09-30T10:05:00Z", body: "頭痛がひどい日が増えました。次の受診で相談したいので、前にもらった薬の名前を教えてください" },
+      { at: "2026-09-30T10:30:00Z", out: true, body: "3月はロキソニン錠60mgをお渡ししています。受診のときにお薬手帳もお持ちください" },
+    ],
     notes: [
       { on: "2026-03-25", category: "allergy", body: "セフェム系抗菌薬で発疹（2019年、他院）" },
       { on: "2026-03-25", category: "lifestyle", body: "妊娠の可能性なし（2026/03/25 本人に確認）" },
@@ -111,6 +125,10 @@ const PATIENTS = [
   },
   {
     name: "遠藤　和子", kana: "エンドウ　カズコ", birthDate: "1945-03-08", sex: "F", burdenPercent: 10, registeredOn: "2026-06-11",
+    labs: [
+      { on: "2026-06-05", source: "photo", values: [{ item: "egfr", value: "48" }, { item: "cr", value: "0.86" }] },
+      { on: "2026-08-20", source: "manual", values: [{ item: "mg", value: "2.4" }] },
+    ],
     notes: [
       { on: "2026-06-11", category: "disease", body: "慢性便秘。腎機能がやや低下（eGFR 48、2026/06 内科の検査）" },
       { on: "2026-06-11", category: "concomitant", body: "整形外科でロキソプロフェンのテープ剤" },
@@ -145,6 +163,25 @@ const PATIENTS = [
           "症状の聞き取りを続ける。Mg 値の定期測定を処方医に確認"),
       },
     ],
+  },
+  {
+    // 小児：体重から分量を確かめる（処方入力の「小児の分量」）。量はどれも添付文書の通常量の範囲内
+    //   カロナール細粒20% 1日2.7g（1回180mg = 10mg/kg）、ワイドシリン細粒20% 1日3g（600mg = 33.3mg/kg/日）、ムコダインDS50% 1日1.08g（540mg = 30mg/kg/日）
+    name: "上田　陽向", kana: "ウエダ　ヒナタ", birthDate: "2021-05-10", sex: "M", burdenPercent: 20, registeredOn: "2026-10-20",
+    labs: [{ on: "2026-10-20", source: "manual", values: [{ item: "weight", value: "18.0" }] }],
+    notes: [
+      { on: "2026-10-20", category: "handover", body: "粉薬は嫌がるので、アイスやジュースに混ぜる方法を母に説明すると喜ばれる" },
+    ],
+    visits: [{
+      on: "2026-10-20", by: 2, rps: [
+        { usage: "1日3回毎食後", days: 5, items: [item(D.calonalFine, "2.7")] },
+        { usage: "1日3回毎食後", days: 5, items: [item(D.widecillin, "3"), item(D.mucodyneDs, "1.08")] },
+      ],
+      record: soap("（母より）おとといから38度台の熱。のどを痛がる",
+        "体重 18.0kg（本日、薬局で測定）。分量はどれも体重当たりの通常量の範囲内",
+        "抗菌薬は飲み切ることが大事。解熱剤は熱が下がれば中止できる",
+        "抗菌薬は5日分を飲み切るよう母に説明。発疹・ひどい下痢があれば連絡。解熱剤は1日3回まで、6時間以上あける"),
+    }],
   },
   { name: "宇野　健太", kana: "ウノ　ケンタ", birthDate: "2001-08-20", sex: "M", burdenPercent: 30, registeredOn: "2026-10-30", notes: [], visits: [] },
   {
@@ -216,8 +253,10 @@ for (const u of USERS) {
 
 // 日時は来局日の日中にしておく（実行した日時のままだと、過去の薬歴として不自然になる）
 const at = (date, hhmm) => `${date}T${hhmm}:00.000Z`;
+const patientIds = new Map(); // 氏名 → 患者ID
 for (const p of PATIENTS) {
   const { id } = await createPatient(db, { id: 2 }, p);
+  patientIds.set(p.name, id);
   await db.prepare("UPDATE patients SET created_at = ?1 WHERE id = ?2").bind(at(p.registeredOn, "01:00"), id).run();
   for (const n of p.notes) {
     const note = await createNote(db, { id: 2 }, id, n);
@@ -235,12 +274,71 @@ for (const p of PATIENTS) {
       await db.prepare("UPDATE guidance_records SET created_at = ?1 WHERE id = ?2").bind(at(v.on, "01:45"), rec.id).run();
     }
   }
+  for (const l of p.labs ?? []) {
+    await createMeasurements(db, { id: 2 }, id, { measuredOn: l.on, source: l.source, values: l.values });
+    await db.prepare("UPDATE measurements SET created_at = ?1 WHERE patient_id = ?2 AND measured_on = ?3").bind(at(l.on, "01:15"), id, l.on).run();
+  }
+  // つながる薬局のやり取り（受信は送信時刻で入れる）
+  for (const m of p.messages ?? []) {
+    await db.prepare("INSERT INTO line_messages (patient_id, direction, body, sent_at, created_by) VALUES (?1, ?2, ?3, ?4, ?5)")
+      .bind(id, m.out ? "out" : "in", m.body, m.at, m.out ? 2 : null).run();
+  }
 }
+
+// 指導記録のテンプレート
+const TEMPLATES = [
+  { title: "定期・変わりなし", subjective: "体調に変わりはない。", objective: "前回と同じ処方。", assessment: "服薬は良好。", plan: "同じ飲み方で続けるよう説明。次回も体調の変化と飲み忘れを確認。" },
+  { title: "新しい薬が始まった", subjective: "", objective: "今回から新しい薬が追加。", assessment: "初期の副作用の確認が必要。", plan: "飲み方と主な副作用を説明。気になる症状があれば連絡するよう伝えた。次回、副作用の有無を確認。" },
+  { title: "残薬あり", subjective: "飲み忘れることがある。", objective: "残薬あり。", assessment: "飲み忘れの原因の確認が必要。", plan: "飲み忘れやすい時間を一緒に確認。お薬カレンダーの利用を提案。次回、残薬の数を確認。" },
+];
+for (const t of TEMPLATES) await createTemplate(db, { id: 2 }, t);
+
+// 在宅：遠藤さん（自宅）。計画書 → 10月に2回訪問して記録 → 11月の予定
+const endo = patientIds.get("遠藤　和子");
+await registerHomePatient(db, { id: 2 }, {
+  patientId: endo, facilityId: null, institution: "○○内科クリニック（架空）", doctor: "山田", careManager: "佐々木",
+  intensive: false, startedOn: "2026-10-01",
+});
+await createPlan(db, { id: 2 }, endo, {
+  madeOn: "2026-10-01", visitsPerMonth: 2, intervalText: "第2・第4木曜",
+  management: "1回分ずつの一包化はせず、お薬カレンダー（朝・昼・夕）に娘さんが1週間分をセットする",
+  drugNotes: "マグミット（酸化マグネシウム）：腎機能が低い（eGFR 48）ため高マグネシウム血症に注意。吐き気・だるさ・脱力の有無を確認",
+  guidance: "昼の飲み忘れの確認と、カレンダーのセットの方法の確認。便通と Mg 値（検査があれば）の確認",
+});
+const VISITS = [
+  { on: "2026-10-08", record: { storage: "居間のお薬カレンダーに1週間分。直射日光の当たらない場所", adherence: "朝・夕は飲めている。昼を週2回ほど飲み忘れ", leftover: "マグミット錠 4錠", guidance: "昼の分をカレンダーの見やすい位置に移した。娘さんに昼の声かけをお願いした", shared: "ケアマネジャー（佐々木）に、昼の声かけをヘルパーにも頼めるか相談" } },
+  { on: "2026-10-22", record: { storage: "カレンダーで管理。問題なし", adherence: "昼の飲み忘れは週1回に減った", leftover: "マグミット錠 2錠", guidance: "飲み忘れが減ったことを本人と確認。便通は毎日", shared: "" } },
+  { on: "2026-11-05" },
+  { on: "2026-11-19" },
+];
+for (const v of VISITS) {
+  const { id: scheduleId } = await createSchedule(db, { id: 2 }, { patientId: endo, visitOn: v.on, pharmacistId: 2 });
+  if (v.record) {
+    const report = composeReport({ visit: v.record, record: { subjective: "お通じは毎日ある。昼の薬を飲み忘れることがある", assessment: "Mg 値は基準内。便秘は改善", plan: "症状の聞き取りを続ける。Mg 値の定期測定を処方医に確認" } });
+    await createVisitRecord(db, { id: 2 }, scheduleId, { ...v.record, report });
+    await db.prepare("UPDATE visit_records SET created_at = ?1 WHERE schedule_id = ?2").bind(at(v.on, "06:00"), scheduleId).run();
+  }
+}
+
+// トレーシングレポート：遠藤さんの9月の来局（残薬調整）から、処方医へ
+const endoRx = await db.prepare("SELECT id FROM prescriptions WHERE patient_id = ?1 AND dispensed_on = '2026-09-17'").bind(endo).first();
+await createTracing(db, { id: 2 }, endo, {
+  prescriptionId: endoRx.id, institution: "○○内科クリニック（架空）", department: "内科", doctor: "山田", consent: "agreed",
+  adherence: "昼の分を週2回ほど飲み忘れています（本人・娘さんより）。朝・夕は飲めています。",
+  leftover: "マグミット錠が7日分残っていたため、9月17日の処方を28日分から21日分に減らしました（疑義照会でご了承いただきました）。",
+  concomitant: "整形外科でロキソプロフェンのテープ剤を使っています。",
+  complaint: "", family: "娘さんが付き添い、お薬カレンダーのセットを手伝っています。",
+  proposal: "昼の飲み忘れが続くようでしたら、朝・夕の2回にまとめられる処方をご検討いただけないでしょうか。腎機能（eGFR 48）を踏まえ、Mg 値の定期的な測定もお願いいたします。",
+  other: "", nextVisitOn: "2026-10-15",
+});
+await db.prepare("UPDATE tracing_reports SET created_at = ?1").bind(at("2026-09-17", "03:00")).run();
 
 // 作った行を INSERT 文にして書き出す。アクセスログは本物の操作だけを残したいので書き出さない
 const TABLES = ["pharmacy_profile", "pharmacy_facility", "users", "patients", "patient_notes", "prescriptions", "prescription_rps",
-  "prescription_items", "inquiries", "prescription_fees", "guidance_records"];
-const lines = ["DELETE FROM access_logs;", "DELETE FROM sessions;", ...[...TABLES].reverse().map((t) => `DELETE FROM ${t};`)];
+  "prescription_items", "inquiries", "prescription_fees", "conversations", "guidance_records", "measurements", "guidance_templates",
+  "tracing_reports", "facilities", "home_patients", "care_plans", "visit_schedules", "visit_records", "line_messages"];
+const lines = ["DELETE FROM access_logs;", "DELETE FROM sessions;", "DELETE FROM mfa_challenges;", "DELETE FROM inspection_scans;", "DELETE FROM inspections;",
+  "DELETE FROM reception_steps;", "UPDATE prescriptions SET reception_id = NULL;", "DELETE FROM receptions;", ...[...TABLES].reverse().map((t) => `DELETE FROM ${t};`)];
 for (const t of TABLES) {
   const { results } = await db.prepare(`SELECT * FROM ${t}`).all();
   for (const row of results) {

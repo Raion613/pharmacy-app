@@ -5,6 +5,7 @@
 // ブラウザは PC に入っている Edge を使う（Playwright のブラウザのダウンロードは不要）。
 import { chromium } from "playwright-core";
 import assert from "node:assert/strict";
+import { hotp, stepOf } from "../src/server/totp.js";
 
 const BASE = process.env.BASE_URL ?? "http://localhost:8788";
 const browser = await chromium.launch({ channel: "msedge", headless: true });
@@ -14,14 +15,14 @@ async function newPage({ toursSeen }) {
   // 前半は業務の流れを確かめるので、チュートリアルは見終わった状態にしておく
   if (toursSeen) {
     await context.addInitScript(() => {
-      for (const k of ["login", "patients", "patient", "rx", "drugs", "logs", "master"]) localStorage.setItem(`tour:${k}`, "2"); // tour.js の VERSION と揃える
+      for (const k of ["login", "patients", "patient", "rx", "drugs", "logs", "master", "board", "inspect", "homecare", "tracing", "stats", "messages", "account"]) localStorage.setItem(`tour:${k}`, "3"); // tour.js の VERSION と揃える
     });
   }
   const p = await context.newPage();
   p.on("pageerror", (e) => errors.push(e.message));
   p.on("dialog", (d) => d.accept()); // 保存していない入力があるときの「このページを離れますか」
-  // 422 は入力の誤りを確かめる手順で意図して出すので除く
-  p.on("console", (m) => { if (m.type() === "error" && !m.text().includes("status of 422")) errors.push(m.text()); });
+  // 422（入力の誤り）と 401（多要素認証で違う6桁を入れる）は、確かめる手順で意図して出すので除く
+  p.on("console", (m) => { if (m.type() === "error" && !/status of (422|401)/.test(m.text())) errors.push(m.text()); });
   return p;
 }
 let page = await newPage({ toursSeen: true });
@@ -32,6 +33,17 @@ const focused = () => page.evaluate(() => {
 });
 const text = (sel) => page.locator(sel).innerText();
 const step = (name) => console.log(`- ${name}`);
+
+// 無音の WAV（録音ファイルの読み込みを試す。長さだけが使われる）
+function silentWav(seconds) {
+  const rate = 8000;
+  const data = rate * seconds * 2;
+  const b = Buffer.alloc(44 + data);
+  b.write("RIFF", 0); b.writeUInt32LE(36 + data, 4); b.write("WAVE", 8); b.write("fmt ", 12);
+  b.writeUInt32LE(16, 16); b.writeUInt16LE(1, 20); b.writeUInt16LE(1, 22); b.writeUInt32LE(rate, 24);
+  b.writeUInt32LE(rate * 2, 28); b.writeUInt16LE(2, 32); b.writeUInt16LE(16, 34); b.write("data", 36); b.writeUInt32LE(data, 40);
+  return b;
+}
 
 // 1. 未ログインならログイン画面へ。ID → Tab → パスワード → Enter
 step("ログイン");
@@ -229,7 +241,7 @@ await page.locator('input[name="sex"][value="M"]').check();
 await page.locator('input[name="burdenPercent"][value="30"]').check();
 await Promise.all([page.waitForURL(/\/patient\?id=\d+$/), page.keyboard.press("Enter")]);
 await page.waitForSelector("#band .name");
-assert.match(await text("#band"), /シケン　ジロウ[\s\S]*試験　次郎[\s\S]*000007/);
+assert.match(await text("#band"), /シケン　ジロウ[\s\S]*試験　次郎[\s\S]*000008/);
 
 // 11. 薬価照会：基準日に効いている薬価の行を強調する
 step("薬価照会");
@@ -243,12 +255,12 @@ assert.match(await text(".history"), /−2\.90円/);
 
 // 11-2. 長期収載品の選定療養：（選）のコードの薬は、保険の薬剤料とは別に特別の料金が出る
 step("選定療養：薬歴に特別の料金、前回Do で入力中にも特別の料金");
-await page.goto(`${BASE}/patient?id=6`);
+await page.goto(`${BASE}/patient?id=7`);
 await page.waitForSelector(selectedCard);
 // ロキソニン（選）10.65円 × 3 + ムコスタ 10.80円 × 3 = 64.35円 → 6点 × 14日 = 84点。
 // 特別の料金：価格差 0.15円 × 3 = 0.45円 → 1点 × 14日 = 14点 → 140円 + 消費税 = 154円
 assert.match(await text(selectedCard), /2026\/10\/22[\s\S]*薬剤料 84点[\s\S]*特別の料金 154円[\s\S]*ロキソニン錠６０ｍｇ（選）/);
-await Promise.all([page.waitForURL(/\/rx\?patient=6&from=/), page.keyboard.press("Alt+D")]);
+await Promise.all([page.waitForURL(/\/rx\?patient=7&from=/), page.keyboard.press("Alt+D")]);
 await page.waitForSelector("#special-fee:not([hidden])");
 assert.equal(await text("#total"), "84点");
 assert.equal(await text("#special-fee-yen"), "154円");
@@ -270,7 +282,7 @@ await page.locator('[data-field="drug"][data-r="0"][data-i="0"]').focus();
 await page.keyboard.press("Alt+H");
 await page.waitForSelector('.rx-row [data-field="rxName"]');
 assert.equal(await page.inputValue('.rx-row [data-field="rxName"]'), "【般】ロキソプロフェンＮａ錠６０ｍｇ");
-await page.goto(`${BASE}/patient?id=6`);
+await page.goto(`${BASE}/patient?id=7`);
 await page.waitForSelector(selectedCard);
 
 // 11-2-3. 領収証・明細書とお薬手帳（紙に貼る内容と、電子版の QR コード）
@@ -296,6 +308,201 @@ await page.waitForSelector("#import-rows tr");
 assert.match(await text("#import-rows tr:first-child"), /2026\/09\/11[\s\S]*調剤行為 全件[\s\S]*m20260911\.csv[\s\S]*初期データ/);
 assert.match(await text("#import-rows"), /2026\/10\/13[\s\S]*医薬品 全件[\s\S]*y_ALL20261013\.zip/);
 assert.equal((await focused()).id, "pick");
+
+// ---------- 追加した機能（kusudamaクラウド薬歴・ホルトノキの機能） ----------
+
+// 13. 検査値：用紙を撮影 → 項目に値が入る → 確かめて保存 → 要点に出る
+step("検査値：用紙の写真から読み取って保存（Alt+L）");
+await page.goto(`${BASE}/patient?id=3`); // 遠藤さん（eGFR 48・マグミット）
+await page.waitForSelector(selectedCard);
+assert.match(await text("#labs"), /eGFR\s*48mL[\s\S]*2026\/06\/05[\s\S]*マグネシウム（Mg）\s*2\.4/);
+await page.locator("#timeline").focus();
+await page.keyboard.press("Alt+L");
+await page.waitForSelector("#lab-dialog[open]");
+assert.equal((await focused()).id, "lab-date");
+await page.setInputFiles("#lab-photo", { name: "検査結果.png", mimeType: "image/png", buffer: Buffer.from("89504e470d0a1a0a", "hex") });
+await page.waitForSelector("#lab-photo-tag:not([hidden])");
+assert.equal(await page.inputValue("#lab-egfr"), "64");
+await page.fill("#lab-egfr", "4.5"); // 小数を許さない項目
+await page.locator("#lab-egfr").focus();
+await page.keyboard.press("Control+Enter");
+await page.waitForFunction(() => document.querySelector('#lab-form [data-error="values.1.value"]').textContent !== "");
+await page.fill("#lab-egfr", "52");
+await page.keyboard.press("Control+Enter");
+await page.waitForSelector("#lab-dialog:not([open])", { state: "attached" });
+assert.match(await text("#labs"), /eGFR\s*52mL[\s\S]*↑[\s\S]*用紙から/);
+
+// 14. 指導記録：録音ファイルを読み込む → 文字起こし → 会話から拾ったメモ → 下書き（Alt+G）→ 提案を P に → 保存
+step("指導記録：録音ファイルの文字起こし・会話から拾ったメモ・下書き・提案");
+await page.locator("#timeline").focus();
+await page.keyboard.press("Alt+K"); // 選んでいるのは最新の来局（9/17）
+await page.waitForSelector("#record-dialog[open]");
+assert.match(await text("#suggestions"), /マグミット錠３３０ｍｇ[\s\S]*高マグネシウム血症[\s\S]*腎機能が低下している[\s\S]*eGFR 48（2026-06-05）/); // その来局（9/17）の時点の検査値
+await page.setInputFiles("#rec-file", { name: "指導_0917.wav", mimeType: "audio/wav", buffer: silentWav(3) });
+await page.waitForSelector("#transcript:not([hidden])");
+assert.match(await text("#transcript"), /3秒[\s\S]*薬剤師\s*今日はマグミット錠３３０ｍｇが出ています/);
+assert.match(await text("#extracted"), /併用薬（OTC・健康食品を含む）\s*ドラッグストアで買った胃腸薬[\s\S]*疾患（既往歴・合併症・他科）\s*去年から整形外科で腰痛/);
+await page.locator("#soap-subjective").focus();
+await page.keyboard.press("Alt+G");
+assert.match(await page.inputValue("#soap-subjective"), /朝に少し胃がもたれます/);
+assert.match(await page.inputValue("#soap-objective"), /マグネシウム（Mg） 2\.4mg\/dL（08\/20）[\s\S]*残薬：「昼の分をたまに飲み忘れます。」「2回分くらい残っています。」/);
+assert.match(await page.inputValue("#soap-plan"), /高マグネシウム血症/);
+assert.equal(await page.locator('#record-form input[name="leftover"]:checked').getAttribute("value"), "some");
+await page.locator('#extracted [data-extract="0"]').check();
+await page.locator("#soap-plan").focus();
+await page.keyboard.press("Control+Enter");
+await page.waitForSelector("#record-dialog:not([open])", { state: "attached" });
+await page.waitForSelector(".record.new");
+assert.match(await text(selectedCard), /服薬指導の会話（3秒・ファイル 指導_0917\.wav）[\s\S]*下書きから/);
+assert.match(await text('.note-group[data-category="concomitant"]'), /ドラッグストアで買った胃腸薬[\s\S]*服薬指導の会話より/);
+assert.match(await text(".toasts"), /患者メモ 1件も追加/);
+
+// 15. テンプレート：選んで写す
+step("指導記録のテンプレートを写す");
+await page.keyboard.press("Alt+K");
+await page.waitForSelector("#record-dialog[open]");
+await page.selectOption("#template-select", { label: "残薬あり" });
+await page.click("#apply-template");
+assert.match(await page.inputValue("#soap-plan"), /お薬カレンダーの利用を提案/);
+await page.keyboard.press("Escape");
+
+// 16. トレーシングレポート：薬歴から写す → 保存 → 印刷の画面
+step("トレーシングレポート（Alt+T → Alt+W で薬歴から写す → 保存 → 印刷）");
+await page.locator("#timeline").focus();
+await Promise.all([page.waitForURL(/\/tracing\?patient=3&rx=/), page.keyboard.press("Alt+T")]);
+await page.waitForFunction(() => document.activeElement?.id === "t-institution");
+await page.keyboard.press("Alt+W");
+assert.match(await page.inputValue("#t-leftover"), /マグミット錠が7日分残っている[\s\S]*回答：21日分で可/);
+assert.match(await page.inputValue("#t-concomitant"), /ロキソプロフェンのテープ剤/);
+await page.keyboard.press("Control+Enter");
+await page.waitForFunction(() => document.querySelector('[data-error="institution"]').textContent !== "");
+assert.equal(await text('[data-error="consent"]'), "患者の同意を選んでください");
+await page.fill("#t-institution", "○○内科クリニック（架空）");
+await page.fill("#t-department", "内科");
+await page.fill("#t-doctor", "山田");
+await page.locator('input[name="consent"][value="agreed"]').check();
+await Promise.all([page.waitForURL(/\/tracing\?id=\d+$/), page.keyboard.press("Control+Enter")]);
+await page.waitForSelector(".tracing-sheet");
+assert.match(await text(".tracing-sheet"), /○○内科クリニック（架空）　御中[\s\S]*服薬情報提供書（トレーシングレポート）[\s\S]*山田　先生[\s\S]*遠藤　和子[\s\S]*■ 患者の同意のもと報告します[\s\S]*1-1\. 残薬調整の報告\s*マグミット錠が7日分/);
+
+// 17. 小児の分量：上田さん（4歳・18kg）の処方を Do すると、3つとも通常量の範囲内。量を増やすと上限超え
+step("処方入力：小児の分量（体重当たり）");
+await page.goto(`${BASE}/patient?id=4`);
+await page.waitForSelector(selectedCard);
+await Promise.all([page.waitForURL(/\/rx\?patient=4&from=/), page.keyboard.press("Alt+D")]);
+await page.waitForSelector("#peds:not([hidden]) #peds-list li");
+assert.match(await text("#peds-weight"), /5歳・体重 18\.0kg/);
+assert.equal(await page.locator("#peds-list li.peds-ok").count(), 3);
+assert.match(await text("#peds-list"), /カロナール細粒２０％[\s\S]*10mg\/kg\/回。通常量の範囲内/);
+await page.fill('[data-field="qty"][data-r="1"][data-i="0"]', "9");
+await page.locator('[data-field="qty"][data-r="1"][data-i="0"]').dispatchEvent("input");
+await page.waitForSelector("#peds-list li.peds-over");
+assert.match(await text("#peds-list li.peds-over"), /ワイドシリン細粒２０％[\s\S]*1日 100mg\/kg。上限の 90mg\/kg を超えています/);
+
+// 18. 受付状況：受付 → 処方入力 → 調剤監査（バーコード）→ 投薬 → 会計
+step("受付状況：受付（Alt+U）→ 処方入力 → 監査 → 投薬 → 会計");
+await page.goto(`${BASE}/board`);
+await page.waitForFunction(() => document.activeElement?.id === "reception-q");
+await page.keyboard.type("うの");
+await page.waitForSelector('#reception-suggest li[aria-selected="true"]');
+await page.keyboard.press("Enter");
+await page.waitForSelector(".col-received .board-card");
+assert.match(await text(".col-received .board-card"), /宇野　健太[\s\S]*受付 \d\d:\d\d[\s\S]*0分待ち/);
+assert.match(await page.evaluate(() => document.activeElement.textContent), /処方を入力/);
+await Promise.all([page.waitForURL(/\/rx\?patient=5&reception=\d+$/), page.keyboard.press("Enter")]);
+await page.waitForSelector('[data-field="drug"]');
+await page.keyboard.type("のるばすく錠５");
+await page.waitForSelector("#suggest li[aria-selected=true]");
+await page.keyboard.press("Enter");
+await page.keyboard.type("1");
+await page.keyboard.press("Enter");
+await page.keyboard.press("Enter");
+await page.keyboard.type("1日1回朝食後");
+await page.keyboard.press("Enter");
+await page.keyboard.type("14");
+await Promise.all([page.waitForURL(/\/board$/), page.keyboard.press("Control+Enter")]);
+await page.waitForSelector(".col-entered .board-card");
+await Promise.all([page.waitForURL(/\/inspect\?id=/), page.click(".col-entered .board-card .btn")]);
+await page.waitForFunction(() => document.activeElement?.id === "scan-input");
+assert.match(await text("#check-items"), /ノルバスク錠５ｍｇ[\s\S]*総量 14錠[\s\S]*まだ読んでいません/);
+assert.equal(await page.locator("#save").isDisabled(), true);
+// 違う薬の箱 → 赤。期限切れ → 赤。正しい箱 → チェック。読み取り機は文字と Enter を送る
+await page.click("#demo-scan button:has-text('違う薬の箱')");
+await page.waitForSelector("#scan-log li.r-wrong");
+await page.click("#demo-scan button:has-text('期限切れ')");
+await page.waitForSelector("#scan-log li.r-expired");
+await page.keyboard.type("(01)14987114335002(17)301231(10)E2E01"); // ノルバスク錠５ｍｇ ＰＴＰ 100錠（HOTコードマスター）
+await page.keyboard.press("Enter");
+await page.waitForSelector("#check-items li.done");
+assert.match(await text("#check-items li.done"), /ＰＴＰ 100錠（10錠×10）・期限 2030-12-31・ロット E2E01/);
+await page.keyboard.type("(01)14987114335003");
+await page.keyboard.press("Enter");
+await page.waitForFunction(() => document.querySelector("#scan-error").textContent.includes("チェックデジット"));
+await Promise.all([page.waitForURL(/\/board$/), page.keyboard.press("Control+Enter")]);
+await page.waitForSelector(".col-audited .board-card");
+assert.match(await text(".toasts"), /調剤監査を保存しました（合わない読み取り 2件も記録）/);
+await page.click(".col-audited .board-card .btn");
+await page.waitForSelector(".col-handed .board-card");
+assert.equal(await page.evaluate(() => document.activeElement.textContent), "会計した");
+await page.keyboard.press("Enter");
+await page.waitForSelector(".col-paid .board-card");
+assert.match(await text(".col-paid .board-card"), /入力 \d\d:\d\d → 監査 \d\d:\d\d → 投薬 \d\d:\d\d → 会計 \d\d:\d\d/);
+
+// 19. 在宅：予定（回数の上限）→ 記録（薬歴から報告書の形）→ 報告書の印刷
+step("在宅：訪問の予定（週1回まで）・記録・報告書");
+await page.goto(`${BASE}/homecare?month=2026-11`);
+await page.waitForSelector("#home-list li");
+assert.match(await text("#home-list"), /遠藤　和子[\s\S]*2 \/ 4回[\s\S]*計画書 2026\/10\/01/);
+await page.keyboard.press("Alt+V");
+await page.waitForSelector("#visit-dialog[open]");
+assert.match(await text("#v-limit"), /月4回・週1回まで/);
+await page.fill("#v-date", "2026-11-06"); // 11/5 と同じ週
+await page.keyboard.press("Control+Enter");
+await page.waitForFunction(() => document.querySelector('#visit-form [data-error="visitOn"]').textContent.includes("同じ週"));
+await page.fill("#v-date", "2026-11-12");
+await page.keyboard.press("Control+Enter");
+await page.waitForSelector("#visit-dialog:not([open])", { state: "attached" });
+assert.match(await text("#home-list"), /3 \/ 4回/);
+await page.click('.cal-day[data-date="2026-11-05"] .cal-visit');
+await page.waitForSelector("#record-dialog[open]");
+await page.fill("#r-storage", "カレンダーで管理");
+await page.fill("#r-adherence", "飲み忘れなし");
+await page.fill("#r-leftover", "なし");
+await page.fill("#r-guidance", "便通の確認");
+await page.locator("#r-guidance").focus();
+await page.keyboard.press("Alt+G");
+await page.waitForFunction(() => document.querySelector("#r-report").value.includes("【今後の方針・提案】"));
+assert.match(await page.inputValue("#r-report"), /【服薬状況】飲み忘れなし[\s\S]*【患者・家族の訴え】/);
+await page.keyboard.press("Control+Enter");
+await page.waitForSelector("#record-dialog:not([open])", { state: "attached" });
+assert.equal(await page.locator('.cal-day[data-date="2026-11-05"] .cal-visit.done').count(), 1);
+await page.goto(`${BASE}/homecare-print?kind=reports&month=2026-11&facility=home`);
+await page.waitForSelector(".home-sheet");
+assert.match(await text("#sheet"), /○○内科クリニック（架空）　山田　先生　御侍史[\s\S]*写し：介護支援専門員 佐々木 様[\s\S]*訪問薬剤管理指導 報告書[\s\S]*2026\/11\/05[\s\S]*【服薬状況】飲み忘れなし/);
+
+// 20. つながる薬局：受信（デモ）→ 返信 → 薬歴の要点に出る
+step("つながる薬局：受信と返信");
+await page.goto(`${BASE}/messages?patient=2`);
+await page.waitForSelector("#chat-log li");
+assert.match(await text("#chat-log"), /前にもらった薬の名前を教えてください[\s\S]*ロキソニン錠60mgをお渡ししています/);
+await page.fill("#reply-body", "受け取りは何時ごろになりますか");
+await page.keyboard.press("Control+Enter");
+await page.waitForFunction(() => document.querySelectorAll("#chat-log li").length === 3);
+await page.fill("#receive-q", "おの");
+await page.waitForFunction(() => document.querySelector("#receive-patient").options.length > 0);
+await page.fill("#receive-body", "血圧の薬を1日飲み忘れました");
+await page.click("#receive-form button[type=submit]");
+await page.waitForFunction(() => document.querySelector("#chat-head").textContent.includes("小野寺"));
+await page.goto(`${BASE}/patient?id=6`);
+await page.waitForSelector(".line-summary");
+assert.match(await text(".line-summary"), /血圧の薬を1日飲み忘れました/);
+
+// 21. 薬局の数字
+step("薬局の数字（処方箋単価・後発医薬品の使用割合）");
+await page.goto(`${BASE}/stats`);
+await page.waitForSelector(".chart svg");
+assert.equal(await page.locator(".chart").count(), 3);
+assert.match(await text("#table"), /2026年10月\s*4\s*[\d,]+円[\s\S]*\d+\.\d%/);
 
 // 12. ログアウトしたら API も画面も見えない
 step("ログアウト");
@@ -401,6 +608,12 @@ for (const [url, ready, firstTarget] of [
   ["/drugs", "#q", ".search-head"],
   ["/logs", "#rows tr", ".logs .grid thead"],
   ["/master", "#import-rows tr", "#history"],
+  ["/board", "#board .board-col", ".reception-search"],
+  ["/inspect?id=" + rxId, "#check-items li", ".inspect-items"],
+  ["/homecare?month=2026-11", "#home-list li", "#home-patients"],
+  ["/tracing?patient=3", "#t-adherence", "#fill"],
+  ["/messages", "#threads li", ".threads"],
+  ["/stats", ".chart svg", "#charts"],
 ]) {
   await page.goto(`${BASE}${url}`);
   await page.waitForSelector(ready);
@@ -413,6 +626,40 @@ for (const [url, ready, firstTarget] of [
   await page.waitForTimeout(300);
   assert.equal(await tourOpen(), false, `${url}: 二度目も出た`);
 }
+
+// ---------- 多要素認証（最後に。終わったら無効に戻す） ----------
+step("多要素認証：設定 → ログインで6桁を求める → 無効にする");
+await page.goto(`${BASE}/account`);
+await page.waitForSelector(".tour.open");
+await page.keyboard.press("Escape");
+await page.click("#begin");
+await page.waitForSelector(".qr svg");
+const secret = (await text(".secret")).replace(/\s/g, "");
+const code = (offset) => hotp(secret, stepOf(Date.now()) + offset);
+await page.fill("#code", "000000");
+await page.click("#confirm-form button");
+await page.waitForFunction(() => document.querySelector("#code-error").textContent !== "");
+await page.fill("#code", await code(0));
+await page.click("#confirm-form button");
+await page.waitForFunction(() => document.querySelector("#mfa-state").textContent === "有効");
+await page.click("#logout");
+await page.waitForURL(/\/login$/);
+await page.fill("#login-id", "demo");
+await page.fill("#password", "pharmacy-demo");
+await page.click("#login-form button[type=submit]");
+await page.waitForSelector("#mfa-form:not([hidden])");
+assert.equal((await page.request.get(`${BASE}/api/patients`)).status(), 401, "6桁を入れる前に入れてしまう");
+await page.fill("#mfa-code", await code(0)); // 設定で使った数字は使い回せない
+await page.click("#mfa-form button");
+await page.waitForSelector("#mfa-error:not([hidden])");
+await Promise.all([page.waitForURL(/\/patients$/), (async () => { await page.fill("#mfa-code", await code(1)); await page.click("#mfa-form button"); })()]);
+// 無効にするには、さらに次の区切りの数字が要る（同じ数字は使えない）。次の30秒になるまで待つ
+await page.waitForTimeout(30000 - (Date.now() % 30000) + 500);
+await page.goto(`${BASE}/account`);
+await page.waitForSelector("#disable-form");
+await page.fill("#code", await code(1));
+await page.click("#disable-form button");
+await page.waitForFunction(() => document.querySelector("#mfa-state").textContent === "未設定");
 
 assert.deepEqual(errors, [], "ブラウザのエラー");
 await browser.close();

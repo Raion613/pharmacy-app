@@ -3,13 +3,28 @@
 -- 日付は 'YYYY-MM-DD' の文字列。文字列のまま大小比較できる。
 
 DROP TABLE IF EXISTS access_logs;
+DROP TABLE IF EXISTS mfa_challenges;
+DROP TABLE IF EXISTS line_messages;
+DROP TABLE IF EXISTS inspection_scans;
+DROP TABLE IF EXISTS inspections;
+DROP TABLE IF EXISTS reception_steps;
+DROP TABLE IF EXISTS visit_records;
+DROP TABLE IF EXISTS visit_schedules;
+DROP TABLE IF EXISTS care_plans;
+DROP TABLE IF EXISTS home_patients;
+DROP TABLE IF EXISTS facilities;
+DROP TABLE IF EXISTS tracing_reports;
+DROP TABLE IF EXISTS guidance_templates;
+DROP TABLE IF EXISTS measurements;
 DROP TABLE IF EXISTS guidance_records;
+DROP TABLE IF EXISTS conversations;
 DROP TABLE IF EXISTS patient_notes;
 DROP TABLE IF EXISTS prescription_fees;
 DROP TABLE IF EXISTS inquiries;
 DROP TABLE IF EXISTS prescription_items;
 DROP TABLE IF EXISTS prescription_rps;
 DROP TABLE IF EXISTS prescriptions;
+DROP TABLE IF EXISTS receptions;
 DROP TABLE IF EXISTS patients;
 DROP TABLE IF EXISTS sessions;
 DROP TABLE IF EXISTS staging_fee_rows;
@@ -18,6 +33,8 @@ DROP TABLE IF EXISTS pending_imports;
 DROP TABLE IF EXISTS fee_points;
 DROP TABLE IF EXISTS fee_items;
 DROP TABLE IF EXISTS drug_prices;
+DROP TABLE IF EXISTS drug_packages;
+DROP TABLE IF EXISTS generic_flags;
 DROP TABLE IF EXISTS drugs;
 DROP TABLE IF EXISTS master_imports;
 DROP TABLE IF EXISTS pharmacy_facility;
@@ -72,6 +89,26 @@ CREATE TABLE drug_prices (
 );
 
 CREATE INDEX idx_drugs_name_key ON drugs(name_key);
+
+-- 薬の箱のバーコード（GS1 の GTIN-14）→ 医薬品コード。調剤監査で、取り出した薬が処方と合っているかを照合する。
+-- 出どころは MEDIS（医療情報システム開発センター）の「医薬品HOTコードマスター」販売包装単位コード付き版。
+-- 医薬品マスターとは別に公表されるので、drugs への外部キーは付けない（内用薬以外の行や、マスターに無いコードもある）。
+CREATE TABLE drug_packages (
+  gtin       TEXT PRIMARY KEY CHECK (length(gtin) = 14), -- 販売包装単位コード
+  drug_code  TEXT NOT NULL,             -- レセプト電算処理システムコード（医薬品コード）
+  hot_code   TEXT NOT NULL,             -- HOTコード（13桁）
+  package    TEXT NOT NULL              -- 包装（例：ＰＴＰ 10錠×10）
+);
+
+CREATE INDEX idx_drug_packages_drug ON drug_packages(drug_code);
+
+-- 後発医薬品の使用割合の分母に入れる薬。厚生労働省「薬価基準収載品目リスト」の
+-- 「同一剤形・規格の後発医薬品がある先発医薬品」欄に印がある品目（薬価基準収載医薬品コード単位）。
+-- 分子の「後発医薬品」は医薬品マスターの後発品区分（drugs.generic）を使う。
+CREATE TABLE generic_flags (
+  yj_code   TEXT PRIMARY KEY,
+  list_date TEXT NOT NULL               -- 使ったリストの適用日
+);
 
 -- 調剤報酬の算定項目（調剤行為コードごと）
 CREATE TABLE fee_items (
@@ -175,7 +212,18 @@ CREATE TABLE users (
   display_name        TEXT NOT NULL,
   password_hash       TEXT NOT NULL,    -- PBKDF2-SHA256 の結果（16進）
   password_salt       TEXT NOT NULL,    -- ユーザーごとのランダムな塩（16進）
-  password_iterations INTEGER NOT NULL
+  password_iterations INTEGER NOT NULL,
+  -- 多要素認証（スマホの認証アプリが30秒ごとに出す6桁の数字。RFC 6238 の TOTP）
+  totp_secret         TEXT,             -- 認証アプリと共有する秘密（Base32）。NULL＝未設定
+  totp_pending_secret TEXT,             -- 設定の途中（QR を読ませて、6桁の確認が済むまで）
+  totp_last_step      INTEGER           -- 最後に使った6桁の時刻の区切り（同じ数字を2回使わせない）
+);
+
+-- パスワードが合って、6桁の数字を待っている状態（5分）。Cookie にはトークン、DB にはそのハッシュだけを置く
+CREATE TABLE mfa_challenges (
+  token_hash TEXT PRIMARY KEY,
+  user_id    INTEGER NOT NULL REFERENCES users(id),
+  expires_at TEXT NOT NULL
 );
 
 -- ログイン中のセッション。Cookie にはランダムなトークンを渡し、DB にはそのハッシュだけを置く。
@@ -200,6 +248,16 @@ CREATE TABLE patients (
 
 CREATE INDEX idx_patients_kana ON patients(kana);
 
+-- 受付（処方箋を受け取った時刻）。業務の進み具合（入力・監査・投薬・会計）は reception_steps に1行ずつ足す
+CREATE TABLE receptions (
+  id          INTEGER PRIMARY KEY,
+  patient_id  INTEGER NOT NULL REFERENCES patients(id),
+  received_at TEXT NOT NULL,
+  created_by  INTEGER NOT NULL REFERENCES users(id)
+);
+
+CREATE INDEX idx_receptions_at ON receptions(received_at);
+
 -- 処方（処方箋1枚分）
 CREATE TABLE prescriptions (
   id            TEXT PRIMARY KEY,       -- サーバーで採番（明細と同じトランザクションで入れるため）
@@ -213,6 +271,7 @@ CREATE TABLE prescriptions (
   copay_yen     INTEGER NOT NULL,       -- 一部負担金（円）。合計点数 × 10円 × 負担割合 を10円未満四捨五入
   special_fee_yen INTEGER,              -- 選定療養の特別の料金（消費税込み、円）。対象の薬が無ければ NULL
   special_fee_method TEXT CHECK (special_fee_method IN ('points', 'amount')), -- 計算方法（調剤日で決まる）
+  reception_id  INTEGER UNIQUE REFERENCES receptions(id), -- 受付から入力したとき（受付1件に処方1枚）
   created_at    TEXT NOT NULL,
   created_by    INTEGER NOT NULL REFERENCES users(id),
   CHECK (prescribed_on <= dispensed_on)
@@ -286,11 +345,41 @@ CREATE TABLE patient_notes (
   patient_id INTEGER NOT NULL REFERENCES patients(id),
   category   TEXT NOT NULL CHECK (category IN ('allergy', 'adverse', 'disease', 'concomitant', 'lifestyle', 'generic', 'handover')),
   body       TEXT NOT NULL,
+  source     TEXT NOT NULL CHECK (source IN ('manual', 'conversation')), -- 手で書いた／服薬指導の会話から拾って薬剤師が確かめた
   created_at TEXT NOT NULL,
   created_by INTEGER NOT NULL REFERENCES users(id)
 );
 
 CREATE INDEX idx_patient_notes_patient ON patient_notes(patient_id, created_at);
+
+-- 検査値・体重。処方箋に印字された検査値、検査結果の用紙、薬局での聞き取りなどから入れる。
+-- 値は小数を持ち込まないよう 1000倍の整数にする（eGFR 48 → 48000、PT-INR 1.25 → 1250）。項目は lab-items.js
+CREATE TABLE measurements (
+  id          INTEGER PRIMARY KEY,
+  patient_id  INTEGER NOT NULL REFERENCES patients(id),
+  item        TEXT NOT NULL CHECK (item IN ('weight', 'wbc', 'hb', 'plt', 'ast', 'alt', 'tbil', 'cr', 'egfr', 'k', 'ck', 'hba1c', 'ptinr', 'mg', 'ldl')),
+  value_milli INTEGER NOT NULL CHECK (value_milli >= 0),
+  measured_on TEXT NOT NULL,            -- 検査日・測定日
+  source      TEXT NOT NULL CHECK (source IN ('manual', 'photo')), -- 手で入力／用紙を撮影して読み取り、薬剤師が確かめた
+  created_at  TEXT NOT NULL,
+  created_by  INTEGER NOT NULL REFERENCES users(id)
+);
+
+CREATE INDEX idx_measurements_patient ON measurements(patient_id, item, measured_on);
+
+-- 服薬指導の会話の文字起こし。音声そのものは保存しない（文字にしたら捨てる）
+CREATE TABLE conversations (
+  id              INTEGER PRIMARY KEY,
+  prescription_id TEXT NOT NULL REFERENCES prescriptions(id),
+  patient_id      INTEGER NOT NULL REFERENCES patients(id),
+  source          TEXT NOT NULL CHECK (source IN ('recording', 'file')), -- その場で録音／録音したファイルを後から読み込み（通信が切れていたとき）
+  file_name       TEXT,
+  duration_sec    INTEGER NOT NULL CHECK (duration_sec > 0),
+  transcript      TEXT NOT NULL,
+  created_at      TEXT NOT NULL,
+  created_by      INTEGER NOT NULL REFERENCES users(id),
+  CHECK ((source = 'file') = (file_name IS NOT NULL))
+);
 
 -- 来局ごとの指導記録（SOAP）。1回の来局に複数書ける（追記）。
 CREATE TABLE guidance_records (
@@ -303,6 +392,8 @@ CREATE TABLE guidance_records (
   plan            TEXT NOT NULL,      -- P：指導内容・次回の留意点
   leftover        TEXT NOT NULL CHECK (leftover IN ('none', 'some', 'unchecked')),   -- 残薬
   notebook        TEXT NOT NULL CHECK (notebook IN ('used', 'not_used', 'unchecked')), -- お薬手帳の活用
+  conversation_id INTEGER REFERENCES conversations(id), -- 会話の文字起こしから下書きを作ったとき
+  drafted         INTEGER NOT NULL CHECK (drafted IN (0, 1)), -- 下書き（会話・処方から組み立てた文）を元に書いたか
   created_at      TEXT NOT NULL,
   created_by      INTEGER NOT NULL REFERENCES users(id),
   CHECK (subjective || objective || assessment || plan <> '')
@@ -310,12 +401,154 @@ CREATE TABLE guidance_records (
 
 CREATE INDEX idx_guidance_records_patient ON guidance_records(patient_id, created_at);
 
+-- 指導記録のテンプレート。選ぶと S・O・A・P にまとめて写す
+CREATE TABLE guidance_templates (
+  id         INTEGER PRIMARY KEY,
+  title      TEXT NOT NULL UNIQUE,
+  subjective TEXT NOT NULL,
+  objective  TEXT NOT NULL,
+  assessment TEXT NOT NULL,
+  plan       TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  created_by INTEGER NOT NULL REFERENCES users(id)
+);
+
+-- トレーシングレポート（服薬情報提供書）。急ぎではないが処方医に伝えたいことを、文書で医療機関に送る。
+-- 急ぎ・処方の内容を変える必要があるときは疑義照会（inquiries）。欄は病院の様式（服薬状況・併用薬・副作用・家族からの情報・提案）に合わせた
+CREATE TABLE tracing_reports (
+  id              INTEGER PRIMARY KEY,
+  patient_id      INTEGER NOT NULL REFERENCES patients(id),
+  prescription_id TEXT REFERENCES prescriptions(id), -- 元にした来局
+  institution     TEXT NOT NULL,        -- 医療機関
+  department      TEXT NOT NULL,        -- 診療科
+  doctor          TEXT NOT NULL,        -- 処方医
+  consent         TEXT NOT NULL CHECK (consent IN ('agreed', 'necessary')), -- 患者の同意あり／同意は無いが治療上必要
+  adherence       TEXT NOT NULL,        -- 1. 服薬状況（必須）
+  leftover        TEXT NOT NULL,        -- 1-1. 残薬調整の報告
+  concomitant     TEXT NOT NULL,        -- 2. 併用薬（他院・OTC・健康食品）
+  complaint       TEXT NOT NULL,        -- 3. 患者の訴え（アレルギー・副作用と思われる症状）
+  family          TEXT NOT NULL,        -- 4. 家族・介護者からの情報
+  proposal        TEXT NOT NULL,        -- 5. 薬学的観点からの提案
+  other           TEXT NOT NULL,        -- 6. その他
+  next_visit_on   TEXT,                 -- 次回受診日
+  created_at      TEXT NOT NULL,
+  created_by      INTEGER NOT NULL REFERENCES users(id)
+);
+
+-- 在宅：訪問先の施設（老人ホームなど）。自宅の患者は施設なし
+CREATE TABLE facilities (
+  id         INTEGER PRIMARY KEY,
+  name       TEXT NOT NULL UNIQUE,
+  address    TEXT NOT NULL,
+  phone      TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  created_by INTEGER NOT NULL REFERENCES users(id)
+);
+
+-- 在宅で訪問する患者。訪問は医師の指示に基づくので、指示した医師を持つ
+CREATE TABLE home_patients (
+  patient_id   INTEGER PRIMARY KEY REFERENCES patients(id),
+  facility_id  INTEGER REFERENCES facilities(id), -- NULL＝自宅
+  institution  TEXT NOT NULL,           -- 指示した医師の医療機関
+  doctor       TEXT NOT NULL,
+  care_manager TEXT,                    -- 介護支援専門員（ケアマネジャー）。介護保険の患者は報告先になる
+  intensive    INTEGER NOT NULL CHECK (intensive IN (0, 1)), -- 末期の悪性腫瘍・注射による麻薬・中心静脈栄養（月8回・週2回まで）
+  started_on   TEXT NOT NULL,
+  created_at   TEXT NOT NULL,
+  created_by   INTEGER NOT NULL REFERENCES users(id)
+);
+
+-- 薬学的管理指導計画書。通知の記載事項：薬剤の管理方法、薬剤特性（副作用・相互作用等）を確認した上で実施すべき指導の内容、
+-- 訪問回数、訪問間隔。少なくとも月1回見直す（見直したら新しい行を足す）
+CREATE TABLE care_plans (
+  id               INTEGER PRIMARY KEY,
+  patient_id       INTEGER NOT NULL REFERENCES home_patients(patient_id),
+  made_on          TEXT NOT NULL,
+  management       TEXT NOT NULL,       -- 薬剤の管理方法
+  drug_notes       TEXT NOT NULL,       -- 薬剤特性（副作用・相互作用等）
+  guidance         TEXT NOT NULL,       -- 実施すべき指導の内容
+  visits_per_month INTEGER NOT NULL CHECK (visits_per_month BETWEEN 1 AND 8),
+  interval_text    TEXT NOT NULL,       -- 訪問間隔（例：毎週木曜）
+  created_at       TEXT NOT NULL,
+  created_by       INTEGER NOT NULL REFERENCES users(id)
+);
+
+-- 訪問の予定。1人1日1回
+CREATE TABLE visit_schedules (
+  id            INTEGER PRIMARY KEY,
+  patient_id    INTEGER NOT NULL REFERENCES home_patients(patient_id),
+  visit_on      TEXT NOT NULL,
+  pharmacist_id INTEGER NOT NULL REFERENCES users(id),
+  created_at    TEXT NOT NULL,
+  created_by    INTEGER NOT NULL REFERENCES users(id),
+  UNIQUE (patient_id, visit_on)
+);
+
+CREATE INDEX idx_visit_schedules_on ON visit_schedules(visit_on);
+
+-- 訪問の記録。通知が薬歴に求める事項（実施した薬学的管理指導の内容、処方医に提供した訪問結果の要点、他職種と共有した要点）。
+-- report は処方医への報告書の本文になる
+CREATE TABLE visit_records (
+  id          INTEGER PRIMARY KEY,
+  schedule_id INTEGER NOT NULL UNIQUE REFERENCES visit_schedules(id),
+  storage     TEXT NOT NULL,            -- 薬の保管状況
+  adherence   TEXT NOT NULL,            -- 服薬状況
+  leftover    TEXT NOT NULL,            -- 残薬の状況
+  guidance    TEXT NOT NULL,            -- 実施した指導・服薬支援
+  report      TEXT NOT NULL,            -- 処方医への報告の要点
+  shared      TEXT NOT NULL,            -- ケアマネジャー・訪問看護など他職種と共有した要点
+  created_at  TEXT NOT NULL,
+  created_by  INTEGER NOT NULL REFERENCES users(id)
+);
+
+-- 受付から会計までの進み具合。1つの受付に、段階ごとに1行
+CREATE TABLE reception_steps (
+  reception_id INTEGER NOT NULL REFERENCES receptions(id),
+  step         TEXT NOT NULL CHECK (step IN ('entered', 'audited', 'handed', 'paid')), -- 入力済み／監査済み／投薬済み／会計済み
+  at           TEXT NOT NULL,
+  user_id      INTEGER NOT NULL REFERENCES users(id),
+  PRIMARY KEY (reception_id, step)
+);
+
+-- 調剤監査（ピッキングの照合）。取り出した薬の箱のバーコードを読み、処方の薬と合っているかを確かめた結果
+CREATE TABLE inspections (
+  id              TEXT PRIMARY KEY,     -- サーバーで採番（読み取りの行と同じトランザクションで入れるため）
+  prescription_id TEXT NOT NULL REFERENCES prescriptions(id),
+  created_at      TEXT NOT NULL,
+  created_by      INTEGER NOT NULL REFERENCES users(id)
+);
+
+-- 読んだバーコード。合わなかったもの（取り違え・期限切れ）も残す
+CREATE TABLE inspection_scans (
+  inspection_id TEXT NOT NULL REFERENCES inspections(id),
+  line_no       INTEGER NOT NULL,
+  gtin          TEXT NOT NULL,
+  drug_code     TEXT,                   -- バーコードから引いた医薬品コード（マスターに無ければ NULL）
+  expiry        TEXT,                   -- 有効期限（AI 17）
+  lot           TEXT,                   -- 製造番号（AI 10）
+  result        TEXT NOT NULL CHECK (result IN ('match', 'wrong', 'unknown', 'expired')), -- 処方の薬／処方に無い薬／マスターに無い／期限切れ
+  PRIMARY KEY (inspection_id, line_no)
+);
+
+-- 「つながる薬局」（ファーマシフト社の LINE 公式アカウントのサービス）でのやり取り。
+-- 実際のサービスとはつないでいない。受信したメッセージをここに入れる形だけを作った
+CREATE TABLE line_messages (
+  id         INTEGER PRIMARY KEY,
+  patient_id INTEGER NOT NULL REFERENCES patients(id),
+  direction  TEXT NOT NULL CHECK (direction IN ('in', 'out')), -- 患者から／薬局から
+  body       TEXT NOT NULL,
+  sent_at    TEXT NOT NULL,
+  created_by INTEGER REFERENCES users(id) -- 薬局から送ったときの送信者
+);
+
+CREATE INDEX idx_line_messages_patient ON line_messages(patient_id, sent_at);
+
 -- 誰が・いつ・どの患者の情報に触れたか
 CREATE TABLE access_logs (
   id         INTEGER PRIMARY KEY,
   at         TEXT NOT NULL,
   user_id    INTEGER NOT NULL REFERENCES users(id),
-  action     TEXT NOT NULL,             -- login / logout / patient.view / patient.create / prescription.create / note.create / record.create / master.import
+  action     TEXT NOT NULL,             -- 操作の種類（一覧は logs.js の ACTIONS）
   patient_id INTEGER REFERENCES patients(id),
   detail     TEXT
 );

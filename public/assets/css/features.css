@@ -1,0 +1,188 @@
+/* 追加した画面：受付状況・調剤監査・トレーシングレポート・在宅・つながる薬局・アカウント・薬局の数字 */
+.btn-small { height: 26px; padding: 0 9px; font-size: 12px; font-weight: 700; }
+.input-small { height: 26px; font-size: 12px; }
+.panel-foot { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-top: 1px solid var(--border); background: #fafbfc; }
+.panel-foot .spacer { flex: 1; }
+.check-row { display: flex; gap: 6px; align-items: baseline; padding: 5px 8px; font-size: 13px; border: 1px solid var(--border); border-radius: var(--radius); background: #fff; cursor: pointer; }
+.check-row:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
+.suggest { position: absolute; z-index: 20; margin: 0; padding: 0; list-style: none; background: #fff; border: 1px solid var(--border-strong); border-radius: var(--radius); box-shadow: 0 6px 18px rgba(0, 0, 0, .12); }
+.suggest li { display: flex; gap: 10px; padding: 6px 10px; cursor: pointer; }
+.suggest li[aria-selected="true"] { background: var(--accent-soft); }
+.suggest li.none { color: var(--sub); cursor: default; }
+
+/* ---------- 受付状況 ---------- */
+.board-page { display: flex; flex-direction: column; gap: 12px; }
+.board-controls { display: flex; align-items: flex-end; gap: 16px; flex-wrap: wrap; }
+.board-controls .spacer { flex: 1; }
+.reception-search { position: relative; width: 380px; }
+.board-suggest { top: 100%; left: 0; right: 0; }
+.board-summary { display: flex; gap: 22px; margin: 0; }
+.board-summary dt { font-size: 11px; color: var(--sub); }
+.board-summary dd { margin: 0; font-size: 18px; font-weight: 700; text-align: left; }
+.board { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
+.board-col { background: #e9edf0; border-radius: var(--radius); display: flex; flex-direction: column; min-height: 0; }
+.board-col header { display: flex; align-items: baseline; gap: 6px; padding: 7px 10px; }
+.board-col header .count { font-weight: 700; color: var(--accent-strong); }
+.board-col header .hint { margin-left: auto; font-size: 11px; }
+.board-cards { flex: 1; overflow: auto; padding: 0 8px 8px; display: grid; gap: 6px; align-content: start; }
+.board-cards .empty { padding: 10px; font-size: 12px; }
+.board-card { background: #fff; border: 1px solid var(--border-strong); border-radius: var(--radius); padding: 7px 9px; display: grid; gap: 4px; }
+.board-card.long { border-color: var(--danger); box-shadow: inset 3px 0 0 var(--danger); }
+.board-card.long .bc-wait { color: var(--danger); }
+.bc-head { display: flex; align-items: baseline; gap: 6px; }
+.bc-name { font-weight: 700; font-size: 15px; text-decoration: none; color: var(--text); }
+.bc-no { font-size: 11px; color: var(--sub); }
+.bc-time { display: flex; justify-content: space-between; font-size: 12px; color: var(--sub); }
+.bc-wait { font-weight: 700; color: var(--text); }
+.bc-steps { font-size: 11px; color: var(--sub); }
+.bc-actions { display: flex; justify-content: flex-end; }
+.col-paid .board-card { opacity: .7; }
+
+/* ---------- 調剤監査 ---------- */
+.inspect-items { width: 440px; flex-shrink: 0; display: flex; flex-direction: column; }
+.inspect-scan { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.scan-body { flex: 1; min-height: 0; overflow: auto; display: grid; gap: 10px; align-content: start; }
+.scan-input { font-family: Consolas, monospace; font-size: 15px; height: 38px; }
+.check-items { list-style: none; margin: 0; padding: 8px; display: grid; gap: 6px; overflow: auto; }
+.check-items li { display: grid; grid-template-columns: 26px 1fr auto; gap: 2px 8px; align-items: center; padding: 8px 10px; border: 1px solid var(--border-strong); border-radius: var(--radius); background: #fff; }
+.check-items li .mark { grid-row: span 2; width: 24px; height: 24px; border-radius: 50%; border: 2px solid var(--border-strong); display: grid; place-items: center; }
+.check-items li.done { border-color: #8fd0a4; background: #f1faf3; }
+.check-items li.done .mark { border-color: var(--ok); background: var(--ok); color: #fff; }
+.check-items .name { font-weight: 700; }
+.check-items .sub { grid-column: 2 / -1; font-size: 11.5px; color: var(--sub); }
+.demo-scan { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; padding: 6px 8px; border: 1px dashed var(--border-strong); border-radius: var(--radius); }
+.scan-log { list-style: none; margin: 0; padding: 0; display: grid; gap: 5px; }
+.scan-log li { padding: 6px 9px; border: 1px solid var(--border); border-radius: var(--radius); font-size: 13px; }
+.scan-log li b { margin-left: 5px; }
+.scan-log .sub { font-size: 11.5px; color: var(--sub); }
+.scan-log .r-match { border-color: #8fd0a4; background: #f1faf3; }
+.scan-log .r-wrong, .scan-log .r-expired { border-color: #e3a19a; background: var(--danger-soft); box-shadow: inset 3px 0 0 var(--danger); }
+.scan-log .r-unknown { border-color: #e0b44a; background: #fffaf0; }
+.past h3 { font-size: 12px; color: var(--sub); }
+.past-row { font-size: 12px; }
+
+/* ---------- トレーシングレポート ---------- */
+.tracing-form { max-width: 980px; margin: 0 auto; }
+.tracing-body { display: grid; gap: 12px; }
+.tracing-to { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 10px; }
+.tracing-sections { display: grid; gap: 10px; }
+.tracing-sections .req { margin-left: 6px; font-size: 11px; color: var(--danger); }
+.tracing-sheet .to { display: flex; justify-content: space-between; font-size: 15px; }
+.tracing-sheet .t-head th { width: 14%; }
+.tracing-sheet .t-body { margin-top: 10px; }
+.tracing-sheet .t-body th { text-align: left; }
+.tracing-sheet .t-body td { height: 54px; vertical-align: top; }
+.tracing-sheet .consent { font-size: 13px; margin: 10px 0 0; }
+.tracing-sheet .none { color: var(--sub); }
+.tracing-print-bar { display: flex; }
+
+/* ---------- 在宅 ---------- */
+.home-patients { width: 380px; flex-shrink: 0; display: flex; flex-direction: column; }
+.home-list { flex: 1; min-height: 0; overflow: auto; padding: 10px; display: grid; gap: 12px; align-content: start; }
+.home-group h3 { font-size: 13px; display: flex; gap: 8px; align-items: baseline; margin-bottom: 4px; }
+.home-group h3 .sub { font-size: 11px; color: var(--sub); font-weight: 400; }
+.home-group ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 5px; }
+.home-group li { border: 1px solid var(--border-strong); border-radius: var(--radius); padding: 6px 9px; display: grid; gap: 2px; background: #fff; }
+.home-group li .btn { justify-self: end; }
+.home-group .none { font-size: 12px; color: var(--sub); margin: 0; }
+.hp-head { display: flex; justify-content: space-between; align-items: baseline; }
+.hp-name { font-weight: 700; text-decoration: none; color: var(--text); }
+.hp-visits.full { color: var(--danger); font-weight: 700; }
+.hp-sub { font-size: 12px; color: var(--sub); }
+.hp-plan { font-size: 12px; }
+.hp-plan.due { color: var(--danger); font-weight: 700; }
+.hp-plan.none { color: #7a5400; }
+.home-calendar { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.home-calendar .month { font-size: 15px; font-weight: 700; min-width: 7em; text-align: center; }
+.calendar { flex: 1; min-height: 0; overflow: auto; padding: 8px; display: flex; flex-direction: column; }
+.cal-head, .cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 2px; }
+.cal-head span { text-align: center; font-size: 12px; color: var(--sub); padding: 3px; }
+.cal-grid { flex: 1; grid-auto-rows: minmax(86px, 1fr); }
+.cal-day { background: #fff; border: 1px solid var(--border); padding: 3px 4px; display: flex; flex-direction: column; gap: 2px; cursor: pointer; min-width: 0; }
+.cal-day:hover { background: #f5fafd; }
+.cal-day.out { background: #f4f6f7; color: var(--sub); }
+.cal-day.today { box-shadow: inset 0 0 0 2px var(--accent); }
+.cal-date { font-size: 12px; font-weight: 700; }
+.cal-visit { display: flex; flex-direction: column; align-items: flex-start; text-align: left; border: 1px solid #9fb7d6; background: #f0f5fb; color: #2c4e7a; border-radius: 2px; padding: 1px 5px; font-size: 12px; cursor: pointer; overflow: hidden; }
+.cal-visit small { font-size: 10px; color: var(--sub); }
+.cal-visit.done { border-color: #8fd0a4; background: #eaf8ee; color: #17602f; }
+.cal-visit.late { border-color: #e3a19a; background: var(--danger-soft); color: #8f2318; }
+.cal-legend { display: flex; gap: 8px; align-items: center; margin: 6px 0 0; }
+.cal-legend .cal-visit { display: inline-flex; cursor: default; }
+.plan-history { font-size: 12.5px; padding: 6px 9px; background: #f7f9fa; border: 1px solid var(--border); border-radius: var(--radius); display: grid; gap: 2px; }
+.plan-row { display: grid; grid-template-columns: 1fr 1fr 2fr; gap: 10px; }
+.visit-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.field > label .btn { margin-left: 8px; }
+dialog .dialog-foot .spacer { flex: 1; }
+#h-patient { height: auto; }
+.home-sheet h1 { letter-spacing: .2em; }
+.home-sheet .to { font-size: 15px; }
+.home-sheet .blocks { margin-top: 10px; }
+.home-sheet .blocks th { text-align: left; }
+.home-sheet .blocks td { vertical-align: top; min-height: 60px; line-height: 1.7; }
+
+/* ---------- つながる薬局 ---------- */
+.threads { width: 360px; flex-shrink: 0; display: flex; flex-direction: column; }
+.thread-list { flex: 1; min-height: 0; overflow: auto; list-style: none; margin: 0; padding: 0; outline: none; }
+.thread-list li { padding: 8px 12px; border-bottom: 1px solid var(--border); cursor: pointer; }
+.thread-list li[aria-selected="true"] { background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent); }
+.thread-list li.none { color: var(--sub); cursor: default; }
+.th-head { display: flex; gap: 6px; align-items: baseline; }
+.th-head .sub { font-size: 11px; color: var(--sub); }
+.th-head .time { margin-left: auto; font-size: 11px; color: var(--sub); }
+.th-last { font-size: 12.5px; color: var(--sub); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.th-last.in { color: var(--text); }
+.demo-receive { border-top: 1px solid var(--border); }
+.demo-receive .panel-body { display: grid; gap: 6px; }
+.demo-receive select { height: auto; }
+.chat { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.chat-log { flex: 1; min-height: 0; overflow: auto; list-style: none; margin: 0; padding: 14px; display: flex; flex-direction: column; gap: 8px; background: #eef3f0; }
+.msg { display: flex; flex-direction: column; max-width: 70%; }
+.msg.out { align-self: flex-end; align-items: flex-end; }
+.msg .bubble { padding: 7px 11px; border-radius: 12px; background: #fff; border: 1px solid var(--border); }
+.msg.out .bubble { background: #d9f2df; border-color: #bfe3c8; }
+.msg .meta { font-size: 11px; color: var(--sub); margin-top: 2px; }
+.chat-reply { display: flex; gap: 8px; padding: 10px; border-top: 1px solid var(--border); align-items: flex-end; }
+.chat-reply textarea { flex: 1; }
+
+/* ---------- アカウント ---------- */
+.account-panel { max-width: 720px; }
+.account-body { display: grid; gap: 12px; }
+.account-body p { margin: 0; }
+.setup-steps { margin: 0; padding-left: 1.4em; display: grid; gap: 14px; }
+.qr { margin: 8px 0; }
+.qr svg { width: 200px; height: 200px; }
+.secret { font-size: 14px; letter-spacing: .05em; background: #f6f8f9; padding: 2px 6px; }
+.code-form { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.code-form label { width: 100%; font-size: 12px; font-weight: 700; color: var(--sub); }
+.code-input { width: 120px; font-size: 20px; letter-spacing: .2em; text-align: center; font-family: Consolas, monospace; height: 40px; }
+
+/* ---------- 薬局の数字 ---------- */
+.stats-page { display: grid; gap: 14px; align-content: start; }
+.stats-filter { display: flex; align-items: flex-end; gap: 16px; }
+.stats-filter .hint { margin: 0 0 6px; }
+.stat-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.stat-tile { background: #fff; border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 14px; display: grid; gap: 2px; }
+.stat-tile .label { font-size: 12px; color: var(--sub); font-weight: 700; }
+.stat-tile .value { font-size: 28px; font-weight: 700; text-align: left; }
+.stat-tile .value small { font-size: 14px; margin-left: 2px; }
+.stat-tile .delta { font-size: 12px; color: var(--sub); }
+.charts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.chart { margin: 0; padding: 10px 12px; }
+.chart figcaption { font-weight: 700; font-size: 13px; margin-bottom: 4px; }
+.chart svg { width: 100%; height: auto; display: block; }
+.chart .grid-line { stroke: #e6eaed; stroke-width: 1; }
+.chart .tick { fill: var(--sub); font-size: 11px; }
+.chart .bar { fill: #0a7fb3; }
+.chart .value-label { fill: var(--text); font-size: 12px; font-weight: 700; }
+.chart .hit { fill: transparent; }
+.chart .hit.on { fill: rgba(10, 127, 179, .07); }
+.chart-tip { position: fixed; z-index: 30; pointer-events: none; background: #2f3a42; color: #fff; padding: 4px 9px; border-radius: var(--radius); font-size: 12px; white-space: nowrap; }
+.stats-table .scroll { max-height: 360px; overflow: auto; }
+.stats-table .grid tbody tr { cursor: default; }
+.stats-note { padding: 8px 12px; margin: 0; border-top: 1px solid var(--border); line-height: 1.7; }
+
+@media (max-width: 1100px) {
+  .charts, .stat-tiles { grid-template-columns: 1fr; }
+  .board { grid-template-columns: repeat(5, minmax(160px, 1fr)); overflow-x: auto; }
+}

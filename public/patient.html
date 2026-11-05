@@ -8,6 +8,7 @@
 <link rel="stylesheet" href="/assets/css/app.css">
 <link rel="stylesheet" href="/assets/css/tour.css">
 <link rel="stylesheet" href="/assets/css/patient.css">
+<link rel="stylesheet" href="/assets/css/assist.css">
 <script type="module" src="/assets/js/patient.js"></script>
 </head>
 <body class="app">
@@ -18,7 +19,7 @@
   <section class="panel patient-band band-top" id="band"></section>
   <main class="content split">
     <aside class="panel summary" id="summary">
-      <div class="panel-head">この患者の要点<span class="spacer"></span><button type="button" class="btn btn-small" id="add-note">メモを追加（Alt+M）</button></div>
+      <div class="panel-head">この患者の要点<span class="spacer"></span><button type="button" class="btn btn-small" id="add-lab">検査値（Alt+L）</button><button type="button" class="btn btn-small" id="add-note">メモ（Alt+M）</button></div>
       <div class="summary-body" id="summary-body"></div>
     </aside>
     <section class="panel history" id="history">
@@ -36,9 +37,10 @@
     </section>
   </main>
   <footer class="actionbar">
-    <div class="keys"><span><kbd>↑</kbd><kbd>↓</kbd>来局を選ぶ</span><span><kbd>Alt</kbd>+<kbd>K</kbd>指導記録を記載</span><span><kbd>Alt</kbd>+<kbd>M</kbd>メモを追加</span></div>
+    <div class="keys"><span><kbd>↑</kbd><kbd>↓</kbd>来局を選ぶ</span><span><kbd>Alt</kbd>+<kbd>K</kbd>指導記録を記載</span><span><kbd>Alt</kbd>+<kbd>M</kbd>メモを追加</span><span><kbd>Alt</kbd>+<kbd>L</kbd>検査値</span><span><kbd>Alt</kbd>+<kbd>T</kbd>トレーシングレポート</span></div>
     <span class="spacer"></span>
     <a class="btn" id="to-logs">閲覧記録</a>
+    <a class="btn" id="to-tracing">トレーシングレポート（Alt+T）</a>
     <button type="button" class="btn" id="do-rx" disabled>選んだ処方でDo（Alt+D）</button>
     <a class="btn btn-primary" id="new-rx">新規処方（Alt+N）</a>
   </footer>
@@ -68,11 +70,20 @@
   </form>
 </dialog>
 
-<dialog id="record-dialog" class="wide" aria-labelledby="record-dialog-title">
+<dialog id="record-dialog" class="wide assist-dialog" aria-labelledby="record-dialog-title">
   <form id="record-form" novalidate>
     <div class="panel-head" id="record-dialog-title">指導記録を記載</div>
+    <div class="assist-layout">
     <div class="dialog-body">
       <div class="record-context" id="record-context"></div>
+      <div class="record-tools">
+        <button type="button" class="btn btn-small" id="make-draft" title="会話の文字起こし・処方の変化・検査値・指導内容の提案から S・O・A・P を組み立てる">下書きを作る（Alt+G）</button>
+        <label class="hint" for="template-select">テンプレート</label>
+        <select class="input input-small" id="template-select"></select>
+        <button type="button" class="btn btn-small" id="apply-template">写す</button>
+        <button type="button" class="btn btn-ghost btn-small" id="save-template">今の内容をテンプレートに</button>
+        <span class="tag tag-warn" id="drafted-tag" hidden>下書きから</span>
+      </div>
       <div class="soap-grid" id="soap-fields"></div>
       <div class="record-checks">
         <div class="field">
@@ -86,6 +97,51 @@
       </div>
       <span class="error-text" data-error="subjective"></span>
       <p class="hint">記載した薬剤師の名前と日時は自動で残ります。追記のみで、消せません。</p>
+    </div>
+    <aside class="assist" id="assist">
+      <section class="assist-block" id="conv-block">
+        <h3>服薬指導の会話</h3>
+        <div class="conv-actions">
+          <button type="button" class="btn btn-small" id="rec-toggle"></button>
+          <span class="rec-time num" id="rec-time" hidden></span>
+          <button type="button" class="btn btn-small" id="rec-file-btn">録音ファイルを読み込む</button><input type="file" id="rec-file" accept="audio/*" hidden>
+        </div>
+        <p class="hint">録音を止めると文字にします（このアプリでは固定の文を返します）。通信が切れていたときは、録音したファイルを後から読み込めます。音声は保存しません。</p>
+        <div class="transcript" id="transcript" hidden></div>
+        <div class="extracted" id="extracted" hidden></div>
+      </section>
+      <section class="assist-block">
+        <h3>指導内容の提案<span class="sub">処方・患者の情報・過去の薬歴から</span></h3>
+        <ul class="suggestions" id="suggestions"></ul>
+      </section>
+      <section class="assist-block" id="line-block" hidden>
+        <h3>つながる薬局で届いたメッセージ<span class="sub">前回の来局より後</span></h3>
+        <ul class="line-list" id="line-list"></ul>
+      </section>
+    </aside>
+    </div>
+    <div class="dialog-foot">
+      <button type="button" class="btn" data-close>キャンセル（Esc）</button>
+      <button type="submit" class="btn btn-primary">保存（Ctrl+Enter）</button>
+    </div>
+  </form>
+</dialog>
+<dialog id="lab-dialog" class="wide" aria-labelledby="lab-dialog-title">
+  <form id="lab-form" novalidate>
+    <div class="panel-head" id="lab-dialog-title">検査値・体重を入力</div>
+    <div class="dialog-body">
+      <div class="lab-top">
+        <div class="field">
+          <label for="lab-date">検査日・測定日</label>
+          <input class="input" type="date" id="lab-date" name="measuredOn">
+          <span class="error-text" data-error="measuredOn"></span>
+        </div>
+        <button type="button" class="btn" id="lab-photo-btn">検査結果の用紙を撮影して読み取る</button><input type="file" id="lab-photo" accept="image/*" capture="environment" hidden>
+        <span class="tag tag-warn" id="lab-photo-tag" hidden>用紙から読み取った値です。用紙と見比べてから保存してください</span>
+      </div>
+      <div class="lab-grid" id="lab-grid"></div>
+      <span class="error-text" data-error="values"></span>
+      <p class="hint">空欄の項目は保存しません。追記のみで、消せません（間違えたら正しい値を同じ日付で入れ直します）。</p>
     </div>
     <div class="dialog-foot">
       <button type="button" class="btn" data-close>キャンセル（Esc）</button>

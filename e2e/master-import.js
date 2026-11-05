@@ -13,7 +13,7 @@ const CHANNEL = process.env.BROWSER === "chrome" ? "chrome" : "msedge";
 const browser = await chromium.launch({ channel: CHANNEL, headless: true });
 const context = await browser.newContext({ locale: "ja-JP", timezoneId: "Asia/Tokyo", viewport: { width: 1366, height: 768 } });
 await context.addInitScript(() => {
-  for (const k of ["login", "patients", "master"]) localStorage.setItem(`tour:${k}`, "2"); // tour.js の VERSION と揃える
+  for (const k of ["login", "patients", "master"]) localStorage.setItem(`tour:${k}`, "3"); // tour.js の VERSION と揃える
 });
 const page = await context.newPage();
 const errors = [];

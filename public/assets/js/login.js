@@ -12,16 +12,43 @@ form.addEventListener("submit", async (e) => {
   const button = form.querySelector("button[type=submit]");
   button.disabled = true;
   try {
-    await api("/api/login", { method: "POST", body: { loginId: form.loginId.value.trim(), password: form.password.value } });
-    // 別サイトへ飛ばされないよう、戻り先は自サイト内のパスだけを受け付ける
-    const next = new URLSearchParams(location.search).get("next");
-    location.href = next && next.startsWith("/") && !next.startsWith("//") ? next : "/patients";
+    const r = await api("/api/login", { method: "POST", body: { loginId: form.loginId.value.trim(), password: form.password.value } });
+    if (r.mfa) {
+      // パスワードは合った。多要素認証を設定した人には、続けて認証アプリの6桁を求める
+      form.hidden = true;
+      mfaForm.hidden = false;
+      mfaForm.code.focus();
+      return;
+    }
+    goNext();
   } catch (err) {
     if (!(err instanceof ApiError)) throw err;
     error.textContent = err.message;
     error.hidden = false;
     form.password.select();
     button.disabled = false;
+  }
+});
+
+// 別サイトへ飛ばされないよう、戻り先は自サイト内のパスだけを受け付ける
+function goNext() {
+  const next = new URLSearchParams(location.search).get("next");
+  location.href = next && next.startsWith("/") && !next.startsWith("//") ? next : "/patients";
+}
+
+const mfaForm = document.querySelector("#mfa-form");
+const mfaError = document.querySelector("#mfa-error");
+mfaForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  mfaError.hidden = true;
+  try {
+    await api("/api/login/mfa", { method: "POST", body: { code: mfaForm.code.value.trim() } });
+    goNext();
+  } catch (err) {
+    if (!(err instanceof ApiError)) throw err;
+    mfaError.textContent = err.message;
+    mfaError.hidden = false;
+    mfaForm.code.select();
   }
 });
 

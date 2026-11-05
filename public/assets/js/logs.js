@@ -13,6 +13,20 @@ const ACTIONS = {
   "note.create": ["患者メモを追加", "act-create"],
   "record.create": ["指導記録を記載", "act-create"],
   "master.import": ["医薬品マスターを取り込み", "act-create"],
+  "measurement.create": ["検査値を入力", "act-create"],
+  "conversation.create": ["服薬指導を文字起こし", "act-create"],
+  "tracing.create": ["トレーシングレポートを作成", "act-create"],
+  "homecare.register": ["在宅の患者を登録", "act-create"],
+  "homecare.plan": ["在宅の計画書を作成", "act-create"],
+  "homecare.schedule": ["訪問を予定", "act-create"],
+  "homecare.visit": ["訪問を記録", "act-create"],
+  "reception.create": ["処方箋を受付", "act-create"],
+  "reception.step": ["業務を進めた", "act-create"],
+  "inspection.create": ["調剤監査を保存", "act-create"],
+  "line.receive": ["つながる薬局で受信", "act-create"],
+  "line.reply": ["つながる薬局で返信", "act-create"],
+  "mfa.enable": ["多要素認証を有効にした", ""],
+  "mfa.disable": ["多要素認証を無効にした", ""],
 };
 
 const logs = await api(`/api/access-logs${patientId ? `?patient=${patientId}` : ""}`);

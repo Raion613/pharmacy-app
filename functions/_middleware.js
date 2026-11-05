@@ -2,7 +2,7 @@
 import { getSessionUser } from "../src/server/session.js";
 import { HttpError, json } from "../src/server/http.js";
 
-const PUBLIC_PATHS = new Set(["/login", "/login.html", "/api/login"]);
+const PUBLIC_PATHS = new Set(["/login", "/login.html", "/api/login", "/api/login/mfa"]);
 
 export async function onRequest(context) {
   const { request, env, data, next } = context;

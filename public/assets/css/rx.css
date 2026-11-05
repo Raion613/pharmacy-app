@@ -157,3 +157,16 @@
 .bill-lines summary { cursor: pointer; font-size: 12px; color: var(--accent-strong); }
 .bill-lines ul { margin: 4px 0 0; padding: 0; list-style: none; display: grid; gap: 2px; font-size: 12px; }
 .bill-lines li { display: flex; justify-content: space-between; gap: 8px; }
+
+/* 小児の分量 */
+.peds { border: 1px solid var(--border-strong); border-radius: var(--radius); padding: 8px 10px; display: grid; gap: 6px; }
+.peds-head { font-weight: 700; display: flex; flex-direction: column; gap: 1px; }
+.peds-weight-form { display: flex; align-items: center; gap: 5px; font-size: 12px; }
+.peds-weight-form .input { width: 70px; height: 26px; }
+.peds ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; }
+.peds li { padding: 5px 7px; border: 1px solid var(--border); border-radius: var(--radius); font-size: 12.5px; }
+.peds li b { margin-left: 4px; }
+.peds li.peds-ok { border-color: #8fd0a4; background: #f1faf3; }
+.peds li.peds-low, .peds li.peds-high, .peds li.peds-check { border-color: #e0b44a; background: #fffaf0; }
+.peds li.peds-over { border-color: #e3a19a; background: var(--danger-soft); box-shadow: inset 3px 0 0 var(--danger); }
+.peds li.none { color: var(--sub); border-style: dashed; }

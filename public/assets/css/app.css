@@ -68,7 +68,8 @@ body.app { display: flex; }
 }
 .topbar h1 { font-size: 16px; font-weight: 700; }
 .topbar .spacer { flex: 1; }
-.topbar .user { color: var(--sub); font-size: 13px; }
+.topbar .user { color: var(--sub); font-size: 13px; text-decoration: none; }
+.topbar .user:hover { color: var(--accent); text-decoration: underline; }
 .topbar .tour-button { height: 30px; padding: 0 10px; border-color: var(--accent-line); color: var(--accent-strong); font-size: 13px; }
 .topbar .tour-button:hover { background: var(--accent-soft); }
 .crumbs {

@@ -6,9 +6,13 @@ import { NOTE_LABEL } from "./record-kinds.js";
 
 const NAV = [
   { page: "patients", href: "/patients", label: "患者", icon: "users", key: "1" },
-  { page: "drugs", href: "/drugs", label: "薬価照会", icon: "pill", key: "2" },
-  { page: "logs", href: "/logs", label: "閲覧記録", icon: "history", key: "3" },
-  { page: "master", href: "/master", label: "マスター取込", icon: "upload", key: "4" },
+  { page: "board", href: "/board", label: "受付状況", icon: "clipboard", key: "2" },
+  { page: "homecare", href: "/homecare", label: "在宅", icon: "home", key: "3" },
+  { page: "messages", href: "/messages", label: "つながる薬局", icon: "message", key: "4" },
+  { page: "stats", href: "/stats", label: "薬局の数字", icon: "chart", key: "5" },
+  { page: "drugs", href: "/drugs", label: "薬価照会", icon: "pill", key: "6" },
+  { page: "logs", href: "/logs", label: "閲覧記録", icon: "history", key: "7" },
+  { page: "master", href: "/master", label: "マスター取込", icon: "upload", key: "8" },
 ];
 
 // 左のアイコン列と上の帯を描く。crumbs は [{ label, href? }]
@@ -22,7 +26,7 @@ export function renderShell({ page, title, crumbs }) {
   const topbar = document.querySelector(".topbar");
   topbar.innerHTML = `<h1>${escapeHtml(title)}</h1><span class="spacer"></span>
     <button type="button" class="btn tour-button" id="tour-button" title="この画面の使い方をもう一度見る">${icon("help", 16)}チュートリアル</button>
-    <span class="user" id="current-user"></span>
+    <a class="user" id="current-user" href="/account" title="アカウント（多要素認証の設定）"></a>
     <button type="button" class="btn btn-ghost" id="logout">${icon("logOut", 16)}ログアウト</button>`;
   topbar.querySelector("#tour-button").addEventListener("click", startTour);
   topbar.querySelector("#logout").addEventListener("click", async () => {
@@ -66,7 +70,7 @@ export async function api(path, { method = "GET", body } = {}) {
     headers: body === undefined ? {} : { "content-type": "application/json" },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
-  if (res.status === 401 && path !== "/api/login") {
+  if (res.status === 401 && !path.startsWith("/api/login")) { // ログインの画面（パスワード・6桁）の 401 は、その画面で文言を出す
     location.href = `/login?next=${encodeURIComponent(location.pathname + location.search)}`;
     return new Promise(() => {}); // 画面遷移するので、呼び出し元の続きは実行させない
   }

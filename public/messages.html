@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>つながる薬局</title>
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/assets/css/app.css">
+<link rel="stylesheet" href="/assets/css/tour.css">
+<link rel="stylesheet" href="/assets/css/features.css">
+<script type="module" src="/assets/js/messages.js"></script>
+</head>
+<body class="app">
+<nav class="sidebar"></nav>
+<div class="main">
+  <header class="topbar"></header>
+  <nav class="crumbs"></nav>
+  <main class="content split messages-page">
+    <aside class="panel threads">
+      <div class="panel-head">やり取りのある患者<span class="count" id="thread-count"></span></div>
+      <ul class="thread-list" id="threads" tabindex="0" aria-label="患者ごとの最新のメッセージ"></ul>
+      <section class="demo-receive">
+        <div class="panel-head">デモ：患者からのメッセージを受信したことにする</div>
+        <form class="panel-body" id="receive-form" novalidate>
+          <div class="field"><label for="receive-q">患者（カナ・氏名・患者番号）</label><input class="input" id="receive-q" autocomplete="off"><select class="input" id="receive-patient" size="3"></select></div>
+          <div class="field"><label for="receive-body">メッセージ</label><textarea class="input textarea" id="receive-body" rows="2" maxlength="500" placeholder="例：薬が1日分足りないようです"></textarea></div>
+          <span class="error-text" id="receive-error"></span>
+          <button type="submit" class="btn">受信する</button>
+          <p class="hint">「つながる薬局」（ファーマシフト社の LINE 公式アカウントのサービス）とは実際にはつないでいません。本物なら、つながる薬局のサーバーからこのアプリにメッセージが届きます。</p>
+        </form>
+      </section>
+    </aside>
+    <section class="panel chat">
+      <div class="panel-head" id="chat-head">患者を選んでください</div>
+      <ol class="chat-log" id="chat-log"></ol>
+      <form class="chat-reply" id="reply-form" novalidate hidden>
+        <textarea class="input textarea" id="reply-body" rows="2" maxlength="500" placeholder="返信（Ctrl+Enter で送る）"></textarea>
+        <button type="submit" class="btn btn-primary" id="reply-send">返信する</button>
+      </form>
+    </section>
+  </main>
+</div>
+</body>
+</html>
