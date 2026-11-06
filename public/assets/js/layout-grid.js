@@ -1,41 +1,27 @@
-// 箱を並べる画面の仕組み。画面を 12列 × 12行 の格子に分け、箱（data-box を付けた要素）をその上の長方形に置く。
-//   - 「配置を変える」を押すと編集になり、箱の見出しを引っぱると動き、右下の角を引っぱると大きさが変わる（指でもマウスでも）
+// 箱を並べる画面の仕組み。横は 12列、縦は段（行）に分け、箱（data-box を付けた要素）を「何列目から何列ぶん・何段目から何段ぶん」で置く。
+//   - 箱の高さは中身で決まる（段の高さは、その段でいちばん背の高い箱に合う）。箱の中ではスクロールさせない。
+//     画面に入りきらないときは、箱を並べた領域全体が1本のスクロールで動く
+//   - 文字の大きさは変えない（ほかの画面と同じ）
+//   - 「配置を変える」を押すと編集になり、箱の見出しを引っぱると動き、右下の角を引っぱると幅と段数が変わる（指でもマウスでも）
 //   - 「完了」で利用者ごとにサーバーへ保存する。「初期の配置」で画面が決めた配置に戻す
-//   - 画面全体はスクロールさせない。箱の中身が入りきらなければ、文字を読める大きさの下限まで小さくして収める。
-//     それでも入らないときだけ、その箱の中でスクロールする
 import { api, toast } from "./app.js";
 
 const COLS = 12;
-const ROWS = 12;
-const MIN = { w: 2, h: 2 };
-const FONT_MIN = 12; // これより小さい文字にはしない（読めなくなる）
+const ROWS = 12; // 段の数の上限
+const MIN = { w: 2, h: 1 };
 
 export function setupLayout({ grid, page, defaults, editButton, resetButton }) {
   const boxes = new Map([...grid.querySelectorAll("[data-box]")].map((el) => [el.dataset.box, el]));
   let pos = structuredClone(defaults);
   let editing = false;
 
-  const apply = () => {
-    for (const [id, el] of boxes) {
-      const p = pos[id];
-      el.style.gridColumn = `${p.c} / span ${p.w}`;
-      el.style.gridRow = `${p.r} / span ${p.h}`;
-    }
-    fitAll();
+  const place = (el, p) => {
+    el.style.gridColumn = `${p.c} / span ${p.w}`;
+    el.style.gridRow = `${p.r} / span ${p.h}`;
   };
-
-  // 箱ごとに、入りきる一番大きい文字の大きさを探す（data-font-max から 1px ずつ下げる）
-  function fit(el) {
-    const body = el.querySelector("[data-fit]");
-    const max = Number(el.dataset.fontMax);
-    for (let size = max; size >= FONT_MIN; size--) {
-      body.style.fontSize = `${size}px`;
-      if (body.scrollHeight <= body.clientHeight + 1 && body.scrollWidth <= body.clientWidth + 1) return;
-    }
-  }
-  function fitAll() {
-    for (const el of boxes.values()) fit(el);
-  }
+  const apply = () => {
+    for (const [id, el] of boxes) place(el, pos[id]);
+  };
 
   const overlaps = (id, p) => [...boxes.keys()].some((other) => {
     if (other === id) return false;
@@ -43,16 +29,24 @@ export function setupLayout({ grid, page, defaults, editButton, resetButton }) {
     return p.c < q.c + q.w && q.c < p.c + p.w && p.r < q.r + q.h && q.r < p.r + p.h;
   });
 
-  // 画面上の座標 → 格子の列・行（1から）
+  // 画面上の座標 → 列・段（1から）。列は等分、段は高さがまちまちなので、実際の段の高さ（計算済みの値）で数える
   function cellAt(x, y) {
     const rect = grid.getBoundingClientRect();
     const style = getComputedStyle(grid);
     const left = rect.left + parseFloat(style.paddingLeft);
-    const top = rect.top + parseFloat(style.paddingTop);
     const width = rect.width - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
-    const height = rect.height - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom);
     const c = Math.floor(((x - left) / width) * COLS) + 1;
-    const r = Math.floor(((y - top) / height) * ROWS) + 1;
+    const gap = parseFloat(style.rowGap);
+    const tracks = style.gridTemplateRows.split(" ").map(parseFloat);
+    let top = rect.top + parseFloat(style.paddingTop) - grid.scrollTop;
+    let r = tracks.length + 1; // いちばん下の段より下なら、新しい段
+    for (let i = 0; i < tracks.length; i++) {
+      if (y < top + tracks[i] + gap / 2) {
+        r = i + 1;
+        break;
+      }
+      top += tracks[i] + gap;
+    }
     return { c: Math.max(1, Math.min(COLS, c)), r: Math.max(1, Math.min(ROWS, r)) };
   }
 
@@ -77,8 +71,7 @@ export function setupLayout({ grid, page, defaults, editButton, resetButton }) {
       }
       pos[id] = p;
       el.classList.toggle("blocked", overlaps(id, p));
-      el.style.gridColumn = `${p.c} / span ${p.w}`;
-      el.style.gridRow = `${p.r} / span ${p.h}`;
+      place(el, p);
     };
     const end = () => {
       el.removeEventListener("pointermove", move);
@@ -98,7 +91,7 @@ export function setupLayout({ grid, page, defaults, editButton, resetButton }) {
     el.querySelector(".pbox-head").addEventListener("pointerdown", (e) => startDrag(e, id, "move"));
     const handle = document.createElement("span");
     handle.className = "pbox-resize";
-    handle.title = "引っぱって大きさを変える";
+    handle.title = "引っぱって幅と段数を変える";
     handle.addEventListener("pointerdown", (e) => startDrag(e, id, "resize"));
     el.append(handle);
   }
@@ -125,8 +118,6 @@ export function setupLayout({ grid, page, defaults, editButton, resetButton }) {
     toast("初期の配置に戻しました");
   });
 
-  new ResizeObserver(fitAll).observe(grid);
-
   return {
     // 保存した配置を読む。画面の箱が増減していても、知らない箱は捨て、無い箱は初期の配置を使う
     async load() {
@@ -138,6 +129,5 @@ export function setupLayout({ grid, page, defaults, editButton, resetButton }) {
       }
       apply();
     },
-    fitAll,
   };
 }

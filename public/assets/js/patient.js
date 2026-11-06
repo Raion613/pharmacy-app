@@ -1,7 +1,7 @@
 // 薬歴：再来局した患者を開いたときに、この人について知っておくべきことを1画面で見渡す。
-//   上の箱：患者・注意点（アレルギー歴・副作用歴・疾患・併用薬）・次に確認すること（前回の P・申し送り）・今の処方・生活・検査値
-//   下の箱「経過」：全来局を新しい順に段組みで。処方の変化と指導記録を開かずに読める。選んだ来局だけ処方の中身と操作を出す
-//   下の箱「処方の推移」：薬 × 来局日の表。いつ始まり・変わり・止まったか
+//   箱：患者・注意点（アレルギー歴・副作用歴・疾患・併用薬）・次に確認すること（前回の P・申し送り）・今の処方・生活・検査値
+//   箱「経過」：全来局を新しい順に、横に並べて入りきらなければ次の行へ。処方の変化と指導記録を開かずに読める。選んだ来局だけ処方の中身と操作を出す
+//   箱「経過」のタブ「処方の推移」：薬 × 来局日の表。いつ始まり・変わり・止まったか
 //   箱の置き場所と大きさは「配置を変える」で利用者ごとに変えられる（layout-grid.js）
 //   指導記録を書く画面の右側：服薬指導の会話の録音と文字起こし、会話から拾った患者メモの候補、指導内容の提案、
 //   つながる薬局で届いたメッセージ。左の S・O・A・P には、下書き（会話と処方から組み立てた文）とテンプレートを写せる
@@ -43,20 +43,20 @@ const nextEl = document.querySelector("#next");
 const medsEl = document.querySelector("#current-meds");
 const otherEl = document.querySelector("#other");
 const labsEl = document.querySelector("#labs");
-// 初期の配置（12列 × 12行）。上の段に要点、下に経過
+// 初期の配置（12列。段の高さは中身で決まる）。上の2段に要点、3段目に経過を全幅で
 const layout = setupLayout({
   grid: document.querySelector("#pt-grid"),
   page: "patient",
   editButton: document.querySelector("#layout-edit"),
   resetButton: document.querySelector("#layout-reset"),
   defaults: {
-    patient: { c: 1, r: 1, w: 2, h: 2 },
-    labs: { c: 1, r: 3, w: 2, h: 3 },
-    cautions: { c: 3, r: 1, w: 4, h: 5 },
-    next: { c: 7, r: 1, w: 3, h: 5 },
-    meds: { c: 10, r: 1, w: 3, h: 3 },
-    other: { c: 10, r: 4, w: 3, h: 2 },
-    history: { c: 1, r: 6, w: 12, h: 7 },
+    patient: { c: 1, r: 1, w: 2, h: 1 },
+    labs: { c: 1, r: 2, w: 2, h: 1 },
+    cautions: { c: 3, r: 1, w: 4, h: 2 },
+    next: { c: 7, r: 1, w: 3, h: 1 },
+    other: { c: 7, r: 2, w: 3, h: 1 },
+    meds: { c: 10, r: 1, w: 3, h: 2 },
+    history: { c: 1, r: 3, w: 12, h: 1 },
   },
 });
 const timeline = document.querySelector("#timeline");
@@ -120,7 +120,7 @@ function latestRecordFrom(index) {
 }
 
 // ---------- 上：患者・注意点・次に確認すること・今の処方・生活・検査値 ----------
-// 箱の置き場所と大きさは利用者が変えられる（layout-grid.js）。中身を描き直したら文字の大きさを合わせ直す
+// 箱の置き場所と大きさは利用者が変えられる（layout-grid.js）
 
 const notesOf = (key) => notes.filter((n) => n.category === key);
 const noteItems = (key, newNoteId) => notesOf(key).map((n) => `<li class="${n.id === newNoteId ? "new" : ""}">${escapeHtml(n.body)}<span class="meta">${
@@ -209,7 +209,6 @@ function renderSummary(newNoteId = null) {
   renderMeds();
   renderOther(newNoteId);
   renderLabs();
-  layout.fitAll();
   if (newNoteId !== null) document.querySelector("li.new").scrollIntoView({ block: "nearest" });
 }
 
@@ -236,7 +235,6 @@ function renderTimeline() {
     });
   }
   if (selectedIndex >= 0) select(selectedIndex, false);
-  layout.fitAll();
 }
 
 function cardHtml(rx, i) {
@@ -384,7 +382,6 @@ function showTab(tab) {
     t.tabIndex = on ? 0 : -1;
     document.getElementById(t.getAttribute("aria-controls")).hidden = !on;
   }
-  layout.fitAll();
   if (tab.id === "tab-matrix") matrixView.parentElement.scrollLeft = matrixView.parentElement.scrollWidth; // 最新の来局が見えるように
 }
 for (const t of tabs) {
@@ -860,10 +857,10 @@ await layout.load();
 setTour("patient", [
   {
     title: "薬歴：この患者のことを1画面で",
-    body: `<p>来局した患者を開くと、最初にこの画面が出ます。スクロールせずに見渡せるよう、箱に分けて並べています。</p>
+    body: `<p>来局した患者を開くと、最初にこの画面が出ます。箱に分けて並べています。</p>
       <div class="tour-map">
-        <div><b>上の箱</b>患者・注意点・次に確認すること・今の処方・生活・検査値</div>
-        <div><b>下の箱</b>来局ごとの経過（処方の変化・指導記録）</div>
+        <div><b>上</b>患者・注意点・次に確認すること・今の処方・生活・検査値</div>
+        <div><b>下</b>来局ごとの経過（処方の変化・指導記録）</div>
         <div><b>左下</b>配置を変える（箱を動かす・大きさを変える）</div>
         <div><b>右下</b>次の操作（指導記録・Do・新規処方）</div>
       </div>`,
@@ -893,7 +890,7 @@ setTour("patient", [
     target: ".visit-card",
     optional: true,
     title: "経過：来局ごとのカード",
-    body: `<p>新しい来局から順に、左上から下へ、入りきらなければ右の段へ並べます。開かなくても中身が読めます。</p>
+    body: `<p>新しい来局から順に左から並べ、入りきらなければ次の行へ続けます。開かなくても中身が読めます。</p>
       <ul>
         <li><b>処方の変化</b>：前回と比べて <span class="change add"><b>＋追加</b></span> <span class="change stop"><b>−中止</b></span> <span class="change mod"><b>変更</b></span></li>
         <li><b>指導記録</b>：S 会話・訴え、O 服薬状況や検査値、A 薬剤師の所見、<strong>P 次回の留意点</strong></li>
@@ -924,7 +921,7 @@ setTour("patient", [
     placement: "top",
     title: "配置を変える",
     body: `<p>押すと箱の見出しを引っぱって動かせ、右下の角を引っぱって大きさを変えられます。「完了」で保存し、次からもその配置で開きます（利用者ごと）。</p>
-      <p>注意点が長い患者・来局が多い患者など、入りきらないときに広げてください。箱の中の文字は、入りきる大きさに自動で合わせます。</p>`,
+      <p>箱の高さは中身に合わせて伸びます。幅を広げると、長い注意点や処方が少ない行数で収まります。</p>`,
   },
   {
     target: "#write-record",

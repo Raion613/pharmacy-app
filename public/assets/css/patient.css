@@ -1,38 +1,39 @@
 .band-top { margin: 12px 16px 0; flex-shrink: 0; }
 .btn-small { height: 26px; padding: 0 9px; font-size: 12px; font-weight: 700; }
 
-/* ---------- 薬歴：箱を並べる格子（12列 × 12行）。画面全体はスクロールさせない ---------- */
+/* ---------- 薬歴：箱を並べる格子（12列。段の高さは中身で決まる） ----------
+   箱の中ではスクロールさせない。入りきらないときは、この領域全体が1本のスクロールで動く。文字の大きさはほかの画面と同じ */
 .pt-grid {
-  flex: 1; min-height: 0; display: grid; gap: 10px; padding: 10px 16px;
-  grid-template-columns: repeat(12, minmax(0, 1fr)); grid-template-rows: repeat(12, minmax(0, 1fr));
+  flex: 1; min-height: 0; overflow: auto; display: grid; gap: 10px; padding: 10px 16px; align-content: start;
+  grid-template-columns: repeat(12, minmax(0, 1fr)); grid-auto-rows: auto;
 }
-.pbox { position: relative; display: flex; flex-direction: column; min-width: 0; min-height: 0; background: #fff; border: 1px solid var(--border); border-radius: var(--radius); }
+.pbox { position: relative; display: flex; flex-direction: column; min-width: 0; background: #fff; border: 1px solid var(--border); border-radius: var(--radius); }
 .pbox-head {
   flex-shrink: 0; display: flex; align-items: center; gap: 8px; min-height: 34px; padding: 4px 10px;
   background: var(--head); border-bottom: 1px solid var(--border); font-weight: 700; font-size: 13px; touch-action: none;
 }
 .pbox-head .spacer { flex: 1; }
 .pbox-head .sub { font-weight: 400; font-size: 12px; color: var(--sub); }
-.pbox-body { flex: 1; min-height: 0; overflow: auto; padding: 8px 10px; line-height: 1.45; }
-.pbox .none { color: var(--sub); font-size: .85em; }
+.pbox-body { flex: 1 1 auto; padding: 8px 10px; }
+.pbox .none { color: var(--sub); font-size: 12px; }
 .pbox ul { margin: 0; padding: 0; list-style: none; }
-.pbox h3 { font-size: .8em; font-weight: 700; color: var(--sub); margin: 0 0 2px; display: flex; gap: 6px; align-items: baseline; }
+.pbox h3 { font-size: 12px; font-weight: 700; color: var(--sub); margin: 0 0 2px; display: flex; gap: 6px; align-items: baseline; }
 .pbox h3 .sub { font-weight: 400; }
-.pbox .meta { font-size: .78em; color: var(--sub); margin-left: 6px; white-space: nowrap; }
+#cautions .meta, #next .meta, #other .meta { font-size: 11px; color: var(--sub); margin-left: 6px; white-space: nowrap; }
 .pbox li.new { animation: flash 1.6s ease-out; }
 
 /* 患者 */
-#band .kana { font-size: .8em; color: var(--sub); }
-#band .name { font-size: 1.35em; font-weight: 700; line-height: 1.2; }
+#band .kana { font-size: 12px; color: var(--sub); }
+#band .name { font-size: 18px; font-weight: 700; line-height: 1.3; }
 #band .facts { margin: 4px 0 0; display: flex; flex-wrap: wrap; gap: 2px 14px; }
 #band .facts div { display: flex; gap: 4px; align-items: baseline; }
-#band .facts dt { font-size: .75em; color: var(--sub); }
+#band .facts dt { font-size: 11px; color: var(--sub); }
 #band .facts dd { margin: 0; font-weight: 700; }
 
 /* 注意点：表。赤はアレルギー歴・副作用歴の行だけ */
 .pbox.warn .pbox-head { background: var(--danger-soft); color: var(--danger); border-bottom-color: #e3a19a; }
 .cautions { width: 100%; border-collapse: collapse; }
-.cautions th { width: 5.5em; text-align: left; vertical-align: top; font-size: .85em; color: var(--sub); padding: 5px 6px; white-space: nowrap; }
+.cautions th { width: 76px; text-align: left; vertical-align: top; font-size: 12px; color: var(--sub); padding: 5px 6px; white-space: nowrap; }
 .cautions td { padding: 5px 6px; }
 .cautions tr + tr th, .cautions tr + tr td { border-top: 1px solid var(--border); }
 .cautions tr.alert th { color: var(--danger); }
@@ -51,7 +52,7 @@
 .meds li:last-child { border-bottom: 0; }
 .meds .name { font-weight: 700; }
 .meds .dose { text-align: right; white-space: nowrap; }
-.meds .since { grid-column: 1 / -1; font-size: .82em; color: var(--sub); }
+.meds .since { grid-column: 1 / -1; font-size: 12px; color: var(--sub); }
 .meds .since.recent { color: var(--ok); font-weight: 700; }
 
 /* 生活・後発品・検査値 */
@@ -60,25 +61,22 @@
 .labs li:last-child { border-bottom: 0; }
 .labs .value { font-weight: 700; }
 .labs .trend { margin-left: 4px; color: var(--accent-strong); }
-.labs .since { grid-column: 1 / -1; font-size: .78em; color: var(--sub); }
+.labs .since { grid-column: 1 / -1; font-size: 11px; color: var(--sub); }
 
-/* 経過：来局を段組みで並べ、なるべく1画面に全部入れる。選んだ来局だけ処方の中身と操作を出す */
+/* 経過：来局を横に並べ、入りきらなければ次の行へ（カードは途中で切らない）。選んだ来局だけ処方の中身と操作を出す */
 .history-head { padding-top: 0; padding-bottom: 0; align-items: stretch; }
 .history-head .count { align-self: center; font-weight: 400; font-size: 12px; color: var(--sub); }
 .history-body { padding: 8px 10px; }
-.timeline { height: 100%; column-width: 26em; column-gap: 10px; column-fill: auto; outline: none; }
-.visit-card { break-inside: avoid; margin-bottom: 8px; }
+.timeline { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 8px; align-items: start; outline: none; }
 .visit-card:not([aria-selected="true"]) .vc-rx,
 .visit-card:not([aria-selected="true"]) .vc-foot { display: none; }
 .visit-card:not([aria-selected="true"]) .vc-body { grid-template-columns: 1fr; }
+.timeline .vc-head { flex-wrap: wrap; row-gap: 2px; }
 
 /* 配置を変えている間：格子を見せ、見出しで動かし右下の角で大きさを変える */
 .pt-grid.editing {
-  background-image:
-    linear-gradient(to right, rgba(10, 127, 179, .12) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(10, 127, 179, .12) 1px, transparent 1px);
-  background-size: calc((100% - 32px) / 12) calc((100% - 20px) / 12);
-  background-position: 16px 10px;
+  background-image: linear-gradient(to right, rgba(10, 127, 179, .14) 1px, transparent 1px);
+  background-size: calc((100% - 32px) / 12) 100%; background-position: 16px 0; background-origin: border-box;
 }
 .pt-grid.editing .pbox { outline: 2px dashed var(--accent-line); outline-offset: -1px; }
 .pt-grid.editing .pbox-head { cursor: move; background: var(--accent-soft); color: var(--accent-strong); }
@@ -209,3 +207,5 @@ dialog.wide { width: 780px; }
 .fee-lines { width: 100%; border-collapse: collapse; font-size: 12.5px; margin: 4px 0; }
 .fee-lines td { padding: 3px 6px; border-bottom: 1px solid var(--border); }
 .fee-lines td:first-child { color: var(--sub); white-space: nowrap; }
+/* 選んだ来局は処方と指導記録を横に並べるので、2枚ぶんの幅にする（縦に長くならないように） */
+.timeline .visit-card[aria-selected="true"] { grid-column: span 2; }

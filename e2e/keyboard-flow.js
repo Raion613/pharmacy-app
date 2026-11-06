@@ -623,29 +623,29 @@ for (const [url, ready, firstTarget] of [
 }
 
 // ---------- 薬歴の配置を変える ----------
-step("薬歴：配置を変える（右下の角で箱を縮めて保存 → 開き直しても同じ → 初期の配置に戻す）");
+step("薬歴：配置を変える（右下の角で箱を1段に縮めて保存 → 開き直しても同じ → 初期の配置に戻す）。箱の中はスクロールしない");
 await page.goto(`${BASE}/patient?id=1`);
 await page.waitForSelector(selectedCard);
+// どの箱も中身が切れていない（箱の中でスクロールさせない）
+assert.equal(await page.evaluate(() => [...document.querySelectorAll(".pbox")].every((b) => b.scrollHeight <= b.clientHeight + 1)), true);
 const medsRow = () => page.locator('[data-box="meds"]').evaluate((el) => el.style.gridRow);
-assert.equal(await medsRow(), "1 / span 3");
+assert.equal(await medsRow(), "1 / span 2");
 await page.click("#layout-edit");
 const handle = await page.locator('[data-box="meds"] .pbox-resize').boundingBox();
-const gridBox = await page.locator("#pt-grid").boundingBox();
+const row1 = await page.locator('[data-box="next"]').boundingBox(); // 1段目だけの箱
 await page.mouse.move(handle.x + 11, handle.y + 11);
 await page.mouse.down();
-await page.mouse.move(handle.x + 11, handle.y + 11 - gridBox.height / 12, { steps: 6 }); // 1行ぶん上へ
+await page.mouse.move(handle.x + 11, row1.y + row1.height / 2, { steps: 6 }); // 1段目まで引き上げる
 await page.mouse.up();
-assert.equal(await medsRow(), "1 / span 2");
+assert.equal(await medsRow(), "1 / span 1");
 await page.click("#layout-edit"); // 完了で保存
 await page.waitForFunction(() => document.querySelector(".toasts")?.textContent.includes("配置を保存しました"));
 await page.reload();
 await page.waitForSelector(selectedCard);
-await page.waitForFunction(() => document.querySelector('[data-box="meds"]').style.gridRow === "1 / span 2");
+await page.waitForFunction(() => document.querySelector('[data-box="meds"]').style.gridRow === "1 / span 1");
 await page.click("#layout-edit");
 await page.click("#layout-reset");
-await page.waitForFunction(() => document.querySelector('[data-box="meds"]').style.gridRow === "1 / span 3");
-// 画面全体はスクロールしない
-assert.equal(await page.evaluate(() => document.documentElement.scrollHeight <= innerHeight), true);
+await page.waitForFunction(() => document.querySelector('[data-box="meds"]').style.gridRow === "1 / span 2");
 
 // ---------- 多要素認証（最後に。終わったら無効に戻す） ----------
 step("多要素認証：設定 → ログインで6桁を求める → 無効にする");

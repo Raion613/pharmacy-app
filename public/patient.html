@@ -17,31 +17,31 @@
   <header class="topbar"></header>
   <nav class="crumbs"></nav>
   <main class="pt-grid" id="pt-grid">
-    <section class="pbox" data-box="patient" data-font-max="18">
+    <section class="pbox" data-box="patient">
       <div class="pbox-head">患者</div>
-      <div class="pbox-body" id="band" data-fit></div>
+      <div class="pbox-body" id="band"></div>
     </section>
-    <section class="pbox warn" data-box="cautions" data-font-max="18">
+    <section class="pbox warn" data-box="cautions">
       <div class="pbox-head">注意点<span class="spacer"></span><button type="button" class="btn btn-small" id="add-note">メモを追加 <kbd>Alt+M</kbd></button></div>
-      <div class="pbox-body" id="cautions" data-fit></div>
+      <div class="pbox-body" id="cautions"></div>
     </section>
-    <section class="pbox" data-box="next" data-font-max="18">
+    <section class="pbox" data-box="next">
       <div class="pbox-head">次に確認すること</div>
-      <div class="pbox-body" id="next" data-fit></div>
+      <div class="pbox-body" id="next"></div>
     </section>
-    <section class="pbox" data-box="meds" data-font-max="17">
+    <section class="pbox" data-box="meds">
       <div class="pbox-head">今の処方<span class="sub" id="meds-date"></span></div>
-      <div class="pbox-body" id="current-meds" data-fit></div>
+      <div class="pbox-body" id="current-meds"></div>
     </section>
-    <section class="pbox" data-box="other" data-font-max="16">
+    <section class="pbox" data-box="other">
       <div class="pbox-head">生活・後発品の意向</div>
-      <div class="pbox-body" id="other" data-fit></div>
+      <div class="pbox-body" id="other"></div>
     </section>
-    <section class="pbox" data-box="labs" data-font-max="16">
+    <section class="pbox" data-box="labs">
       <div class="pbox-head">検査値・体重<span class="spacer"></span><button type="button" class="btn btn-small" id="add-lab">入力 <kbd>Alt+L</kbd></button></div>
-      <div class="pbox-body" id="labs" data-fit></div>
+      <div class="pbox-body" id="labs"></div>
     </section>
-    <section class="pbox" data-box="history" data-font-max="16" id="history">
+    <section class="pbox" data-box="history" id="history">
       <div class="pbox-head history-head">
         <div class="tabs" role="tablist" aria-label="薬歴の表示">
           <button type="button" role="tab" id="tab-timeline" aria-controls="timeline" aria-selected="true">経過</button>
@@ -49,7 +49,7 @@
         </div>
         <span class="count" id="visit-count"></span>
       </div>
-      <div class="pbox-body history-body" data-fit>
+      <div class="pbox-body history-body">
         <div class="timeline" id="timeline" role="tabpanel" aria-labelledby="tab-timeline" tabindex="0"></div>
         <div class="matrix-view" id="matrix-view" role="tabpanel" aria-labelledby="tab-matrix" hidden></div>
       </div>
