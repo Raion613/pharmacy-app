@@ -1,13 +1,15 @@
 // 薬歴：再来局した患者を開いたときに、この人について知っておくべきことを1画面で見渡す。
-//   左：この患者の要点（前回の留意点・今の処方とその開始日・検査値・申し送り・体質・疾患・併用薬・生活・届いたメッセージ）
-//   中央「経過」：全来局を新しい順に。処方の変化・処方・指導記録（会話・所見・留意点）を開かずに読める
-//   中央「処方の推移」：薬 × 来局日の表。いつ始まり・変わり・止まったか
+//   上の箱：患者・注意点（アレルギー歴・副作用歴・疾患・併用薬）・次に確認すること（前回の P・申し送り）・今の処方・生活・検査値
+//   下の箱「経過」：全来局を新しい順に段組みで。処方の変化と指導記録を開かずに読める。選んだ来局だけ処方の中身と操作を出す
+//   下の箱「処方の推移」：薬 × 来局日の表。いつ始まり・変わり・止まったか
+//   箱の置き場所と大きさは「配置を変える」で利用者ごとに変えられる（layout-grid.js）
 //   指導記録を書く画面の右側：服薬指導の会話の録音と文字起こし、会話から拾った患者メモの候補、指導内容の提案、
 //   つながる薬局で届いたメッセージ。左の S・O・A・P には、下書き（会話と処方から組み立てた文）とテンプレートを写せる
 import {
-  renderShell, setCrumbs, api, ApiError, escapeHtml, formatDate, formatDateTime, renderPatientBand, priceText, pointsText,
+  renderShell, setCrumbs, api, ApiError, escapeHtml, formatDate, formatDateTime, birthText, SEX, priceText, pointsText,
   unitText, toast,
 } from "./app.js";
+import { setupLayout } from "./layout-grid.js";
 import { dailyCost, formatYen, formatSen, formatQuantity } from "./yakuzairyo.js";
 import { NOTE_CATEGORIES, NOTE_LABEL, SOAP, LEFTOVER, NOTEBOOK, NOTE_MAX } from "./record-kinds.js";
 import { setTour, autoStartTour, tourActive } from "./tour.js";
@@ -29,17 +31,34 @@ const savedId = params.get("saved");
 renderShell({ page: "patients", title: "薬歴", crumbs: [{ label: "患者一覧", href: "/patients" }, { label: "薬歴" }] });
 
 // prescriptions は新しい順（調剤日の降順）でサーバーから来る
-const { patient, notes, prescriptions, measurements, messages, tracings, homeCare } = await api(`/api/patients/${patientId}`);
+const { patient, notes, prescriptions, measurements, messages } = await api(`/api/patients/${patientId}`);
 
 setCrumbs([{ label: "患者一覧", href: "/patients" }, { label: `${patient.name}（${patient.patientNo}）` }, { label: "薬歴" }]);
 document.querySelector("#new-rx").href = `/rx?patient=${patient.id}`;
-document.querySelector("#to-logs").href = `/logs?patient=${patient.id}`;
-const tracingLink = document.querySelector("#to-tracing");
 const tracingHref = (rx) => `/tracing?patient=${patient.id}${rx ? `&rx=${rx.id}` : ""}`;
-tracingLink.href = tracingHref(null);
 
 const band = document.querySelector("#band");
-const summaryBody = document.querySelector("#summary-body");
+const cautionsEl = document.querySelector("#cautions");
+const nextEl = document.querySelector("#next");
+const medsEl = document.querySelector("#current-meds");
+const otherEl = document.querySelector("#other");
+const labsEl = document.querySelector("#labs");
+// 初期の配置（12列 × 12行）。上の段に要点、下に経過
+const layout = setupLayout({
+  grid: document.querySelector("#pt-grid"),
+  page: "patient",
+  editButton: document.querySelector("#layout-edit"),
+  resetButton: document.querySelector("#layout-reset"),
+  defaults: {
+    patient: { c: 1, r: 1, w: 2, h: 2 },
+    labs: { c: 1, r: 3, w: 2, h: 3 },
+    cautions: { c: 3, r: 1, w: 4, h: 5 },
+    next: { c: 7, r: 1, w: 3, h: 5 },
+    meds: { c: 10, r: 1, w: 3, h: 3 },
+    other: { c: 10, r: 4, w: 3, h: 2 },
+    history: { c: 1, r: 6, w: 12, h: 7 },
+  },
+});
 const timeline = document.querySelector("#timeline");
 const matrixView = document.querySelector("#matrix-view");
 const doButton = document.querySelector("#do-rx");
@@ -100,61 +119,78 @@ function latestRecordFrom(index) {
   return null;
 }
 
-// ---------- 左：この患者の要点 ----------
+// ---------- 上：患者・注意点・次に確認すること・今の処方・生活・検査値 ----------
+// 箱の置き場所と大きさは利用者が変えられる（layout-grid.js）。中身を描き直したら文字の大きさを合わせ直す
 
-function renderSummary(newNoteId = null) {
-  const parts = [];
+const notesOf = (key) => notes.filter((n) => n.category === key);
+const noteItems = (key, newNoteId) => notesOf(key).map((n) => `<li class="${n.id === newNoteId ? "new" : ""}">${escapeHtml(n.body)}<span class="meta">${
+  formatDate(n.createdAt.slice(0, 10))} ${escapeHtml(n.createdBy)}</span></li>`).join("");
 
+// 患者：氏名と、来局時に確かめる基本の事実
+function renderBand() {
+  band.innerHTML = `
+    <div class="kana">${escapeHtml(patient.kana)}</div>
+    <div class="name">${escapeHtml(patient.name)}</div>
+    <dl class="facts">
+      <div><dt>生年月日</dt><dd>${birthText(patient.birthDate)}</dd></div>
+      <div><dt>性別</dt><dd class="sex-${patient.sex}">${SEX[patient.sex]}</dd></div>
+      <div><dt>負担</dt><dd>${patient.burdenPercent / 10}割</dd></div>
+      <div><dt>患者番号</dt><dd class="num">${escapeHtml(patient.patientNo)}</dd></div>
+      <div><dt>最終来局</dt><dd>${patient.lastDispensedOn ? formatDate(patient.lastDispensedOn) : "—"}</dd></div>
+    </dl>`;
+}
+
+// 注意点：アレルギー歴・副作用歴・疾患・併用薬を1つの表に。赤はアレルギー歴・副作用歴だけ
+const CAUTION_KEYS = ["allergy", "adverse", "disease", "concomitant"];
+const CAUTION_LABEL = { allergy: "アレルギー", adverse: "副作用", disease: "疾患", concomitant: "併用薬" };
+
+function renderCautions(newNoteId) {
+  cautionsEl.innerHTML = `<table class="cautions">${CAUTION_KEYS.map((key) => {
+    const items = noteItems(key, newNoteId);
+    const alert = items && NOTE_CATEGORIES.find((c) => c.key === key).alert;
+    return `<tr data-category="${key}" class="${alert ? "alert" : ""}"><th>${CAUTION_LABEL[key]}</th>
+      <td>${items ? `<ul>${items}</ul>` : '<span class="none">記録なし</span>'}</td></tr>`;
+  }).join("")}</table>`;
+}
+
+// 次に確認すること：前回の指導記録の P と、申し送り
+function renderNext(newNoteId) {
   const last = latestRecordFrom(0);
-  if (last && last.record.plan) {
-    parts.push(`<section class="last-plan" id="last-plan">
-      <h3>前回の留意点（P）<span class="sub">${formatDate(last.rx.dispensedOn)} ${escapeHtml(last.record.createdBy)}</span></h3>
-      <p>${escapeHtml(last.record.plan)}</p></section>`);
-  }
+  const handover = noteItems("handover", newNoteId);
+  nextEl.innerHTML = (last && last.record.plan
+    ? `<section class="last-plan" id="last-plan"><h3>前回の留意点（P）<span class="sub">${formatDate(last.rx.dispensedOn)} ${escapeHtml(last.record.createdBy)}</span></h3>
+        <p>${escapeHtml(last.record.plan)}</p></section>`
+    : "")
+    + `<section data-category="handover"><h3>申し送り</h3>${handover ? `<ul>${handover}</ul>` : '<span class="none">記録なし</span>'}</section>`;
+}
 
-  // 今の処方：最終来局の薬と、いつから続いているか（同じ薬が途切れずに出ている最初の来局）
-  if (prescriptions.length) {
-    const latest = prescriptions[0];
-    const items = [...drugsOf(latest).values()].map((d) => {
-      let i = 0;
-      while (i + 1 < prescriptions.length && drugsOf(prescriptions[i + 1]).has(d.code)) i++;
-      const recent = i === 0 && prescriptions.length > 1;
-      return `<li><span class="name">${escapeHtml(d.name)}</span><span class="dose">${qtyText(d)}</span>
-        <span class="since ${recent ? "recent" : ""}">${escapeHtml(d.usage)} ／ ${recent ? "最終来局で追加" : `${formatDate(prescriptions[i].dispensedOn)}から（${i + 1}回）`}</span></li>`;
-    }).join("");
-    parts.push(`<section class="current-meds" id="current-meds"><h3>今の処方<span class="sub">最終来局 ${formatDate(latest.dispensedOn)}</span></h3><ul>${items}</ul></section>`);
+// 今の処方：最終来局の薬と、いつから続いているか（同じ薬が途切れずに出ている最初の来局）
+function renderMeds() {
+  if (prescriptions.length === 0) {
+    medsEl.innerHTML = '<span class="none">来局の記録なし</span>';
+    return;
   }
+  const latest = prescriptions[0];
+  document.querySelector("#meds-date").textContent = formatDate(latest.dispensedOn);
+  medsEl.innerHTML = `<ul class="meds">${[...drugsOf(latest).values()].map((d) => {
+    let i = 0;
+    while (i + 1 < prescriptions.length && drugsOf(prescriptions[i + 1]).has(d.code)) i++;
+    const recent = i === 0 && prescriptions.length > 1;
+    return `<li><span class="name">${escapeHtml(d.name)}</span><span class="dose">${qtyText(d)}</span>
+      <span class="since ${recent ? "recent" : ""}">${escapeHtml(d.usage)} ／ ${recent ? "最終来局で追加" : `${formatDate(prescriptions[i].dispensedOn)}から（${i + 1}回）`}</span></li>`;
+  }).join("")}</ul>`;
+}
 
-  parts.push(labsHtml());
-  if (homeCare) parts.push('<section class="home-flag"><a class="tag tag-original" href="/homecare">在宅で訪問している患者</a></section>');
-
-  // メモは、申し送り → 体質 → 疾患 → 併用薬 → 生活 → 後発品 の順（来局時にまず読みたい順）
-  const order = ["handover", ...NOTE_CATEGORIES.map((c) => c.key).filter((k) => k !== "handover")];
-  for (const key of order) {
-    const c = NOTE_CATEGORIES.find((x) => x.key === key);
-    const items = notes.filter((n) => n.category === key);
-    const body = items.length
-      ? `<ul>${items.map((n) => `<li class="${n.id === newNoteId ? "new" : ""}">${escapeHtml(n.body)}<span class="meta">${formatDate(n.createdAt.slice(0, 10))} ${escapeHtml(n.createdBy)}</span></li>`).join("")}</ul>`
-      : '<div class="none">記録なし</div>';
-    const cls = items.length && c.alert ? "alert" : items.length && key === "handover" ? "handover" : "";
-    parts.push(`<section class="note-group ${cls}" data-category="${key}">
-      <h3>${escapeHtml(c.label)}${items.length > 1 ? `<span class="count">${items.length}件</span>` : ""}</h3>${body}</section>`);
-  }
-  const incoming = messages.filter((m) => m.direction === "in").slice(-3).reverse();
-  if (incoming.length) {
-    parts.push(`<section class="line-summary"><h3>つながる薬局で届いたメッセージ<a class="sub" href="/messages?patient=${patient.id}">やり取りを見る</a></h3>
-      <ul>${incoming.map((m) => `<li>${escapeHtml(m.body)}<span class="meta">${formatDateTime(m.sentAt)}</span></li>`).join("")}</ul></section>`);
-  }
-  if (tracings.length) {
-    parts.push(`<section class="tracing-summary"><h3>トレーシングレポート<span class="count">${tracings.length}件</span></h3>
-      <ul>${tracings.slice(0, 3).map((t) => `<li><a href="/tracing?id=${t.id}">${formatDate(t.createdAt.slice(0, 10))} ${escapeHtml(t.institution)} ${escapeHtml(t.doctor)} 先生宛</a></li>`).join("")}</ul></section>`);
-  }
-  summaryBody.innerHTML = parts.join("");
-  if (newNoteId !== null) summaryBody.querySelector("li.new").scrollIntoView({ block: "nearest" });
+// 生活状況と後発品の意向
+function renderOther(newNoteId) {
+  otherEl.innerHTML = ["lifestyle", "generic"].map((key) => {
+    const items = noteItems(key, newNoteId);
+    return `<section data-category="${key}"><h3>${escapeHtml(NOTE_LABEL[key])}</h3>${items ? `<ul>${items}</ul>` : '<span class="none">記録なし</span>'}</section>`;
+  }).join("");
 }
 
 // 検査値：項目ごとの最新の値と測定日。前回の値があれば矢印で増減を添える
-function labsHtml() {
+function renderLabs() {
   const rows = LAB_ITEMS.map((item) => {
     const list = measurements.filter((m) => m.item === item.key); // 新しい順
     if (list.length === 0) return "";
@@ -164,7 +200,17 @@ function labsHtml() {
       ? `<span class="trend" title="前回 ${labText(item.key, before.valueMilli)}（${formatDate(before.measuredOn)}）">${trend}</span>` : ""}</span>
       <span class="since">${formatDate(now.measuredOn)}${now.source === "photo" ? "・用紙から" : ""}</span></li>`;
   }).join("");
-  return `<section class="labs" id="labs"><h3>検査値・体重</h3>${rows ? `<ul>${rows}</ul>` : '<div class="none">記録なし（<kbd>Alt</kbd>+<kbd>L</kbd> で入力）</div>'}</section>`;
+  labsEl.innerHTML = rows ? `<ul class="labs">${rows}</ul>` : '<span class="none">記録なし</span>';
+}
+
+function renderSummary(newNoteId = null) {
+  renderCautions(newNoteId);
+  renderNext(newNoteId);
+  renderMeds();
+  renderOther(newNoteId);
+  renderLabs();
+  layout.fitAll();
+  if (newNoteId !== null) document.querySelector("li.new").scrollIntoView({ block: "nearest" });
 }
 
 // ---------- 中央：経過 ----------
@@ -190,6 +236,7 @@ function renderTimeline() {
     });
   }
   if (selectedIndex >= 0) select(selectedIndex, false);
+  layout.fitAll();
 }
 
 function cardHtml(rx, i) {
@@ -283,7 +330,6 @@ function transcriptHtml(text) {
 function select(i, scroll = true) {
   selectedIndex = i;
   doButton.disabled = false;
-  tracingLink.href = tracingHref(prescriptions[i]);
   for (const card of timeline.querySelectorAll(".visit-card")) {
     const on = Number(card.dataset.index) === i;
     card.setAttribute("aria-selected", String(on));
@@ -338,7 +384,8 @@ function showTab(tab) {
     t.tabIndex = on ? 0 : -1;
     document.getElementById(t.getAttribute("aria-controls")).hidden = !on;
   }
-  if (tab.id === "tab-matrix") matrixView.scrollLeft = matrixView.scrollWidth; // 最新の来局が見えるように
+  layout.fitAll();
+  if (tab.id === "tab-matrix") matrixView.parentElement.scrollLeft = matrixView.parentElement.scrollWidth; // 最新の来局が見えるように
 }
 for (const t of tabs) {
   t.addEventListener("click", () => showTab(t));
@@ -769,6 +816,7 @@ function openDo(i = selectedIndex) {
   if (i >= 0) location.href = `/rx?patient=${patient.id}&from=${prescriptions[i].id}`;
 }
 doButton.addEventListener("click", () => openDo());
+document.querySelector("#write-record").addEventListener("click", () => openRecordDialog());
 
 // 指導記録を書いている間の Alt+G（下書き）
 recordForm.addEventListener("keydown", (e) => {
@@ -786,17 +834,13 @@ document.addEventListener("keydown", (e) => {
     KeyK: () => openRecordDialog(),
     KeyM: openNoteDialog,
     KeyL: openLabDialog,
-    KeyT: () => { location.href = tracingLink.href; },
+    KeyT: () => { location.href = tracingHref(prescriptions[selectedIndex]); },
   };
   if (actions[e.code]) {
     e.preventDefault();
     actions[e.code]();
   }
 });
-
-function renderBand() {
-  renderPatientBand(band, patient, notes);
-}
 
 // ---------- 開始 ----------
 
@@ -811,56 +855,50 @@ if (prescriptions.length > 0) {
   if (savedIndex >= 0) timeline.querySelector(`.visit-card[data-index="${savedIndex}"]`).classList.add("saved");
   timeline.focus({ preventScroll: true });
 }
+await layout.load();
 
 setTour("patient", [
   {
     title: "薬歴：この患者のことを1画面で",
-    body: `<p>来局した患者を開くと、最初にこの画面が出ます。今日の対応の前に、この人について知っておくべきことを見渡せます。</p>
+    body: `<p>来局した患者を開くと、最初にこの画面が出ます。スクロールせずに見渡せるよう、箱に分けて並べています。</p>
       <div class="tour-map">
-        <div><b>上の帯</b>氏名・年齢と、アレルギー歴・副作用歴</div>
-        <div><b>左</b>この患者の要点（前回の留意点・今の処方・申し送りなど）</div>
-        <div><b>中央</b>来局ごとの経過（処方の変化・会話・所見）</div>
-        <div><b>下</b>次の操作（処方入力・Do）</div>
+        <div><b>上の箱</b>患者・注意点・次に確認すること・今の処方・生活・検査値</div>
+        <div><b>下の箱</b>来局ごとの経過（処方の変化・指導記録）</div>
+        <div><b>左下</b>配置を変える（箱を動かす・大きさを変える）</div>
+        <div><b>右下</b>次の操作（指導記録・Do・新規処方）</div>
       </div>`,
   },
   {
     target: "#band",
-    title: "患者の帯",
-    body: `<p>氏名・カナ・患者番号・年齢・性別です。</p>
-      <p>右端の<strong>赤い札</strong>はアレルギー歴と副作用歴です。処方入力の画面にも同じ帯が出るので、薬を入力している間も見落としません。</p>`,
+    title: "患者",
+    body: "<p>氏名・カナ・生年月日・性別・負担割合・患者番号・最終来局日です。</p>",
   },
   {
-    target: "#summary",
-    placement: "right",
-    title: "この患者の要点",
-    body: `<ul>
-        <li><b>前回の留意点（P）</b>：前回の指導記録で「次に確かめる」と決めたこと</li>
-        <li><b>今の処方</b>：最終来局の薬と、いつから続いているか</li>
-        <li><b>申し送り</b>：接し方・説明の仕方など、薬剤師どうしで共有すること</li>
-        <li>その下に体質・疾患・併用薬・生活状況・後発品の意向</li>
-      </ul>
-      <p>分類は、厚労省の通知が薬歴に記載を求める項目に合わせています。<kbd>Alt</kbd>+<kbd>M</kbd> で追加できます。</p>`,
+    target: "#cautions",
+    title: "注意点",
+    body: `<p>アレルギー歴・副作用歴・疾患・併用薬を1つの表にまとめています。<strong>赤い行</strong>はアレルギー歴と副作用歴です。</p>
+      <p><kbd>Alt</kbd>+<kbd>M</kbd> でメモを追加します。分類は、厚労省の通知が薬歴に記載を求める項目に合わせています。</p>`,
+  },
+  {
+    target: "#next",
+    title: "次に確認すること",
+    body: "<p>前回の指導記録で「次に確かめる」と決めたこと（P）と、薬剤師どうしの申し送りです。</p>",
   },
   {
     target: "#labs",
-    placement: "right",
     title: "検査値・体重",
-    body: `<p>項目ごとに、いちばん新しい値と検査日を出します。前回より上がった・下がったは矢印で分かります。</p>
-      <p><kbd>Alt</kbd>+<kbd>L</kbd> で入力します。検査結果の用紙を<strong>撮影すると、項目に値が入ります</strong>（このアプリでは決まった値が入ります。用紙と見比べてから保存します）。</p>
-      <p>入れた値は、指導内容の提案（腎機能が低い人に注意が要る薬など）と、処方入力の小児の分量チェック（体重）に使います。</p>`,
+    body: `<p>項目ごとに、いちばん新しい値と検査日です。前回より上がった・下がったは矢印で分かります。<kbd>Alt</kbd>+<kbd>L</kbd> で入力します。</p>`,
   },
   {
     target: ".visit-card",
     optional: true,
     title: "経過：来局ごとのカード",
-    body: `<p>新しい来局が上です。開かなくても中身が読めます。</p>
+    body: `<p>新しい来局から順に、左上から下へ、入りきらなければ右の段へ並べます。開かなくても中身が読めます。</p>
       <ul>
         <li><b>処方の変化</b>：前回と比べて <span class="change add"><b>＋追加</b></span> <span class="change stop"><b>−中止</b></span> <span class="change mod"><b>変更</b></span></li>
-        <li><b>左</b>：その日の処方（剤ごと）</li>
-        <li><b>右</b>：指導記録。S 会話・訴え、O 服薬状況や検査値、A 薬剤師の所見、<strong>P 次回の留意点</strong></li>
+        <li><b>指導記録</b>：S 会話・訴え、O 服薬状況や検査値、A 薬剤師の所見、<strong>P 次回の留意点</strong></li>
       </ul>
-      <p>見出しの<strong>薬剤料</strong>は、その日の薬の値段を点数にしたもの（1点＝10円）です。薬の増減と薬価改定で変わります。横の<strong>合計・窓口</strong>は、調剤報酬の合計点数と、窓口で受け取った額です。算定した項目は「計算の内訳を見る」で開きます。</p>
-      <p>処方箋の記載と違うものを渡したとき（一般名処方の銘柄選択・後発品への変更・残薬調整）は、処方箋の記載を小さく添えます。疑義照会もここに出ます。下の<strong>「領収証・明細書」「お薬手帳」</strong>で、渡すものを印刷できます。<strong>「調剤監査」</strong>では、取り出した薬の箱のバーコードを読んで処方と照らし合わせます。<kbd>↑</kbd><kbd>↓</kbd> で来局を選びます。</p>`,
+      <p><kbd>↑</kbd><kbd>↓</kbd> で来局を選ぶと、その来局だけ処方の中身と、領収証・お薬手帳などのボタンが出ます。見出しの<strong>薬剤料</strong>は、その日の薬の値段を点数にしたもの（1点＝10円）です。</p>`,
   },
   {
     target: () => document.querySelector(".no-record") ?? document.querySelector(".vc-records"),
@@ -882,16 +920,21 @@ setTour("patient", [
     body: `<p>薬 × 来局日の表に切り替えます。どの薬が<strong>いつ始まり、いつ変わり、いつ止まったか</strong>が一目で分かります。</p>`,
   },
   {
-    target: ".actionbar",
+    target: "#layout-edit",
+    placement: "top",
+    title: "配置を変える",
+    body: `<p>押すと箱の見出しを引っぱって動かせ、右下の角を引っぱって大きさを変えられます。「完了」で保存し、次からもその配置で開きます（利用者ごと）。</p>
+      <p>注意点が長い患者・来局が多い患者など、入りきらないときに広げてください。箱の中の文字は、入りきる大きさに自動で合わせます。</p>`,
+  },
+  {
+    target: "#write-record",
     placement: "top",
     title: "次の操作",
     body: `<ul>
-        <li><b>新規処方</b> <kbd>Alt</kbd>+<kbd>N</kbd>：今日の処方を入力する</li>
+        <li><b>指導記録を書く</b> <kbd>Alt</kbd>+<kbd>K</kbd>：選んでいる来局の記録を書く</li>
         <li><b>選んだ処方でDo</b> <kbd>Alt</kbd>+<kbd>D</kbd>：選んだ来局の処方を複写して入力する（薬価は今日の日付で引き直す）</li>
-        <li><b>閲覧記録</b>：この患者の情報を、誰がいつ開いたか</li>
-        <li><b>トレーシングレポート</b> <kbd>Alt</kbd>+<kbd>T</kbd>：急ぎではないが処方医に伝えたいことを、文書にして送る</li>
-      </ul>
-      <p>患者一覧へは、上のパンくずか左のアイコンで戻れます。</p>`,
+        <li><b>新規処方</b> <kbd>Alt</kbd>+<kbd>N</kbd>：今日の処方を入力する</li>
+      </ul>`,
   },
 ]);
 autoStartTour();

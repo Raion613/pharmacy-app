@@ -2,6 +2,7 @@
 -- 金額は全て「銭（1/100円）の整数」、1日量は「1/1000単位の整数」で持つ（小数の誤差を持ち込まない）。
 -- 日付は 'YYYY-MM-DD' の文字列。文字列のまま大小比較できる。
 
+DROP TABLE IF EXISTS user_layouts;
 DROP TABLE IF EXISTS access_logs;
 DROP TABLE IF EXISTS mfa_challenges;
 DROP TABLE IF EXISTS line_messages;
@@ -566,3 +567,13 @@ CREATE TABLE access_logs (
 
 CREATE INDEX idx_access_logs_at ON access_logs(at);
 CREATE INDEX idx_access_logs_patient ON access_logs(patient_id, at);
+
+-- 画面の箱の配置（利用者ごと・画面ごと）。薬局のタブレットは何人かで使い回すので、端末ではなく利用者に持たせる。
+-- layout は {箱の名前: {c: 列, r: 行, w: 幅, h: 高さ}} の JSON。無ければ画面の初期の配置
+CREATE TABLE user_layouts (
+  user_id    INTEGER NOT NULL REFERENCES users(id),
+  page       TEXT NOT NULL,
+  layout     TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY (user_id, page)
+);

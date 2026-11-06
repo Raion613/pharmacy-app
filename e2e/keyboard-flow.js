@@ -74,10 +74,10 @@ await page.keyboard.press("ArrowDown");
 assert.match(await text(selectedCard), /2026\/03\/19[\s\S]*薬剤料 84点[\s\S]*前回と同じ処方[\s\S]*指導記録 未記載/);
 
 step("薬歴：この患者の要点（前回の留意点・今の処方とその開始日・申し送り）");
-assert.match(await text("#band-alerts"), /副作用歴\s*アムロジピン10mgで下肢のむくみ/);
+assert.match(await text("#cautions"), /副作用\s*アムロジピン10mgで下肢のむくみ/);
 assert.match(await text("#last-plan"), /前回の留意点（P）[\s\S]*2026\/05\/14[\s\S]*減煙を続けられるよう/);
 assert.match(await text("#current-meds"), /ノルバスク錠５ｍｇ[\s\S]*2026\/02\/19（木）から（4回）[\s\S]*アトルバスタチン[\s\S]*2026\/04\/16（木）から（2回）/);
-assert.match(await text('.note-group[data-category="handover"]'), /家庭血圧の手帳を毎回持参/);
+assert.match(await text('[data-category="handover"]'), /家庭血圧の手帳を毎回持参/);
 
 step("薬歴：処方の推移（薬 × 来局日）");
 await page.click("#tab-matrix");
@@ -122,8 +122,8 @@ await page.fill("#note-body", "ペニシリン系で発疹（本人申告）");
 await page.locator("#note-body").focus();
 await page.keyboard.press("Control+Enter");
 await page.waitForSelector("#note-dialog:not([open])", { state: "attached" });
-assert.match(await text("#band-alerts"), /アレルギー歴\s*ペニシリン系で発疹（本人申告）[\s\S]*副作用歴/);
-assert.match(await text('.note-group[data-category="allergy"]'), /ペニシリン系で発疹（本人申告）[\s\S]*デモ 薬剤師/);
+assert.match(await text("#cautions"), /アレルギー[\s\S]*ペニシリン系で発疹（本人申告）[\s\S]*副作用/);
+assert.match(await text('[data-category="allergy"]'), /ペニシリン系で発疹（本人申告）[\s\S]*デモ 薬剤師/);
 await page.locator("#timeline").focus();
 
 // 4. Alt+N で処方入力。薬名 → Enter → 1日量 → Enter → 次の薬 …
@@ -352,7 +352,7 @@ await page.keyboard.press("Control+Enter");
 await page.waitForSelector("#record-dialog:not([open])", { state: "attached" });
 await page.waitForSelector(".record.new");
 assert.match(await text(selectedCard), /服薬指導の会話（3秒・ファイル 指導_0917\.wav）[\s\S]*下書きから/);
-assert.match(await text('.note-group[data-category="concomitant"]'), /ドラッグストアで買った胃腸薬[\s\S]*服薬指導の会話より/);
+assert.match(await text('[data-category="concomitant"]'), /ドラッグストアで買った胃腸薬[\s\S]*服薬指導の会話より/);
 assert.match(await text(".toasts"), /患者メモ 1件も追加/);
 
 // 15. テンプレート：選んで写す
@@ -460,7 +460,7 @@ await page.waitForFunction(() => document.querySelector('#visit-form [data-error
 await page.fill("#v-date", "2026-11-12");
 await page.keyboard.press("Control+Enter");
 await page.waitForSelector("#visit-dialog:not([open])", { state: "attached" });
-assert.match(await text("#home-list"), /3 \/ 4回/);
+await page.waitForFunction(() => /3 \/ 4回/.test(document.querySelector("#home-list").textContent)); // 保存の後、一覧を読み直すまで待つ
 await page.click('.cal-day[data-date="2026-11-05"] .cal-visit');
 await page.waitForSelector("#record-dialog[open]");
 await page.fill("#r-storage", "カレンダーで管理");
@@ -473,7 +473,7 @@ await page.waitForFunction(() => document.querySelector("#r-report").value.inclu
 assert.match(await page.inputValue("#r-report"), /【服薬状況】飲み忘れなし[\s\S]*【患者・家族の訴え】/);
 await page.keyboard.press("Control+Enter");
 await page.waitForSelector("#record-dialog:not([open])", { state: "attached" });
-assert.equal(await page.locator('.cal-day[data-date="2026-11-05"] .cal-visit.done').count(), 1);
+await page.waitForSelector('.cal-day[data-date="2026-11-05"] .cal-visit.done');
 await page.goto(`${BASE}/homecare-print?kind=reports&month=2026-11&facility=home`);
 await page.waitForSelector(".home-sheet");
 assert.match(await text("#sheet"), /○○内科クリニック（架空）　山田　先生　御侍史[\s\S]*写し：介護支援専門員 佐々木 様[\s\S]*訪問薬剤管理指導 報告書[\s\S]*2026\/11\/05[\s\S]*【服薬状況】飲み忘れなし/);
@@ -491,9 +491,6 @@ await page.waitForFunction(() => document.querySelector("#receive-patient").opti
 await page.fill("#receive-body", "血圧の薬を1日飲み忘れました");
 await page.click("#receive-form button[type=submit]");
 await page.waitForFunction(() => document.querySelector("#chat-head").textContent.includes("小野寺"));
-await page.goto(`${BASE}/patient?id=6`);
-await page.waitForSelector(".line-summary");
-assert.match(await text(".line-summary"), /血圧の薬を1日飲み忘れました/);
 
 // 21. 薬局の数字
 step("薬局の数字（処方箋単価・後発医薬品の使用割合）");
@@ -624,6 +621,31 @@ for (const [url, ready, firstTarget] of [
   await page.waitForTimeout(300);
   assert.equal(await tourOpen(), false, `${url}: 二度目も出た`);
 }
+
+// ---------- 薬歴の配置を変える ----------
+step("薬歴：配置を変える（右下の角で箱を縮めて保存 → 開き直しても同じ → 初期の配置に戻す）");
+await page.goto(`${BASE}/patient?id=1`);
+await page.waitForSelector(selectedCard);
+const medsRow = () => page.locator('[data-box="meds"]').evaluate((el) => el.style.gridRow);
+assert.equal(await medsRow(), "1 / span 3");
+await page.click("#layout-edit");
+const handle = await page.locator('[data-box="meds"] .pbox-resize').boundingBox();
+const gridBox = await page.locator("#pt-grid").boundingBox();
+await page.mouse.move(handle.x + 11, handle.y + 11);
+await page.mouse.down();
+await page.mouse.move(handle.x + 11, handle.y + 11 - gridBox.height / 12, { steps: 6 }); // 1行ぶん上へ
+await page.mouse.up();
+assert.equal(await medsRow(), "1 / span 2");
+await page.click("#layout-edit"); // 完了で保存
+await page.waitForFunction(() => document.querySelector(".toasts")?.textContent.includes("配置を保存しました"));
+await page.reload();
+await page.waitForSelector(selectedCard);
+await page.waitForFunction(() => document.querySelector('[data-box="meds"]').style.gridRow === "1 / span 2");
+await page.click("#layout-edit");
+await page.click("#layout-reset");
+await page.waitForFunction(() => document.querySelector('[data-box="meds"]').style.gridRow === "1 / span 3");
+// 画面全体はスクロールしない
+assert.equal(await page.evaluate(() => document.documentElement.scrollHeight <= innerHeight), true);
 
 // ---------- 多要素認証（最後に。終わったら無効に戻す） ----------
 step("多要素認証：設定 → ログインで6桁を求める → 無効にする");
