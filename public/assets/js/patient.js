@@ -331,7 +331,6 @@ function renderMatrix() {
 // ---------- タブ ----------
 
 const tabs = [document.querySelector("#tab-timeline"), document.querySelector("#tab-matrix")];
-const HINTS = { "tab-timeline": "新しい来局が上", "tab-matrix": "古い順（右が最新）" };
 function showTab(tab) {
   for (const t of tabs) {
     const on = t === tab;
@@ -339,7 +338,6 @@ function showTab(tab) {
     t.tabIndex = on ? 0 : -1;
     document.getElementById(t.getAttribute("aria-controls")).hidden = !on;
   }
-  document.querySelector("#history-hint").textContent = HINTS[tab.id];
   if (tab.id === "tab-matrix") matrixView.scrollLeft = matrixView.scrollWidth; // 最新の来局が見えるように
 }
 for (const t of tabs) {

@@ -71,7 +71,7 @@ if (fromId) {
     items: rp.items.map((it) => ({ ...newItem(), drug: prices[it.drugCode], query: prices[it.drugCode].name, qty: formatQuantity(it.dailyQtyMilli) })),
   }));
   const note = $("#do-note");
-  note.textContent = `${formatDate(src.dispensedOn)}の処方を複写しました。薬価は調剤日で引き直しています。`;
+  note.textContent = `${formatDate(src.dispensedOn)}の処方を複写`;
   note.hidden = false;
 }
 
@@ -281,8 +281,7 @@ function updateSummary() {
   const total = done.reduce((s, x) => s + x.result.points, 0);
   $("#total").textContent = done.length ? pointsText(total) : "—";
   $("#total-yen").textContent = done.length ? `${(total * 10).toLocaleString()}円` : "";
-  $("#total-note").textContent = pending ? "入力途中の剤は合計に含めていません。" : `調剤日 ${formatDate(state.dispensedOn)} の薬価で計算しています。`;
-  updateSpecialFee(done);
+  $("#total-note").textContent = pending ? "入力途中の剤を除く" : "";
   updateBill(infos, done, pending);
   updatePediatric();
   $("#rp-points").innerHTML = state.rps.map((rp, r) => {
@@ -375,9 +374,10 @@ function updateBill(infos, done, pending) {
   if (!ctx || done.length === 0 || pending) {
     for (const id of ids) set(id, "—");
     $("#bill-lines").innerHTML = "";
-    set("bill-note", ctx ? "薬・用法・日数をすべて入れると出ます。" : "");
+    set("bill-note", "");
     return;
   }
+  set("bill-note", "");
   const fees = calcFees({
     date: state.dispensedOn,
     facility: ctx.facility,
@@ -410,7 +410,6 @@ function updateBill(infos, done, pending) {
   chargeEl.textContent = `${charge.toLocaleString()}円`;
   $("#bill-lines").innerHTML = fees.lines.map((l) =>
     `<li><span>${escapeHtml(l.name)}${l.count > 1 ? ` ×${l.count}` : ""}</span><span class="num">${pointsText(l.points * l.count)}</span></li>`).join("");
-  set("bill-note", `合計点数 × 10円 × ${ctx.burdenPercent / 10}割 を10円未満四捨五入。点数は調剤日 ${formatDate(state.dispensedOn)} の調剤行為マスター`);
 }
 
 async function loadFeeContext() {
@@ -485,18 +484,6 @@ function toggleRxDiff(r, i) {
     render();
     rpsEl.querySelector(`[data-field="rxName"][data-r="${r}"][data-i="${i}"]`).focus();
   }
-}
-
-// 選定療養（患者希望）の薬があれば、特別の料金を調剤日の計算方法で出す（保存時はサーバーが計算し直す）
-function updateSpecialFee(done) {
-  const box = $("#special-fee");
-  const fee = done.length ? specialFee(done.map((x) => ({ days: x.days, items: x.calcs })), state.dispensedOn) : null;
-  box.hidden = fee === null;
-  if (fee === null) return;
-  $("#special-fee-yen").textContent = `${fee.yen.toLocaleString()}円`;
-  $("#special-fee-how").textContent = fee.method === "points"
-    ? `価格差を剤ごとに点数にして ${pointsText(fee.points)} × 10円 = ${fee.beforeTaxYen.toLocaleString()}円 ＋ 消費税`
-    : `価格差 × 投薬全量 = ${fee.totalYen}円 → ${fee.beforeTaxYen.toLocaleString()}円（10円単位）＋ 消費税`;
 }
 
 // 選んだ薬の中に、調剤日より後で薬価が変わる薬があれば知らせる（例：11月1日から新しい薬価）
@@ -1090,7 +1077,7 @@ setTour("rx", [
     title: "薬剤料の合計",
     body: `<p>入力するたびに計算し直します。剤ごとの点数はその下に並びます。</p>
       <p>計算の規則：1剤1日分の薬価が15円以下なら1点、15円を超えると10円またはその端数ごとに1点を加え、日数を掛けます。</p>
-      <p>「（選）」の薬があると、保険とは別に患者から受け取る<strong>特別の料金</strong>（選定療養）も出します。計算方法は調剤日で変わります（令和9年3月から変更）。</p>`,
+      <p>「（選）」の薬の<strong>特別の料金</strong>（選定療養）は、会計の「保険外」に出ます。計算方法は調剤日で変わります（令和9年3月から変更）。</p>`,
   },
   {
     target: ".compare",

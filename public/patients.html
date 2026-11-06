@@ -23,7 +23,6 @@
           <label for="q">患者番号・氏名・カナ</label>
           <div class="input-icon" id="q-icon"><input class="input" id="q" type="search" autocomplete="off" autofocus placeholder="例：あおき、000001"></div>
         </div>
-        <p class="hint">カナはひらがなでも探せます。<br><kbd>↓</kbd> で一覧へ移り、<kbd>Enter</kbd> で開きます。</p>
         <button type="button" class="btn btn-primary" id="new-patient"></button>
       </div>
     </section>
@@ -79,10 +78,9 @@
         </div>
         <span class="error-text" data-error="burdenPercent"></span>
       </div>
-      <p class="hint">デモ環境です。実在の方の情報は入力しないでください。</p>
     </div>
     <div class="dialog-foot">
-      <button type="button" class="btn" id="cancel-patient">キャンセル（Esc）</button>
+      <button type="button" class="btn" id="cancel-patient">キャンセル <kbd>Esc</kbd></button>
       <button type="submit" class="btn btn-primary">登録（Enter）</button>
     </div>
   </form>

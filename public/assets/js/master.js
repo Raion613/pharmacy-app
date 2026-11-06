@@ -179,15 +179,14 @@ function renderPreview(r) {
     <div class="examples"><div class="examples-title">${title}</div>
       <table>${rows.map((d) => `<tr><td>${escapeHtml(d.name)} <span class="sub">${d.code}</span></td>${cells(d)}</tr>`).join("")}</table></div>`;
   const notes = [
-    r.olderThan ? `<p class="notice notice-warn">公表日が、取り込み済みのマスター（${formatDate(r.olderThan)}）より前です。変更年月日ごとの薬価は入れますが、名称などの上書きと、全件から消えたコードの廃止はしません。</p>` : "",
-    c.ignored ? `<p class="hint">改定分のうち ${c.ignored.toLocaleString()}行は、取り込み済みの薬に無いコード（注射薬・外用薬など）なので入れません。</p>` : "",
-    c.missingBase ? `<p class="notice notice-warn">${c.missingBase}行は金額が書かれておらず、元になる薬価もまだ無いため入れません（前の改定分を飛ばしている可能性があります）。</p>` : "",
-    c.laterExists ? `<p class="hint">${c.laterExists}行は、その変更年月日より後に、取り込み済みの別の薬価があります。後の薬価はそのまま残ります。</p>` : "",
-    c.disappeared ? `<p class="notice notice-warn">全件ファイルから消えたコードが ${c.disappeared}品目あります。廃止の行（改定分）を取り込めていないものです。経過措置の期限があればその翌日から、無ければ公表日から使えなくします。</p>` : "",
+    r.olderThan ? `<p class="notice notice-warn">取り込み済み（${formatDate(r.olderThan)}）より古い公表日です。薬価だけ入れます。</p>` : "",
+    c.ignored ? `<p class="hint">対象外（内用薬以外） ${c.ignored.toLocaleString()}行</p>` : "",
+    c.missingBase ? `<p class="notice notice-warn">元の薬価が無いため入れない ${c.missingBase}行（前の改定分が未取込）</p>` : "",
+    c.laterExists ? `<p class="hint">より新しい薬価が既にある ${c.laterExists}行（新しい方を残す）</p>` : "",
+    c.disappeared ? `<p class="notice notice-warn">全件から消えたコード ${c.disappeared}品目を廃止にします（経過措置の期限の翌日、無ければ公表日から）</p>` : "",
   ].join("");
   preview.innerHTML = `
     <div class="preview-head"><b>${formatDate(r.publishedOn)} 公表の${MASTER[r.master]}マスター（${KIND[r.kind]}）</b><span>${escapeHtml(r.fileName)} ・ ${r.master === "drug" ? "内用薬 " : ""}${r.rowCount.toLocaleString()}行</span></div>
-    <p class="hint">今の${r.master === "drug" ? "薬価" : "調剤報酬の点数"}と比べた結果です。${r.master === "drug" ? "品目" : "項目"}ごとに、マスターの変更年月日から新しい${r.master === "drug" ? "薬価" : "点数"}になります。</p>
     <div class="tiles">
       ${tile(c.priceWrites, "履歴に書く行", "t-change", "その日に効いている内容と違う行")}
       ${tile(c.scheduled, "うち、これから効く", "t-add", "変更年月日が今日より後")}

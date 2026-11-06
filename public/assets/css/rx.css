@@ -117,10 +117,6 @@
 
 /* 選定療養（患者希望）の薬：価格差と、特別の料金 */
 .drug-meta .sentei { color: #7a5400; }
-.special-fee { border: 1px solid #e0b44a; border-left-width: 4px; border-radius: var(--radius); background: #fff7df; padding: 8px 10px; display: grid; gap: 2px; }
-.special-fee-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; font-size: 13px; font-weight: 700; color: #7a5400; }
-.special-fee-head .num { font-size: 18px; }
-.special-fee .hint { margin: 0; }
 
 /* 処方箋の記載と違う薬・量を調剤したとき */
 .drug-meta .rx-diff { border: 1px solid var(--border-strong); background: #fff; border-radius: 10px; padding: 0 8px; font-size: 11px; color: var(--sub); cursor: pointer; }

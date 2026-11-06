@@ -85,7 +85,7 @@ function renderCalendar() {
           title="${escapeHtml(s.patient.name)}（${escapeHtml(s.pharmacist)}）${s.record ? "記録済み" : "未記録"}">${s.record ? "✓ " : ""}${escapeHtml(s.patient.name)}<small>${escapeHtml(s.pharmacist)}</small></button>`).join("")}
       </div>`;
     }).join("")}</div>
-    <p class="hint cal-legend"><span class="cal-visit done">✓ 記録済み</span><span class="cal-visit">予定</span><span class="cal-visit late">日を過ぎて未記録</span>　日付の空いた所を選ぶと、その日に予定を入れられます。</p>`;
+    <p class="hint cal-legend"><span class="cal-visit done">✓ 記録済み</span><span class="cal-visit">予定</span><span class="cal-visit late">日を過ぎて未記録</span></p>`;
 }
 
 // ---------- ダイアログ共通 ----------

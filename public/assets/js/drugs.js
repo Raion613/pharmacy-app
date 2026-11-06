@@ -98,7 +98,7 @@ async function showDetail(code) {
         <thead><tr><th>適用開始日</th><th class="num">薬価</th><th class="num">前回比</th><th>経過措置</th><th>取り込んだマスター</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
-      <p class="hint">${current ? `基準日 ${formatDate(date)} に適用される行を強調しています。` : `基準日 ${formatDate(date)} の時点では、まだ収載されていません。`}</p>
+      <p class="hint">${current ? "" : `${formatDate(date)} 時点では未収載`}</p>
     </div>`;
 }
 

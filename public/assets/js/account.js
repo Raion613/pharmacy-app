@@ -43,7 +43,6 @@ function render({ enabled }, setup = null) {
     return;
   }
   body.innerHTML = `<p>パスワードだけでなく、スマホの認証アプリが30秒ごとに出す<strong>6桁の数字</strong>でも本人を確かめます。患者の情報を扱うので、パスワードが漏れたときの備えになります。</p>
-    <p class="hint">デモ用のアカウント（demo）で有効にすると、そのスマホが無いと誰も入れなくなります。試すときは、終わったら無効にしてください。</p>
     <button type="button" class="btn btn-primary" id="begin">設定を始める</button>`;
   document.querySelector("#begin").addEventListener("click", async () => {
     render({ enabled: false }, await api("/api/account/mfa", { method: "POST", body: { action: "begin" } }));

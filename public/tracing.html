@@ -19,9 +19,8 @@
   <main class="content tracing-page">
     <form class="panel tracing-form" id="tracing-form" novalidate>
       <div class="panel-head">トレーシングレポート（服薬情報提供書）を作る<span class="spacer"></span>
-        <button type="button" class="btn btn-small" id="fill">薬歴から写す（Alt+W）</button></div>
+        <button type="button" class="btn btn-small" id="fill">薬歴から写す <kbd>Alt+W</kbd></button></div>
       <div class="panel-body tracing-body">
-        <p class="hint">急ぎではないが処方医に伝えたいこと（服薬状況・副作用と思われる症状・提案など）を、文書で医療機関に送ります。急ぐこと・その場で処方を変える必要があることは、疑義照会で問い合わせます。</p>
         <div class="tracing-to">
           <div class="field"><label for="t-institution">医療機関</label><input class="input" id="t-institution" name="institution" maxlength="60"><span class="error-text" data-error="institution"></span></div>
           <div class="field"><label for="t-department">診療科</label><input class="input" id="t-department" name="department" maxlength="30"><span class="error-text" data-error="department"></span></div>
@@ -41,13 +40,13 @@
       <div class="panel-foot">
         <a class="btn" id="back">薬歴へ戻る</a>
         <span class="spacer"></span>
-        <button type="submit" class="btn btn-primary">保存して印刷する（Ctrl+Enter）</button>
+        <button type="submit" class="btn btn-primary">保存して印刷する <kbd>Ctrl+Enter</kbd></button>
       </div>
     </form>
   </main>
 </div>
 <div class="print-bar tracing-print-bar" hidden><b>トレーシングレポート</b><a class="btn" id="print-back">薬歴へ戻る</a><span class="spacer"></span>
-  <button type="button" class="btn btn-primary" id="print">印刷する（Ctrl+P）</button></div>
+  <button type="button" class="btn btn-primary" id="print">印刷する <kbd>Ctrl+P</kbd></button></div>
 <main class="sheet" id="sheet" hidden></main>
 </body>
 </html>

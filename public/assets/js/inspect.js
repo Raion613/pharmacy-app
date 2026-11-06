@@ -125,7 +125,7 @@ if (demo.other) demoBox.insertAdjacentHTML("beforeend", `<button type="button" c
 const firstPkg = demo.packages[0];
 if (firstPkg) demoBox.insertAdjacentHTML("beforeend", `<button type="button" class="btn btn-ghost btn-small" data-raw="(01)${firstPkg.gtin}(17)240300(10)OLD01">期限切れの箱</button>`);
 if (codes.some((c) => !demo.packages.some((p) => p.drugCode === c))) {
-  demoBox.insertAdjacentHTML("beforeend", '<span class="hint">（HOT コードマスターに包装が無い薬があります。その薬は監査を保存できません）</span>');
+  demoBox.insertAdjacentHTML("beforeend", '<span class="hint">包装コードの無い薬あり</span>');
 }
 demoBox.addEventListener("click", (e) => {
   const b = e.target.closest("[data-raw]");

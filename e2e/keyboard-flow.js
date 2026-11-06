@@ -261,10 +261,8 @@ await page.waitForSelector(selectedCard);
 // 特別の料金：価格差 0.15円 × 3 = 0.45円 → 1点 × 14日 = 14点 → 140円 + 消費税 = 154円
 assert.match(await text(selectedCard), /2026\/10\/22[\s\S]*薬剤料 84点[\s\S]*特別の料金 154円[\s\S]*ロキソニン錠６０ｍｇ（選）/);
 await Promise.all([page.waitForURL(/\/rx\?patient=7&from=/), page.keyboard.press("Alt+D")]);
-await page.waitForSelector("#special-fee:not([hidden])");
+await page.waitForFunction(() => document.querySelector("#bill-special").textContent === "154円");
 assert.equal(await text("#total"), "84点");
-assert.equal(await text("#special-fee-yen"), "154円");
-assert.match(await text("#special-fee-how"), /14点 × 10円 = 140円 ＋ 消費税/);
 assert.match(await text('tr.item[data-r="0"][data-i="0"] .drug-meta'), /選定療養（患者希望）[\s\S]*価格差 0\.15円\/錠/);
 // 11-2-2. 残薬調整：調剤した日数を減らし、Alt+Q で疑義照会を書くと、加算が会計に入る。Alt+H で処方箋の記載を別に書ける
 step("残薬調整（日数を減らす・Alt+Q で疑義照会）と、処方箋と違う薬（Alt+H）");

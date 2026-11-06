@@ -27,7 +27,6 @@ document.querySelector("#sheet").innerHTML = `
     <div class="qr-block">
       <div class="qr">${qrSvg(encodeQr(bytes), 3)}</div>
       <p>電子版お薬手帳のアプリで読み取れます</p>
-      <p class="hint">JAHIS 電子版お薬手帳データフォーマット Ver.2.0（JAHISTC03）・Shift_JIS ${bytes.length.toLocaleString()}バイト</p>
       <details class="raw"><summary>QR コードの中身</summary><pre>${escapeHtml(text)}</pre></details>
     </div>
   </section>`;

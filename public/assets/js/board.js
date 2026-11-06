@@ -10,11 +10,11 @@ import { setTour, autoStartTour, tourActive } from "./tour.js";
 renderShell({ page: "board", title: "受付状況", crumbs: [{ label: "受付状況" }] });
 
 const COLUMNS = [
-  { key: "received", label: "入力待ち", hint: "処方箋を受け付けた" },
-  { key: "entered", label: "監査待ち", hint: "処方を入力した" },
-  { key: "audited", label: "投薬待ち", hint: "調剤監査が済んだ" },
-  { key: "handed", label: "会計待ち", hint: "薬を渡した" },
-  { key: "paid", label: "会計済み", hint: "" },
+  { key: "received", label: "入力待ち" },
+  { key: "entered", label: "監査待ち" },
+  { key: "audited", label: "投薬待ち" },
+  { key: "handed", label: "会計待ち" },
+  { key: "paid", label: "会計済み" },
 ];
 const LONG_WAIT_MIN = 20; // これより長く待たせている患者を赤で示す
 
@@ -41,7 +41,7 @@ function render() {
   boardEl.innerHTML = COLUMNS.map((c) => {
     const list = groups.get(c.key) ?? [];
     return `<section class="board-col col-${c.key}" aria-label="${c.label}">
-      <header><b>${c.label}</b><span class="count">${list.length}</span><span class="hint">${c.hint}</span></header>
+      <header><b>${c.label}</b><span class="count">${list.length}</span></header>
       <div class="board-cards">${list.map((r) => cardHtml(r, c.key, now)).join("") || '<p class="empty">なし</p>'}</div>
     </section>`;
   }).join("");

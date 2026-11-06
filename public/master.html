@@ -36,8 +36,8 @@
         <div class="drop" id="drop">
           <div class="drop-icon" id="drop-icon"></div>
           <div class="drop-text">
-            <b>支払基金の医薬品マスター・調剤行為マスター（.zip / .csv）をここにドロップ</b>
-            <span class="hint">医薬品マスターは全件（y_ALL….zip）も改定分（y_….csv）も、調剤行為マスターは全件（m….csv）を、ダウンロードしたまま入れられます。</span>
+            <b>医薬品マスター・調剤行為マスターをドロップ</b>
+            <span class="hint">y_ALL….zip ／ y_….csv ／ m….csv</span>
           </div>
           <button type="button" class="btn" id="pick" autofocus>ファイルを選ぶ</button>
           <input type="file" id="file" accept=".zip,.csv" hidden>
@@ -47,7 +47,6 @@
         <div class="field published-field">
           <label for="published-on">マスターの公表日</label>
           <input class="input" id="published-on" type="date">
-          <span class="hint">ファイル名の日付（y_ALL<b>20261013</b>.zip）から自動で入ります。品目ごとの適用開始日は、マスターの変更年月日をそのまま使います。</span>
         </div>
 
         <div class="progress" id="progress" hidden><div class="bar"><i id="progress-bar"></i></div><span id="progress-text"></span></div>
@@ -58,7 +57,7 @@
   <footer class="actionbar">
     <div class="keys"><span><kbd>Ctrl</kbd>+<kbd>Enter</kbd>反映する</span><span><kbd>Esc</kbd>中止</span></div>
     <span class="spacer"></span>
-    <button type="button" class="btn" id="cancel" hidden>中止（Esc）</button>
+    <button type="button" class="btn" id="cancel" hidden>中止 <kbd>Esc</kbd></button>
     <button type="button" class="btn btn-primary" id="commit" disabled>反映する</button>
   </footer>
 </div>

@@ -32,7 +32,7 @@
         <label class="hint" for="report-facility">報告書</label>
         <select class="input input-small" id="report-facility"></select>
         <a class="btn btn-small" id="print-reports" target="_blank" rel="noopener">この月の報告書を一括印刷</a>
-        <button type="button" class="btn btn-small btn-primary" id="add-visit">訪問を予定（Alt+V）</button>
+        <button type="button" class="btn btn-small btn-primary" id="add-visit">訪問を予定 <kbd>Alt+V</kbd></button>
       </div>
       <div class="calendar" id="calendar"></div>
     </section>
@@ -50,7 +50,7 @@
       <div class="field"><label for="f-address">住所</label><input class="input" id="f-address" name="address" maxlength="100"><span class="error-text" data-error="address"></span></div>
       <div class="field"><label for="f-phone">電話番号</label><input class="input" id="f-phone" name="phone" maxlength="20"><span class="error-text" data-error="phone"></span></div>
     </div>
-    <div class="dialog-foot"><button type="button" class="btn" data-close>キャンセル（Esc）</button><button type="submit" class="btn btn-primary">追加（Ctrl+Enter）</button></div>
+    <div class="dialog-foot"><button type="button" class="btn" data-close>キャンセル <kbd>Esc</kbd></button><button type="submit" class="btn btn-primary">追加 <kbd>Ctrl+Enter</kbd></button></div>
   </form>
 </dialog>
 
@@ -63,11 +63,11 @@
       <div class="field"><label for="h-facility">訪問先</label><select class="input" id="h-facility" name="facilityId"></select><span class="error-text" data-error="facilityId"></span></div>
       <div class="field"><label for="h-institution">訪問を指示した医師の医療機関</label><input class="input" id="h-institution" name="institution" maxlength="60"><span class="error-text" data-error="institution"></span></div>
       <div class="field"><label for="h-doctor">医師</label><input class="input" id="h-doctor" name="doctor" maxlength="30"><span class="error-text" data-error="doctor"></span></div>
-      <div class="field"><label for="h-care">ケアマネジャー（介護保険の患者）</label><input class="input" id="h-care" name="careManager" maxlength="40"><span class="error-text" data-error="careManager"></span></div>
+      <div class="field"><label for="h-care">ケアマネジャー</label><input class="input" id="h-care" name="careManager" maxlength="40"><span class="error-text" data-error="careManager"></span></div>
       <div class="field"><label for="h-started">訪問を始めた日</label><input class="input" type="date" id="h-started" name="startedOn"><span class="error-text" data-error="startedOn"></span></div>
-      <label class="check-row"><input type="checkbox" name="intensive" id="h-intensive">末期の悪性腫瘍・注射による麻薬の投与・中心静脈栄養法の患者（週2回・月8回まで。それ以外は週1回・月4回まで）</label>
+      <label class="check-row"><input type="checkbox" name="intensive" id="h-intensive">末期の悪性腫瘍・注射による麻薬の投与・中心静脈栄養法</label>
     </div>
-    <div class="dialog-foot"><button type="button" class="btn" data-close>キャンセル（Esc）</button><button type="submit" class="btn btn-primary">登録（Ctrl+Enter）</button></div>
+    <div class="dialog-foot"><button type="button" class="btn" data-close>キャンセル <kbd>Esc</kbd></button><button type="submit" class="btn btn-primary">登録 <kbd>Ctrl+Enter</kbd></button></div>
   </form>
 </dialog>
 
@@ -80,7 +80,7 @@
       <div class="field"><label for="v-pharmacist">担当の薬剤師</label><select class="input" id="v-pharmacist" name="pharmacistId"></select><span class="error-text" data-error="pharmacistId"></span></div>
       <p class="hint" id="v-limit"></p>
     </div>
-    <div class="dialog-foot"><button type="button" class="btn" data-close>キャンセル（Esc）</button><button type="submit" class="btn btn-primary">予定に入れる（Ctrl+Enter）</button></div>
+    <div class="dialog-foot"><button type="button" class="btn" data-close>キャンセル <kbd>Esc</kbd></button><button type="submit" class="btn btn-primary">予定に入れる <kbd>Ctrl+Enter</kbd></button></div>
   </form>
 </dialog>
 
@@ -97,9 +97,8 @@
       <div class="field"><label for="p-management">薬剤の管理方法</label><textarea class="input textarea" id="p-management" name="management" rows="2" maxlength="400"></textarea><span class="error-text" data-error="management"></span></div>
       <div class="field"><label for="p-drug">薬剤特性（副作用・相互作用等）</label><textarea class="input textarea" id="p-drug" name="drugNotes" rows="2" maxlength="400"></textarea><span class="error-text" data-error="drugNotes"></span></div>
       <div class="field"><label for="p-guidance">実施すべき指導の内容</label><textarea class="input textarea" id="p-guidance" name="guidance" rows="2" maxlength="400"></textarea><span class="error-text" data-error="guidance"></span></div>
-      <p class="hint">通知が計画書に求める記載事項（薬剤の管理方法、薬剤特性を確認した上で実施すべき指導の内容、訪問回数、訪問間隔）です。少なくとも月1回見直し、見直したら新しい計画書として保存します。</p>
     </div>
-    <div class="dialog-foot"><a class="btn" id="print-plan" target="_blank" rel="noopener">最新の計画書を印刷</a><span class="spacer"></span><button type="button" class="btn" data-close>閉じる（Esc）</button><button type="submit" class="btn btn-primary">計画書を保存（Ctrl+Enter）</button></div>
+    <div class="dialog-foot"><a class="btn" id="print-plan" target="_blank" rel="noopener">最新の計画書を印刷</a><span class="spacer"></span><button type="button" class="btn" data-close>閉じる <kbd>Esc</kbd></button><button type="submit" class="btn btn-primary">計画書を保存 <kbd>Ctrl+Enter</kbd></button></div>
   </form>
 </dialog>
 
@@ -114,11 +113,11 @@
         <div class="field"><label for="r-leftover">残薬の状況</label><textarea class="input textarea" id="r-leftover" name="leftover" rows="2" maxlength="300"></textarea><span class="error-text" data-error="leftover"></span></div>
         <div class="field"><label for="r-guidance">実施した指導・服薬支援</label><textarea class="input textarea" id="r-guidance" name="guidance" rows="2" maxlength="400"></textarea><span class="error-text" data-error="guidance"></span></div>
       </div>
-      <div class="field"><label for="r-report">処方医への報告<button type="button" class="btn btn-ghost btn-small" id="compose-report">薬歴から報告書の形にまとめる（Alt+G）</button></label>
+      <div class="field"><label for="r-report">処方医への報告<button type="button" class="btn btn-ghost btn-small" id="compose-report">薬歴から報告書の形にまとめる <kbd>Alt+G</kbd></button></label>
         <textarea class="input textarea" id="r-report" name="report" rows="6" maxlength="1200"></textarea><span class="error-text" data-error="report"></span></div>
-      <div class="field"><label for="r-shared">ケアマネジャー・訪問看護など他職種と共有した内容</label><textarea class="input textarea" id="r-shared" name="shared" rows="2" maxlength="400"></textarea><span class="error-text" data-error="shared"></span></div>
+      <div class="field"><label for="r-shared">他職種と共有した内容</label><textarea class="input textarea" id="r-shared" name="shared" rows="2" maxlength="400"></textarea><span class="error-text" data-error="shared"></span></div>
     </div>
-    <div class="dialog-foot"><a class="btn" id="print-one" target="_blank" rel="noopener" hidden>この報告書を印刷</a><span class="spacer"></span><button type="button" class="btn" data-close>閉じる（Esc）</button><button type="submit" class="btn btn-primary" id="record-save">記録を保存（Ctrl+Enter）</button></div>
+    <div class="dialog-foot"><a class="btn" id="print-one" target="_blank" rel="noopener" hidden>この報告書を印刷</a><span class="spacer"></span><button type="button" class="btn" data-close>閉じる <kbd>Esc</kbd></button><button type="submit" class="btn btn-primary" id="record-save">記録を保存 <kbd>Ctrl+Enter</kbd></button></div>
   </form>
 </dialog>
 </body>

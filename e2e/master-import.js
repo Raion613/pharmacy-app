@@ -103,7 +103,7 @@ assert.equal(await imports(), before + 1);
 step("全件を入れ直しても、後から入れた12月1日の薬価は残る");
 await dropFile("y_ALL20261013.zip", zip);
 await page.waitForSelector("#preview .tiles", { timeout: 60000 });
-assert.match(await text("#preview"), /取り込み済みのマスター（2026\/12\/01（火））より前[\s\S]*取り込み済みの内容と同じです/);
+assert.match(await text("#preview"), /取り込み済み（2026\/12\/01（火））より古い公表日[\s\S]*取り込み済みの内容と同じです/);
 await page.keyboard.press("Control+Enter");
 await page.waitForFunction((n) => document.querySelectorAll("#import-rows tr").length === n, before + 2);
 await page.waitForFunction(() => document.activeElement.id === "pick"); // 反映の後始末が終わると「ファイルを選ぶ」に戻る

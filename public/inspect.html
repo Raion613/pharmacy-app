@@ -25,12 +25,12 @@
       <div class="panel-head">バーコードを読む</div>
       <div class="panel-body scan-body">
         <div class="field">
-          <label for="scan-input">取り出した薬の箱のバーコード（読み取り機で読むと、ここに入って自動で照合します）</label>
+          <label for="scan-input">薬の箱のバーコード</label>
           <div class="input-icon"><span id="scan-icon"></span><input class="input scan-input" id="scan-input" autocomplete="off" spellcheck="false" placeholder="(01)14987…(17)…(10)…"></div>
           <span class="error-text" id="scan-error"></span>
         </div>
         <div class="demo-scan" id="demo-scan">
-          <span class="hint">デモ用（手元に薬の箱が無いとき）：</span>
+          <span class="hint">デモ：</span>
         </div>
         <ol class="scan-log" id="scan-log"></ol>
         <section class="past" id="past" hidden></section>
@@ -41,7 +41,7 @@
     <div class="keys"><span>読み取り機は <kbd>Enter</kbd> まで送ってきます</span><span><kbd>Ctrl</kbd>+<kbd>Enter</kbd>監査を保存</span></div>
     <span class="spacer"></span>
     <a class="btn" id="back">戻る</a>
-    <button type="button" class="btn btn-primary" id="save" disabled>監査を保存（Ctrl+Enter）</button>
+    <button type="button" class="btn btn-primary" id="save" disabled>監査を保存 <kbd>Ctrl+Enter</kbd></button>
   </footer>
 </div>
 </body>
