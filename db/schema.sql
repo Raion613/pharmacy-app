@@ -38,8 +38,8 @@ DROP TABLE IF EXISTS generic_flags;
 DROP TABLE IF EXISTS drugs;
 DROP TABLE IF EXISTS master_imports;
 DROP TABLE IF EXISTS pharmacy_facility;
-DROP TABLE IF EXISTS pharmacy_profile;
 DROP TABLE IF EXISTS users;
+DROP TABLE IF EXISTS pharmacies;
 
 -- 薬価と調剤報酬の点数の出どころは、社会保険診療報酬支払基金（医療情報基盤・診療報酬審査支払機構）の基本マスター。
 --   医薬品マスター   … 全件ファイル（y_ALL….csv）と改定分ファイル（y_….csv）。内用薬だけを入れる
@@ -181,9 +181,11 @@ CREATE TABLE staging_fee_rows (
   PRIMARY KEY (pending_id, code)
 );
 
--- 薬局。領収証・お薬手帳に出す情報
-CREATE TABLE pharmacy_profile (
-  id              INTEGER PRIMARY KEY CHECK (id = 1),
+-- 薬局。1つの DB を全国の薬局で使うので、利用者・患者・施設・テンプレート・届出は必ずどれかの薬局に属する。
+-- 患者の下にある行（処方・メモ・指導記録など）は患者を通して薬局が決まる。薬価・点数のマスターは全薬局で共通。
+-- 列は領収証・お薬手帳に出す情報
+CREATE TABLE pharmacies (
+  id              INTEGER PRIMARY KEY,
   name            TEXT NOT NULL,
   prefecture_code TEXT NOT NULL,        -- 都道府県番号（2桁）
   pharmacy_code   TEXT NOT NULL,        -- 薬局コード（7桁）
@@ -195,7 +197,8 @@ CREATE TABLE pharmacy_profile (
 -- 薬局が地方厚生局に届け出た施設基準（調剤基本料の区分と加算）。届出は変わるので、適用開始日ごとに持つ。
 -- 列は令和6年度・令和8年度の点数表の両方の区分を持ち、その時期に無い区分は 0 にする。
 CREATE TABLE pharmacy_facility (
-  valid_from        TEXT PRIMARY KEY,
+  pharmacy_id       INTEGER NOT NULL REFERENCES pharmacies(id),
+  valid_from        TEXT NOT NULL,
   basic_fee         TEXT NOT NULL CHECK (basic_fee IN ('1', '2', '3i', '3ro', '3ha')), -- 調剤基本料の区分
   community_support INTEGER NOT NULL CHECK (community_support BETWEEN 0 AND 5), -- 地域支援体制加算（R6：1〜4）／地域支援・医薬品供給対応体制加算（R8：1〜5）
   renkei            INTEGER NOT NULL CHECK (renkei IN (0, 1)),          -- 連携強化加算
@@ -203,11 +206,13 @@ CREATE TABLE pharmacy_facility (
   iryo_dx           INTEGER NOT NULL CHECK (iryo_dx BETWEEN 0 AND 3),   -- 医療ＤＸ推進体制整備加算（R6 のみ）
   iryo_joho         INTEGER NOT NULL CHECK (iryo_joho IN (0, 1)),       -- 医療情報取得加算の施設基準（R6 のみ）
   denshi_renkei     INTEGER NOT NULL CHECK (denshi_renkei IN (0, 1)),   -- 電子的調剤情報連携体制整備加算（R8 のみ）
-  base_up           INTEGER NOT NULL CHECK (base_up IN (0, 1))          -- 調剤ベースアップ評価料（R8 のみ）
+  base_up           INTEGER NOT NULL CHECK (base_up IN (0, 1)),         -- 調剤ベースアップ評価料（R8 のみ）
+  PRIMARY KEY (pharmacy_id, valid_from)
 );
 
 CREATE TABLE users (
   id                  INTEGER PRIMARY KEY,
+  pharmacy_id         INTEGER NOT NULL REFERENCES pharmacies(id), -- 勤めている薬局。この薬局のデータだけを見られる
   login_id            TEXT NOT NULL UNIQUE,
   display_name        TEXT NOT NULL,
   password_hash       TEXT NOT NULL,    -- PBKDF2-SHA256 の結果（16進）
@@ -236,17 +241,19 @@ CREATE TABLE sessions (
 
 CREATE TABLE patients (
   id         INTEGER PRIMARY KEY,
-  patient_no TEXT NOT NULL UNIQUE,      -- 画面に出す患者番号（6桁）
+  pharmacy_id INTEGER NOT NULL REFERENCES pharmacies(id),
+  patient_no TEXT NOT NULL,             -- 画面に出す患者番号（薬局ごとに6桁の連番）
   name       TEXT NOT NULL,
   kana       TEXT NOT NULL,             -- 全角カタカナ
   birth_date TEXT NOT NULL,
   sex        TEXT NOT NULL CHECK (sex IN ('M', 'F')),
   burden_percent INTEGER NOT NULL CHECK (burden_percent IN (10, 20, 30)), -- 一部負担金の割合（保険証の負担割合）
   created_at TEXT NOT NULL,
-  created_by INTEGER NOT NULL REFERENCES users(id)
+  created_by INTEGER NOT NULL REFERENCES users(id),
+  UNIQUE (pharmacy_id, patient_no)
 );
 
-CREATE INDEX idx_patients_kana ON patients(kana);
+CREATE INDEX idx_patients_kana ON patients(pharmacy_id, kana);
 
 -- 受付（処方箋を受け取った時刻）。業務の進み具合（入力・監査・投薬・会計）は reception_steps に1行ずつ足す
 CREATE TABLE receptions (
@@ -404,13 +411,15 @@ CREATE INDEX idx_guidance_records_patient ON guidance_records(patient_id, create
 -- 指導記録のテンプレート。選ぶと S・O・A・P にまとめて写す
 CREATE TABLE guidance_templates (
   id         INTEGER PRIMARY KEY,
-  title      TEXT NOT NULL UNIQUE,
+  pharmacy_id INTEGER NOT NULL REFERENCES pharmacies(id),
+  title      TEXT NOT NULL,
   subjective TEXT NOT NULL,
   objective  TEXT NOT NULL,
   assessment TEXT NOT NULL,
   plan       TEXT NOT NULL,
   created_at TEXT NOT NULL,
-  created_by INTEGER NOT NULL REFERENCES users(id)
+  created_by INTEGER NOT NULL REFERENCES users(id),
+  UNIQUE (pharmacy_id, title)
 );
 
 -- トレーシングレポート（服薬情報提供書）。急ぎではないが処方医に伝えたいことを、文書で医療機関に送る。
@@ -438,11 +447,13 @@ CREATE TABLE tracing_reports (
 -- 在宅：訪問先の施設（老人ホームなど）。自宅の患者は施設なし
 CREATE TABLE facilities (
   id         INTEGER PRIMARY KEY,
-  name       TEXT NOT NULL UNIQUE,
+  pharmacy_id INTEGER NOT NULL REFERENCES pharmacies(id),
+  name       TEXT NOT NULL,
   address    TEXT NOT NULL,
   phone      TEXT NOT NULL,
   created_at TEXT NOT NULL,
-  created_by INTEGER NOT NULL REFERENCES users(id)
+  created_by INTEGER NOT NULL REFERENCES users(id),
+  UNIQUE (pharmacy_id, name)
 );
 
 -- 在宅で訪問する患者。訪問は医師の指示に基づくので、指示した医師を持つ

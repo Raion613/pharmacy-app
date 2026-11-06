@@ -1,6 +1,6 @@
 // 調剤報酬の算定に要る「その日の事実」を DB から集める。算定の規則そのものは public/assets/js/chozai-fee.js。
 //   - その日に効いている算定項目の点数（調剤行為マスターの履歴）
-//   - その日に効いている薬局の届出（施設基準）
+//   - その日に効いている、患者の薬局の届出（施設基準）
 //   - この患者の履歴（3月以内の再来局か、月1回などの項目をもう算定したか）
 import { ALL_CODES, LIMITED, eraOf, pointsOf } from "../../public/assets/js/chozai-fee.js";
 import { HttpError } from "./http.js";
@@ -10,7 +10,8 @@ export async function feeContext(db, patientId, date, { excludePrescriptionId = 
   const placeholders = ALL_CODES.map((_, i) => `?${i + 2}`).join(", ");
   const [patient, facility, fees, recent, done] = await db.batch([
     db.prepare("SELECT birth_date, burden_percent FROM patients WHERE id = ?1").bind(patientId),
-    db.prepare("SELECT * FROM pharmacy_facility WHERE valid_from <= ?1 ORDER BY valid_from DESC LIMIT 1").bind(date),
+    db.prepare(`SELECT * FROM pharmacy_facility WHERE pharmacy_id = (SELECT pharmacy_id FROM patients WHERE id = ?2)
+                  AND valid_from <= ?1 ORDER BY valid_from DESC LIMIT 1`).bind(date, patientId),
     db.prepare(`
       SELECT f.code, p.name, p.point_kind, p.points_x100
         FROM fee_items f

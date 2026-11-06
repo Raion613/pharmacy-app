@@ -12,11 +12,12 @@ INSERT INTO master_imports VALUES (1, 'drug', 'full', '2026-03-19', 'test.csv', 
 INSERT INTO drugs (code, yj_code, name, unit, generic, general_name, sentei, pair_code, narcotic, name_key, general_key, attrs_published_on)
   VALUES ('610000001', '1111111F1011', '試験錠', '錠', 0, NULL, 0, NULL, 0, '試験錠', '', '2026-03-19');
 INSERT INTO drug_prices VALUES ('610000001', '2026-04-01', 1, 1000, NULL);
-INSERT INTO users (id, login_id, display_name, password_hash, password_salt, password_iterations)
-  VALUES (1, 'test', 'テスト 薬剤師', 'x', 'x', 1);
-INSERT INTO patients (id, patient_no, name, kana, birth_date, sex, burden_percent, created_at, created_by) VALUES
-  (1, '000001', '架空　太郎', 'カクウ　タロウ', '1960-01-01', 'M', 30, '2026-01-01T00:00:00Z', 1),
-  (2, '000002', '架空　花子', 'カクウ　ハナコ', '1970-01-01', 'F', 30, '2026-01-01T00:00:00Z', 1);
+INSERT INTO pharmacies (id, name, prefecture_code, pharmacy_code, postal_code, address, phone) VALUES (1, 'テスト薬局', '13', '9999999', '100-0000', '架空', '000'), (2, '別の薬局', '20', '9999998', '386-0000', '架空', '000');
+INSERT INTO users (id, pharmacy_id, login_id, display_name, password_hash, password_salt, password_iterations)
+  VALUES (1, 1, 'test', 'テスト 薬剤師', 'x', 'x', 1);
+INSERT INTO patients (id, pharmacy_id, patient_no, name, kana, birth_date, sex, burden_percent, created_at, created_by) VALUES
+  (1, 1, '000001', '架空　太郎', 'カクウ　タロウ', '1960-01-01', 'M', 30, '2026-01-01T00:00:00Z', 1),
+  (2, 1, '000002', '架空　花子', 'カクウ　ハナコ', '1970-01-01', 'F', 30, '2026-01-01T00:00:00Z', 1);
 INSERT INTO prescriptions (id, patient_id, prescribed_on, dispensed_on, handbook, drug_points, total_points, burden_percent, copay_yen, created_at, created_by)
   VALUES ('rx-1', 1, '2026-05-01', '2026-05-01', 'paper', 7, 7, 30, 20, '2026-05-01T01:00:00Z', 1);
 INSERT INTO prescription_rps (id, prescription_id, rp_no, usage, rx_days, days, daily_yen, points_per_day, points) VALUES ('rp-1', 'rx-1', 1, '1日1回朝食後', 7, 7, '10.00', 1, 7);
@@ -29,7 +30,7 @@ beforeEach(() => {
   db.exec(FIXTURE);
 });
 
-const user = { id: 1 };
+const user = { id: 1, pharmacy_id: 1 };
 const pathsOf = async (promise) => {
   try {
     await promise;
@@ -63,7 +64,7 @@ test("アレルギー歴・副作用歴のメモがある患者は、一覧と�
   await createNote(db, user, 1, { category: "allergy", body: "セフェム系で発疹" });
   await createNote(db, user, 1, { category: "lifestyle", body: "喫煙" });
   assert.deepEqual((await getPatient(db, 1)).alertCategories, ["allergy"]);
-  const list = await searchPatients(db, "カクウ");
+  const list = await searchPatients(db, 1, "カクウ");
   assert.deepEqual(list.map((p) => [p.patientNo, p.alertCategories]), [["000001", ["allergy"]], ["000002", []]]);
 });
 

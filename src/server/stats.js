@@ -1,4 +1,4 @@
-// 薬局の数字（月ごと）。保存した処方から集計する。
+// 薬局の数字（月ごと）。自分の薬局の保存した処方から集計する。
 //   処方箋の枚数      … その月の調剤日の処方の数（このアプリでは処方1件＝処方箋1枚）
 //   処方箋単価        … 調剤報酬の合計点数 × 10円 ÷ 枚数（保険の分。選定療養の特別の料金は含めない）
 //   後発医薬品の使用割合（数量ベース）… 後発医薬品の数量 ÷（後発医薬品のある先発医薬品の数量 ＋ 後発医薬品の数量）
@@ -6,13 +6,14 @@
 //     「後発医薬品のある先発医薬品」は厚労省の薬価基準収載品目リストの欄（generic_flags）で見分ける
 import { HttpError } from "./http.js";
 
-export async function monthlyStats(db, { from, to }) {
+export async function monthlyStats(db, pharmacyId, { from, to }) {
   if (!/^\d{4}-\d{2}$/.test(from) || !/^\d{4}-\d{2}$/.test(to) || from > to) throw new HttpError(400, "期間が不正です");
   const [rx, qty] = await db.batch([
     db.prepare(
-      `SELECT substr(dispensed_on, 1, 7) AS month, COUNT(*) AS sheets, SUM(total_points) AS points, SUM(drug_points) AS drug_points
-         FROM prescriptions WHERE substr(dispensed_on, 1, 7) BETWEEN ?1 AND ?2 GROUP BY month ORDER BY month`,
-    ).bind(from, to),
+      `SELECT substr(p.dispensed_on, 1, 7) AS month, COUNT(*) AS sheets, SUM(p.total_points) AS points, SUM(p.drug_points) AS drug_points
+         FROM prescriptions p JOIN patients pa ON pa.id = p.patient_id
+        WHERE pa.pharmacy_id = ?3 AND substr(p.dispensed_on, 1, 7) BETWEEN ?1 AND ?2 GROUP BY month ORDER BY month`,
+    ).bind(from, to, pharmacyId),
     db.prepare(
       `SELECT substr(p.dispensed_on, 1, 7) AS month,
               SUM(CASE WHEN d.generic = 1 THEN i.daily_qty_milli * r.days ELSE 0 END) AS generic_milli,
@@ -20,11 +21,12 @@ export async function monthlyStats(db, { from, to }) {
          FROM prescription_items i
          JOIN prescription_rps r ON r.id = i.rp_id
          JOIN prescriptions p ON p.id = r.prescription_id
+         JOIN patients pa ON pa.id = p.patient_id
          JOIN drugs d ON d.code = i.drug_code
          LEFT JOIN generic_flags g ON g.yj_code = d.yj_code
-        WHERE substr(p.dispensed_on, 1, 7) BETWEEN ?1 AND ?2
+        WHERE pa.pharmacy_id = ?3 AND substr(p.dispensed_on, 1, 7) BETWEEN ?1 AND ?2
         GROUP BY month`,
-    ).bind(from, to),
+    ).bind(from, to, pharmacyId),
   ]);
   const qtyByMonth = new Map(qty.results.map((q) => [q.month, q]));
   const months = [];

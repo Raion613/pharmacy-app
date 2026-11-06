@@ -60,11 +60,12 @@ export async function messagesOf(db, patientId) {
   return results.map(toJson);
 }
 
-// 患者ごとの最新のメッセージ（新しい順）。受信箱の一覧
-export async function threads(db) {
+// 自分の薬局の患者ごとの最新のメッセージ（新しい順）。受信箱の一覧
+export async function threads(db, pharmacyId) {
   const { results } = await db.prepare(
-    `${SELECT} WHERE m.id = (SELECT x.id FROM line_messages x WHERE x.patient_id = m.patient_id ORDER BY x.sent_at DESC, x.id DESC LIMIT 1)
+    `${SELECT} WHERE pa.pharmacy_id = ?1
+        AND m.id = (SELECT x.id FROM line_messages x WHERE x.patient_id = m.patient_id ORDER BY x.sent_at DESC, x.id DESC LIMIT 1)
       ORDER BY m.sent_at DESC`,
-  ).all();
+  ).bind(pharmacyId).all();
   return results.map(toJson);
 }

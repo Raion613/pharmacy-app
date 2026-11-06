@@ -23,13 +23,13 @@ const fail = (errors) => {
 export async function createFacility(db, user, body) {
   const errors = [];
   const f = texts(body, [["name", "施設名", 60, true], ["address", "住所", 100, true], ["phone", "電話番号", 20, true]], errors);
-  if (errors.length === 0 && await db.prepare("SELECT 1 FROM facilities WHERE name = ?1").bind(f.name).first()) {
+  if (errors.length === 0 && await db.prepare("SELECT 1 FROM facilities WHERE pharmacy_id = ?1 AND name = ?2").bind(user.pharmacy_id, f.name).first()) {
     errors.push({ path: "name", message: "同じ名前の施設があります" });
   }
   fail(errors);
   const row = await db.prepare(
-    "INSERT INTO facilities (name, address, phone, created_at, created_by) VALUES (?1, ?2, ?3, ?4, ?5) RETURNING id",
-  ).bind(f.name, f.address, f.phone, nowIso(), user.id).first();
+    "INSERT INTO facilities (pharmacy_id, name, address, phone, created_at, created_by) VALUES (?1, ?2, ?3, ?4, ?5, ?6) RETURNING id",
+  ).bind(user.pharmacy_id, f.name, f.address, f.phone, nowIso(), user.id).first();
   return { id: row.id, ...f };
 }
 
@@ -48,7 +48,7 @@ export async function registerHomePatient(db, user, body) {
     .bind(body.patientId).first();
   if (!patient) throw new HttpError(404, "患者が見つかりません");
   if (patient.registered) fail([{ path: "patientId", message: "この患者はもう在宅の患者として登録されています" }]);
-  if (facilityId !== null && !await db.prepare("SELECT 1 FROM facilities WHERE id = ?1").bind(facilityId).first()) {
+  if (facilityId !== null && !await db.prepare("SELECT 1 FROM facilities WHERE id = ?1 AND pharmacy_id = ?2").bind(facilityId, user.pharmacy_id).first()) {
     fail([{ path: "facilityId", message: "施設が見つかりません" }]);
   }
   await db.batch([
@@ -102,7 +102,9 @@ export async function createSchedule(db, user, body) {
   fail(errors);
   const home = await homePatient(db, body.patientId);
   if (body.visitOn < home.started_on) fail([{ path: "visitOn", message: "訪問を始めた日より前です" }]);
-  if (!await db.prepare("SELECT 1 FROM users WHERE id = ?1").bind(body.pharmacistId).first()) fail([{ path: "pharmacistId", message: "薬剤師が見つかりません" }]);
+  if (!await db.prepare("SELECT 1 FROM users WHERE id = ?1 AND pharmacy_id = ?2").bind(body.pharmacistId, user.pharmacy_id).first()) {
+    fail([{ path: "pharmacistId", message: "薬剤師が見つかりません" }]);
+  }
   const [mine, theirs] = await db.batch([
     db.prepare("SELECT visit_on FROM visit_schedules WHERE patient_id = ?1").bind(body.patientId),
     db.prepare("SELECT visit_on FROM visit_schedules WHERE pharmacist_id = ?1").bind(body.pharmacistId),
@@ -168,16 +170,18 @@ function scheduleJson(r) {
   };
 }
 
-// 在宅の画面の中身：施設、在宅の患者（最新の計画書つき）、その月の訪問予定、薬剤師
-export async function homeOverview(db, month) {
+// 在宅の画面の中身（自分の薬局の分）：施設、在宅の患者（最新の計画書つき）、その月の訪問予定、薬剤師
+export async function homeOverview(db, pharmacyId, month) {
   const [facilities, patients, plans, schedules, users] = await db.batch([
-    db.prepare("SELECT id, name, address, phone FROM facilities ORDER BY name"),
+    db.prepare("SELECT id, name, address, phone FROM facilities WHERE pharmacy_id = ?1 ORDER BY name").bind(pharmacyId),
     db.prepare(
-      `SELECT h.*, pa.name, pa.kana, pa.patient_no, pa.birth_date FROM home_patients h JOIN patients pa ON pa.id = h.patient_id ORDER BY pa.kana`,
-    ),
-    db.prepare("SELECT * FROM care_plans ORDER BY made_on DESC, id DESC"),
-    db.prepare(`${SCHEDULE_SELECT} WHERE substr(s.visit_on, 1, 7) = ?1 ORDER BY s.visit_on, pa.kana`).bind(month),
-    db.prepare("SELECT id, display_name FROM users ORDER BY id"),
+      `SELECT h.*, pa.name, pa.kana, pa.patient_no, pa.birth_date FROM home_patients h JOIN patients pa ON pa.id = h.patient_id
+        WHERE pa.pharmacy_id = ?1 ORDER BY pa.kana`,
+    ).bind(pharmacyId),
+    db.prepare(`SELECT c.* FROM care_plans c JOIN patients pa ON pa.id = c.patient_id
+                 WHERE pa.pharmacy_id = ?1 ORDER BY c.made_on DESC, c.id DESC`).bind(pharmacyId),
+    db.prepare(`${SCHEDULE_SELECT} WHERE pa.pharmacy_id = ?1 AND substr(s.visit_on, 1, 7) = ?2 ORDER BY s.visit_on, pa.kana`).bind(pharmacyId, month),
+    db.prepare("SELECT id, display_name FROM users WHERE pharmacy_id = ?1 ORDER BY id").bind(pharmacyId),
   ]);
   const latestPlan = new Map();
   for (const p of plans.results) if (!latestPlan.has(p.patient_id)) latestPlan.set(p.patient_id, p);
@@ -220,20 +224,20 @@ export async function homeDetail(db, patientId) {
   };
 }
 
-// 報告書の印刷用：記録の済んだ訪問を集める。scheduleId を渡せばその1件、
+// 報告書の印刷用：自分の薬局の、記録の済んだ訪問を集める。scheduleId を渡せばその1件、
 // そうでなければ月と施設（"home"＝自宅の患者、"all"＝全員、数字＝その施設）で集める
-export async function reportsFor(db, { month, facilityId, scheduleId = null }) {
-  let where = "v.id IS NOT NULL";
-  const binds = [];
+export async function reportsFor(db, pharmacyId, { month, facilityId, scheduleId = null }) {
+  let where = "v.id IS NOT NULL AND pa.pharmacy_id = ?1";
+  const binds = [pharmacyId];
   if (scheduleId !== null) {
-    where += " AND s.id = ?1";
+    where += " AND s.id = ?2";
     binds.push(scheduleId);
   } else {
-    where += " AND substr(s.visit_on, 1, 7) = ?1";
+    where += " AND substr(s.visit_on, 1, 7) = ?2";
     binds.push(month);
     if (facilityId === "home") where += " AND h.facility_id IS NULL";
     else if (facilityId !== "all") {
-      where += " AND h.facility_id = ?2";
+      where += " AND h.facility_id = ?3";
       binds.push(Number(facilityId));
     }
   }

@@ -175,8 +175,10 @@ export async function conversationsByPrescription(db, patientId) {
 
 // ---------- テンプレート ----------
 
-export async function templatesOf(db) {
-  const { results } = await db.prepare("SELECT id, title, subjective, objective, assessment, plan FROM guidance_templates ORDER BY title").all();
+export async function templatesOf(db, pharmacyId) {
+  const { results } = await db.prepare(
+    "SELECT id, title, subjective, objective, assessment, plan FROM guidance_templates WHERE pharmacy_id = ?1 ORDER BY title",
+  ).bind(pharmacyId).all();
   return results;
 }
 
@@ -191,13 +193,13 @@ export async function createTemplate(db, user, body) {
     if (t[key].length > SOAP_MAX) errors.push({ path: key, message: `${letter}は${SOAP_MAX}文字までです` });
   }
   if (SOAP.every(({ key }) => t[key] === "")) errors.push({ path: "subjective", message: "S・O・A・P のどれかを入力してください" });
-  if (errors.length === 0 && await db.prepare("SELECT 1 FROM guidance_templates WHERE title = ?1").bind(title).first()) {
+  if (errors.length === 0 && await db.prepare("SELECT 1 FROM guidance_templates WHERE pharmacy_id = ?1 AND title = ?2").bind(user.pharmacy_id, title).first()) {
     errors.push({ path: "title", message: "同じ名前のテンプレートがあります" });
   }
   if (errors.length > 0) throw new HttpError(422, "入力に誤りがあります", errors);
   const row = await db.prepare(
-    `INSERT INTO guidance_templates (title, subjective, objective, assessment, plan, created_at, created_by)
-     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7) RETURNING id`,
-  ).bind(title, t.subjective, t.objective, t.assessment, t.plan, nowIso(), user.id).first();
+    `INSERT INTO guidance_templates (pharmacy_id, title, subjective, objective, assessment, plan, created_at, created_by)
+     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8) RETURNING id`,
+  ).bind(user.pharmacy_id, title, t.subjective, t.objective, t.assessment, t.plan, nowIso(), user.id).first();
   return { id: row.id, title, ...t };
 }

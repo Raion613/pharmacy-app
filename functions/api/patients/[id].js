@@ -7,10 +7,12 @@ import { notesOf } from "../../../src/server/records.js";
 import { measurementsOf } from "../../../src/server/measurements.js";
 import { messagesOf } from "../../../src/server/line.js";
 import { tracingsOf } from "../../../src/server/tracing.js";
+import { assertPatient } from "../../../src/server/tenant.js";
 
 export async function onRequestGet({ params, request, env, data }) {
   const id = Number(params.id);
   if (!Number.isInteger(id)) throw new HttpError(404, "患者が見つかりません");
+  await assertPatient(env.DB, data.user, id);
   const patient = await getPatient(env.DB, id);
   const purpose = new URL(request.url).searchParams.get("purpose") === "rx" ? "処方入力" : "薬歴";
   await auditStatement(env.DB, data.user.id, "patient.view", id, purpose).run();

@@ -17,11 +17,12 @@ let master;
 before(async () => {
   master = openD1("db/schema.sql");
   master.exec(`
-    INSERT INTO users (id, login_id, display_name, password_hash, password_salt, password_iterations) VALUES (1, 't', 'テスト 薬剤師', 'x', 'x', 1);
-    INSERT INTO patients (id, patient_no, name, kana, birth_date, sex, burden_percent, created_at, created_by)
-      VALUES (1, '000001', '架空　太郎', 'カクウ　タロウ', '1960-01-01', 'M', 30, '2026-01-01T00:00:00Z', 1),
-             (2, '000002', '架空　花子', 'カクウ　ハナコ', '2023-05-01', 'F', 20, '2026-01-01T00:00:00Z', 1);
-    INSERT INTO pharmacy_facility VALUES ('2025-04-01', '1', 0, 1, 2, 3, 1, 0, 0), ('2026-06-01', '1', 1, 1, 0, 0, 0, 1, 1);`);
+    INSERT INTO pharmacies (id, name, prefecture_code, pharmacy_code, postal_code, address, phone) VALUES (1, 'テスト薬局', '13', '9999999', '100-0000', '架空', '000'), (2, '別の薬局', '20', '9999998', '386-0000', '架空', '000');
+    INSERT INTO users (id, pharmacy_id, login_id, display_name, password_hash, password_salt, password_iterations) VALUES (1, 1, 't', 'テスト 薬剤師', 'x', 'x', 1);
+    INSERT INTO patients (id, pharmacy_id, patient_no, name, kana, birth_date, sex, burden_percent, created_at, created_by)
+      VALUES (1, 1, '000001', '架空　太郎', 'カクウ　タロウ', '1960-01-01', 'M', 30, '2026-01-01T00:00:00Z', 1),
+             (2, 1, '000002', '架空　花子', 'カクウ　ハナコ', '2023-05-01', 'F', 20, '2026-01-01T00:00:00Z', 1);
+    INSERT INTO pharmacy_facility VALUES (1, '2025-04-01', '1', 0, 1, 2, 3, 1, 0, 0), (1, '2026-06-01', '1', 1, 1, 0, 0, 0, 1, 1);`);
   for (const f of FEE_MASTERS) await loadMasterFile(master, f);
 });
 
@@ -147,10 +148,11 @@ let db;
 beforeEach(async () => {
   db = openD1("db/schema.sql");
   db.exec(`
-    INSERT INTO users (id, login_id, display_name, password_hash, password_salt, password_iterations) VALUES (1, 't', 'テスト', 'x', 'x', 1);
-    INSERT INTO patients (id, patient_no, name, kana, birth_date, sex, burden_percent, created_at, created_by)
-      VALUES (1, '000001', '架空　太郎', 'カクウ　タロウ', '1960-01-01', 'M', 30, '2026-01-01T00:00:00Z', 1);
-    INSERT INTO pharmacy_facility VALUES ('2025-04-01', '1', 0, 1, 2, 3, 1, 0, 0), ('2026-06-01', '1', 1, 1, 0, 0, 0, 1, 1);
+    INSERT INTO pharmacies (id, name, prefecture_code, pharmacy_code, postal_code, address, phone) VALUES (1, 'テスト薬局', '13', '9999999', '100-0000', '架空', '000'), (2, '別の薬局', '20', '9999998', '386-0000', '架空', '000');
+    INSERT INTO users (id, pharmacy_id, login_id, display_name, password_hash, password_salt, password_iterations) VALUES (1, 1, 't', 'テスト', 'x', 'x', 1);
+    INSERT INTO patients (id, pharmacy_id, patient_no, name, kana, birth_date, sex, burden_percent, created_at, created_by)
+      VALUES (1, 1, '000001', '架空　太郎', 'カクウ　タロウ', '1960-01-01', 'M', 30, '2026-01-01T00:00:00Z', 1);
+    INSERT INTO pharmacy_facility VALUES (1, '2025-04-01', '1', 0, 1, 2, 3, 1, 0, 0), (1, '2026-06-01', '1', 1, 1, 0, 0, 0, 1, 1);
     INSERT INTO master_imports VALUES (1, 'drug', 'full', '2026-03-19', 't.csv', 1, 1, '2026-03-19T00:00:00Z', NULL, 'p1');
     INSERT INTO drugs (code, yj_code, name, unit, generic, general_name, sentei, pair_code, narcotic, name_key, general_key, attrs_published_on)
       VALUES ('610000001', '1111111F1011', '試験錠', '錠', 1, '【般】試験錠', 0, NULL, 0, 'A', '', '2026-03-19');
@@ -165,7 +167,7 @@ const body = (rp, inquiries = []) => ({
 const LEFTOVER = { kind: "leftover", content: "7日分残っている。21日分にしてよいか", answer: "21日分で可", changed: true };
 
 test("残薬調整：処方箋28日分を照会で21日分に。日数・照会・加算が残り、薬剤料は21日分", async () => {
-  const saved = await createPrescription(db, { id: 1 }, body({ rxDays: 28, days: 21, daysChange: "inquiry" }, [LEFTOVER]));
+  const saved = await createPrescription(db, { id: 1, pharmacy_id: 1 }, body({ rxDays: 28, days: 21, daysChange: "inquiry" }, [LEFTOVER]));
   assert.equal(saved.drugPoints, 21); // 10円 → 1点 × 21日
   const rp = await db.prepare("SELECT rx_days, days, days_change FROM prescription_rps").first();
   assert.deepEqual(rp, { rx_days: 28, days: 21, days_change: "inquiry" });
@@ -180,7 +182,7 @@ test("残薬調整：処方箋28日分を照会で21日分に。日数・照会�
 });
 
 test("一般名処方の銘柄選択：処方箋の記載を残し、調剤した薬で計算する", async () => {
-  await createPrescription(db, { id: 1 }, body({ rxDays: 14, days: 14, daysChange: null,
+  await createPrescription(db, { id: 1, pharmacy_id: 1 }, body({ rxDays: 14, days: 14, daysChange: null,
     items: [{ drugCode: "610000001", dailyQty: "1", rx: { name: "【般】試験錠", dailyQty: "1", reason: "general" } }] }));
   const it = await db.prepare("SELECT drug_code, rx_name, rx_daily_qty_milli, change_reason FROM prescription_items").first();
   assert.deepEqual(it, { drug_code: "610000001", rx_name: "【般】試験錠", rx_daily_qty_milli: 1000, change_reason: "general" });

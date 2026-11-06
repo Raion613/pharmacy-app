@@ -10,7 +10,7 @@ export async function getSessionUser(db, request) {
   if (!token) return null;
   return db
     .prepare(
-      `SELECT u.id, u.login_id, u.display_name
+      `SELECT u.id, u.login_id, u.display_name, u.pharmacy_id
          FROM sessions s JOIN users u ON u.id = s.user_id
         WHERE s.token_hash = ?1 AND s.expires_at > ?2`,
     )

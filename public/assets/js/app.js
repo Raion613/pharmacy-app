@@ -34,7 +34,7 @@ export function renderShell({ page, title, crumbs }) {
     location.href = "/login";
   });
   api("/api/me").then((me) => {
-    topbar.querySelector("#current-user").textContent = `${me.displayName}（${me.loginId}）`;
+    topbar.querySelector("#current-user").textContent = `${me.pharmacyName}　${me.displayName}`;
   });
 
   setCrumbs(crumbs);

@@ -40,8 +40,8 @@ export async function addStep(db, user, receptionId, step) {
 
 export const STEP_LABEL = { entered: "入力", audited: "監査", handed: "投薬", paid: "会計" };
 
-// その日（日本時間）の受付の一覧。古い順
-export async function receptionsOn(db, date) {
+// 自分の薬局の、その日（日本時間）の受付の一覧。古い順
+export async function receptionsOn(db, pharmacyId, date) {
   if (!isDate(date)) throw new HttpError(400, "日付が不正です");
   // received_at は UTC。日本時間の1日は前日 15:00Z 〜 当日 15:00Z
   const from = new Date(Date.parse(`${date}T00:00:00+09:00`)).toISOString();
@@ -52,12 +52,13 @@ export async function receptionsOn(db, date) {
               (SELECT COUNT(*) FROM inspections i WHERE i.prescription_id = p.id) AS inspections
          FROM receptions r JOIN patients pa ON pa.id = r.patient_id
          LEFT JOIN prescriptions p ON p.reception_id = r.id
-        WHERE r.received_at >= ?1 AND r.received_at < ?2 ORDER BY r.received_at`,
-    ).bind(from, to),
+        WHERE pa.pharmacy_id = ?3 AND r.received_at >= ?1 AND r.received_at < ?2 ORDER BY r.received_at`,
+    ).bind(from, to, pharmacyId),
     db.prepare(
       `SELECT s.reception_id, s.step, s.at, u.display_name AS by FROM reception_steps s JOIN receptions r ON r.id = s.reception_id
-         JOIN users u ON u.id = s.user_id WHERE r.received_at >= ?1 AND r.received_at < ?2`,
-    ).bind(from, to),
+         JOIN patients pa ON pa.id = r.patient_id
+         JOIN users u ON u.id = s.user_id WHERE pa.pharmacy_id = ?3 AND r.received_at >= ?1 AND r.received_at < ?2`,
+    ).bind(from, to, pharmacyId),
   ]);
   const byReception = Map.groupBy(steps.results, (s) => s.reception_id);
   return receptions.results.map((r) => ({

@@ -29,11 +29,12 @@ INSERT INTO drug_prices (drug_code, valid_from, import_id, price_sen, transition
   ('620000006', '2026-04-01', 2, 10000, NULL),
   ('670000006', '2026-04-01', 2, 8733, NULL),
   ('670000006', '2026-06-01', 2, 7465, NULL);
-INSERT INTO users (id, login_id, display_name, password_hash, password_salt, password_iterations)
-  VALUES (1, 'test', 'テスト 薬剤師', 'x', 'x', 1);
-INSERT INTO patients (id, patient_no, name, kana, birth_date, sex, burden_percent, created_at, created_by)
-  VALUES (1, '000001', '架空　太郎', 'カクウ　タロウ', '1960-01-01', 'M', 30, '2026-01-01T00:00:00Z', 1);
-INSERT INTO pharmacy_facility VALUES ('2025-04-01', '1', 0, 1, 2, 3, 1, 0, 0), ('2026-06-01', '1', 1, 1, 0, 0, 0, 1, 1);
+INSERT INTO pharmacies (id, name, prefecture_code, pharmacy_code, postal_code, address, phone) VALUES (1, 'テスト薬局', '13', '9999999', '100-0000', '架空', '000'), (2, '別の薬局', '20', '9999998', '386-0000', '架空', '000');
+INSERT INTO users (id, pharmacy_id, login_id, display_name, password_hash, password_salt, password_iterations)
+  VALUES (1, 1, 'test', 'テスト 薬剤師', 'x', 'x', 1);
+INSERT INTO patients (id, pharmacy_id, patient_no, name, kana, birth_date, sex, burden_percent, created_at, created_by)
+  VALUES (1, 1, '000001', '架空　太郎', 'カクウ　タロウ', '1960-01-01', 'M', 30, '2026-01-01T00:00:00Z', 1);
+INSERT INTO pharmacy_facility VALUES (1, '2025-04-01', '1', 0, 1, 2, 3, 1, 0, 0), (1, '2026-06-01', '1', 1, 1, 0, 0, 0, 1, 1);
 `;
 
 // 調剤報酬の点数は、支払基金の調剤行為マスターの実ファイルを入れる（医薬品はこのファイルの架空の薬）
@@ -45,7 +46,7 @@ beforeEach(async () => {
   for (const f of FEE_MASTERS) await loadMasterFile(db, f);
 });
 
-const user = { id: 1 };
+const user = { id: 1, pharmacy_id: 1 };
 const price = async (code, date) => (await pricesAt(db, [code], date)).get(code);
 
 test("改定日の前日は旧薬価、当日と翌日は新薬価", async () => {

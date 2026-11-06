@@ -2,6 +2,6 @@
 import { json } from "../../../src/server/http.js";
 import { threads } from "../../../src/server/line.js";
 
-export async function onRequestGet({ env }) {
-  return json(await threads(env.DB));
+export async function onRequestGet({ env, data }) {
+  return json(await threads(env.DB, data.user.pharmacy_id));
 }

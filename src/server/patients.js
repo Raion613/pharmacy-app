@@ -21,17 +21,17 @@ export function validatePatient(body, today = todayJst()) {
 
 export async function createPatient(db, user, body) {
   const p = validatePatient(body);
-  // 患者番号は「今の最大＋1」を6桁で。INSERT 文の中で求めるので、2人が同時に登録しても同じ番号にならない
+  // 患者番号は「その薬局の今の最大＋1」を6桁で。INSERT 文の中で求めるので、2人が同時に登録しても同じ番号にならない
   // （D1 は書き込みを1本ずつ処理する。万一重なっても UNIQUE 制約で失敗する）。
   // 登録とアクセスログは同じ batch（＝1トランザクション）。ログの患者IDは直前の INSERT の行IDを使う。
   const now = nowIso();
   const [inserted] = await db.batch([
     db.prepare(
-      `INSERT INTO patients (patient_no, name, kana, birth_date, sex, burden_percent, created_at, created_by)
-       VALUES ((SELECT printf('%06d', COALESCE(MAX(CAST(patient_no AS INTEGER)), 0) + 1) FROM patients),
+      `INSERT INTO patients (pharmacy_id, patient_no, name, kana, birth_date, sex, burden_percent, created_at, created_by)
+       VALUES (?8, (SELECT printf('%06d', COALESCE(MAX(CAST(patient_no AS INTEGER)), 0) + 1) FROM patients WHERE pharmacy_id = ?8),
                ?1, ?2, ?3, ?4, ?5, ?6, ?7)
        RETURNING id, patient_no`,
-    ).bind(p.name, p.kana, p.birthDate, p.sex, p.burdenPercent, now, user.id),
+    ).bind(p.name, p.kana, p.birthDate, p.sex, p.burdenPercent, now, user.id, user.pharmacy_id),
     db.prepare(
       `INSERT INTO access_logs (at, user_id, action, patient_id, detail)
        VALUES (?1, ?2, 'patient.create', last_insert_rowid(), NULL)`,
@@ -49,22 +49,24 @@ const PATIENT_SELECT = `
            WHERE patient_id = pa.id AND category IN ('allergy', 'adverse')) AS alert_categories
     FROM patients pa`;
 
-// 患者番号（前方一致）、カナ（部分一致）、氏名（部分一致）で探す。空なら最近来局した順。
-export async function searchPatients(db, q) {
+// 自分の薬局の患者を、患者番号（前方一致）、カナ（部分一致）、氏名（部分一致）で探す。空なら最近来局した順。
+export async function searchPatients(db, pharmacyId, q) {
   const text = String(q ?? "").trim();
   let stmt;
   if (text === "") {
-    stmt = db.prepare(`${PATIENT_SELECT} ORDER BY last_dispensed_on IS NULL, last_dispensed_on DESC, pa.id DESC LIMIT 50`);
+    stmt = db.prepare(`${PATIENT_SELECT} WHERE pa.pharmacy_id = ?1
+      ORDER BY last_dispensed_on IS NULL, last_dispensed_on DESC, pa.id DESC LIMIT 50`).bind(pharmacyId);
   } else {
     stmt = db
       .prepare(
         `${PATIENT_SELECT}
-          WHERE pa.patient_no LIKE ?1 || '%'
+          WHERE pa.pharmacy_id = ?4
+            AND (pa.patient_no LIKE ?1 || '%'
              OR REPLACE(pa.kana, '　', '') LIKE '%' || ?2 || '%'
-             OR REPLACE(pa.name, '　', '') LIKE '%' || ?3 || '%'
+             OR REPLACE(pa.name, '　', '') LIKE '%' || ?3 || '%')
           ORDER BY pa.kana LIMIT 50`,
       )
-      .bind(text.normalize("NFKC"), searchKey(text), text.replace(/\s+/g, ""));
+      .bind(text.normalize("NFKC"), searchKey(text), text.replace(/\s+/g, ""), pharmacyId);
   }
   const { results } = await stmt.all();
   return results.map(toPatientJson);

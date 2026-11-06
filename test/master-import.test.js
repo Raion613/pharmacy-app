@@ -13,7 +13,7 @@ const USER = 1;
 let db;
 beforeEach(() => {
   db = openD1("db/schema.sql");
-  db.exec("INSERT INTO users (id, login_id, display_name, password_hash, password_salt, password_iterations) VALUES (1, 'test', 'テスト', 'x', 'x', 1);");
+  db.exec("INSERT INTO pharmacies (id, name, prefecture_code, pharmacy_code, postal_code, address, phone) VALUES (1, 'テスト薬局', '13', '9999999', '100-0000', '架空', '000'), (2, '別の薬局', '20', '9999998', '386-0000', '架空', '000'); INSERT INTO users (id, pharmacy_id, login_id, display_name, password_hash, password_salt, password_iterations) VALUES (1, 1, 'test', 'テスト', 'x', 'x', 1);");
 });
 
 // 医薬品マスターの1行（42項目）。項番で値を指定し、残りは全件ファイルと同じ既定値
@@ -167,7 +167,7 @@ test("反映は1つのトランザクション。途中で失敗したら薬も�
 });
 
 test("他人の取り込み作業には触れない", async () => {
-  db.exec("INSERT INTO users (id, login_id, display_name, password_hash, password_salt, password_iterations) VALUES (2, 'b', 'B', 'x', 'x', 1);");
+  db.exec("INSERT INTO users (id, pharmacy_id, login_id, display_name, password_hash, password_salt, password_iterations) VALUES (2, 1, 'b', 'B', 'x', 'x', 1);");
   const file = parseMasterCsv(csv(row({ 3: "610000001" })));
   const id = await startImport(db, USER, { master: "drug", kind: file.kind, publishedOn: "2026-03-19", fileName: "y.csv", expectedRows: 1 });
   await assert.rejects(addRows(db, 2, id, JSON.stringify(file.rows)), (e) => e instanceof HttpError && e.status === 404);

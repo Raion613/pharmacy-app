@@ -1,9 +1,9 @@
 import { json, readJson } from "../../../src/server/http.js";
 import { searchPatients, createPatient } from "../../../src/server/patients.js";
 
-export async function onRequestGet({ request, env }) {
+export async function onRequestGet({ request, env, data }) {
   const q = new URL(request.url).searchParams.get("q");
-  return json(await searchPatients(env.DB, q));
+  return json(await searchPatients(env.DB, data.user.pharmacy_id, q));
 }
 
 export async function onRequestPost({ request, env, data }) {

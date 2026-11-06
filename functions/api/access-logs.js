@@ -1,9 +1,9 @@
-// アクセスログの閲覧。患者を指定すると、その患者の情報に誰がいつ触れたかに絞る。
+// アクセスログの閲覧（自分の薬局の利用者の操作だけ）。患者を指定すると、その患者の情報に誰がいつ触れたかに絞る。
 import { json, HttpError } from "../../src/server/http.js";
 
-export async function onRequestGet({ request, env }) {
+export async function onRequestGet({ request, env, data }) {
   const patient = new URL(request.url).searchParams.get("patient");
-  const where = patient ? "WHERE l.patient_id = ?1" : "";
+  const where = patient ? "AND l.patient_id = ?2" : "";
   if (patient && !/^\d+$/.test(patient)) throw new HttpError(400, "患者の指定が不正です");
   let stmt = env.DB.prepare(
     `SELECT l.id, l.at, l.action, l.detail, u.display_name AS user_name, u.login_id,
@@ -11,10 +11,10 @@ export async function onRequestGet({ request, env }) {
        FROM access_logs l
        JOIN users u ON u.id = l.user_id
        LEFT JOIN patients pa ON pa.id = l.patient_id
-       ${where}
+      WHERE u.pharmacy_id = ?1 ${where}
       ORDER BY l.id DESC LIMIT 300`,
   );
-  if (patient) stmt = stmt.bind(Number(patient));
+  stmt = patient ? stmt.bind(data.user.pharmacy_id, Number(patient)) : stmt.bind(data.user.pharmacy_id);
   const { results } = await stmt.all();
   return json(results.map((r) => ({
     id: r.id,

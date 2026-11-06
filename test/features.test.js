@@ -28,11 +28,12 @@ INSERT INTO drug_packages VALUES
   ('14987114335002', '612170710', '1032994010202', 'ＰＴＰ 10錠×10'),
   ('14987123456781', '699999999', '9999999999999', 'ＰＴＰ 10錠×10');
 INSERT INTO generic_flags VALUES ('2171022F2025', '2026-11-01');
-INSERT INTO users (id, login_id, display_name, password_hash, password_salt, password_iterations) VALUES
-  (1, 'test', 'テスト 薬剤師', 'x', 'x', 1), (2, 'b', 'B 薬剤師', 'x', 'x', 1);
-INSERT INTO patients (id, patient_no, name, kana, birth_date, sex, burden_percent, created_at, created_by) VALUES
-  (1, '000001', '架空　太郎', 'カクウ　タロウ', '1945-01-01', 'M', 10, '2026-01-01T00:00:00Z', 1),
-  (2, '000002', '架空　花子', 'カクウ　ハナコ', '1970-01-01', 'F', 30, '2026-01-01T00:00:00Z', 1);
+INSERT INTO pharmacies (id, name, prefecture_code, pharmacy_code, postal_code, address, phone) VALUES (1, 'テスト薬局', '13', '9999999', '100-0000', '架空', '000'), (2, '別の薬局', '20', '9999998', '386-0000', '架空', '000');
+INSERT INTO users (id, pharmacy_id, login_id, display_name, password_hash, password_salt, password_iterations) VALUES
+  (1, 1, 'test', 'テスト 薬剤師', 'x', 'x', 1), (2, 1, 'b', 'B 薬剤師', 'x', 'x', 1);
+INSERT INTO patients (id, pharmacy_id, patient_no, name, kana, birth_date, sex, burden_percent, created_at, created_by) VALUES
+  (1, 1, '000001', '架空　太郎', 'カクウ　タロウ', '1945-01-01', 'M', 10, '2026-01-01T00:00:00Z', 1),
+  (2, 1, '000002', '架空　花子', 'カクウ　ハナコ', '1970-01-01', 'F', 30, '2026-01-01T00:00:00Z', 1);
 INSERT INTO prescriptions (id, patient_id, prescribed_on, dispensed_on, handbook, drug_points, total_points, burden_percent, copay_yen, created_at, created_by)
   VALUES ('rx-1', 1, '2026-10-01', '2026-10-01', 'paper', 14, 100, 10, 100, '2026-10-01T01:00:00Z', 1);
 INSERT INTO prescription_rps (id, prescription_id, rp_no, usage, rx_days, days, daily_yen, points_per_day, points) VALUES
@@ -47,7 +48,7 @@ beforeEach(() => {
   db.exec(FIXTURE);
 });
 
-const user = { id: 1, login_id: "test", display_name: "テスト 薬剤師" };
+const user = { id: 1, pharmacy_id: 1, login_id: "test", display_name: "テスト 薬剤師" };
 const pathsOf = async (promise) => {
   try {
     await promise;
@@ -100,7 +101,7 @@ test("テンプレート：名前は重ねられない", async () => {
   await createTemplate(db, user, { title: "定期・変更なし", subjective: "変わりない", objective: "", assessment: "", plan: "継続" });
   assert.deepEqual(await pathsOf(createTemplate(db, user, { title: "定期・変更なし", plan: "x" })), ["title"]);
   assert.deepEqual(await pathsOf(createTemplate(db, user, { title: "空" })), ["subjective"]);
-  assert.equal((await templatesOf(db)).length, 1);
+  assert.equal((await templatesOf(db, 1)).length, 1);
 });
 
 test("トレーシングレポート：服薬状況は必須。来局は同じ患者のものだけ", async () => {
@@ -133,13 +134,13 @@ test("在宅：登録 → 計画書 → 予定（回数の上限）→ 記録 �
   await createVisitRecord(db, user, s1.id, visit);
   assert.deepEqual(await pathsOf(createVisitRecord(db, user, s1.id, visit)), ["storage"]); // 2回は書けない
 
-  const o = await homeOverview(db, "2026-11");
+  const o = await homeOverview(db, 1, "2026-11");
   assert.equal(o.patients[0].plan.reviewDue, "2026-11-01");
   assert.deepEqual(o.schedules.map((s) => [s.visitOn, s.record !== null]), [["2026-11-05", true], ["2026-11-12", false]]);
   assert.equal((await homeDetail(db, 1)).plans.length, 1);
-  const reports = await reportsFor(db, { month: "2026-11", facilityId: String(f.id) });
+  const reports = await reportsFor(db, 1, { month: "2026-11", facilityId: String(f.id) });
   assert.deepEqual(reports.map((r) => [r.visitOn, r.careManager]), [["2026-11-05", "佐々木"]]);
-  assert.equal((await reportsFor(db, { month: "2026-11", facilityId: "home" })).length, 0);
+  assert.equal((await reportsFor(db, 1, { month: "2026-11", facilityId: "home" })).length, 0);
 });
 
 test("受付 → 入力 → 監査 → 投薬 → 会計。段階は順番どおりにしか進まない", async () => {
@@ -148,7 +149,7 @@ test("受付 → 入力 → 監査 → 投薬 → 会計。段階は順番どお
   await assert.rejects(addStep(db, user, r.id, "handed"), /監査が済んでいません/);
 
   // 受付から処方を入力すると「入力済み」
-  db.exec("INSERT INTO pharmacy_facility VALUES ('2025-04-01', '1', 0, 0, 0, 0, 0, 0, 0)");
+  db.exec("INSERT INTO pharmacy_facility VALUES (1, '2025-04-01', '1', 0, 0, 0, 0, 0, 0, 0)");
   await assert.rejects(createPrescription(db, user, {
     patientId: 2, prescribedOn: todayJst(), dispensedOn: todayJst(), handbook: "paper", inquiries: [], receptionId: r.id,
     rps: [{ usage: "1日1回", rxDays: 7, days: 7, items: [{ drugCode: "612170710", dailyQty: "1" }] }],
@@ -173,14 +174,14 @@ test("受付 → 入力 → 監査 → 投薬 → 会計。段階は順番どお
   await addStep(db, user, r.id, "paid");
   await assert.rejects(addStep(db, user, r.id, "paid"), /もう済んでいます/);
   await assert.rejects(addStep(db, user, r.id, "audited"), /画面から進められません/);
-  const [row] = await receptionsOn(db, todayJst());
+  const [row] = await receptionsOn(db, 1, todayJst());
   assert.deepEqual(Object.keys(row.steps).sort(), ["audited", "entered", "handed", "paid"]);
   assert.equal(row.prescriptionId, "rx-1");
   await createReception(db, user, { patientId: 1 }); // 会計が済めば次を受け付けられる
 });
 
 test("月ごとの集計：処方箋単価と後発医薬品の使用割合（数量ベース）", async () => {
-  const [oct, nov] = await monthlyStats(db, { from: "2026-10", to: "2026-11" });
+  const [oct, nov] = await monthlyStats(db, 1, { from: "2026-10", to: "2026-11" });
   // ノルバスク（後発品のある先発品）14錠、アトルバスタチン（後発品）14錠 → 50.0%
   assert.deepEqual(oct, {
     month: "2026-10", sheets: 1, unitPriceYen: 1000, drugPoints: 14, totalPoints: 100,
@@ -188,7 +189,7 @@ test("月ごとの集計：処方箋単価と後発医薬品の使用割合（�
   });
   assert.equal(nov.sheets, 0);
   assert.equal(nov.genericPermille, null);
-  await assert.rejects(monthlyStats(db, { from: "2026-11", to: "2026-10" }), (e) => e.status === 400);
+  await assert.rejects(monthlyStats(db, 1, { from: "2026-11", to: "2026-10" }), (e) => e.status === 400);
 });
 
 test("つながる薬局：受信と返信を残し、患者ごとの最新を一覧にする", async () => {
@@ -197,7 +198,7 @@ test("つながる薬局：受信と返信を残し、患者ごとの最新を�
   await receiveMessage(db, user, { patientId: 2, body: "受け取りは夕方になります", sentAt: "2026-10-04T01:00:00Z" });
   assert.deepEqual(await pathsOf(receiveMessage(db, user, { patientId: 1, body: " " })), ["body"]);
   assert.deepEqual((await messagesOf(db, 1)).map((m) => m.direction), ["in", "out"]);
-  assert.deepEqual((await threads(db)).map((t) => t.patientId), [1, 2]);
+  assert.deepEqual((await threads(db, 1)).map((t) => t.patientId), [1, 2]);
 });
 
 test("多要素認証：設定 → ログインの2段目 → 同じ数字は2回使えない → 無効にする", async () => {

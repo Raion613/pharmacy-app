@@ -14,11 +14,14 @@ import { composeReport } from "../public/assets/js/home-visit-rules.js";
 
 export const DEMO_LOGIN = { loginId: "demo", password: "pharmacy-demo" };
 
+// 薬局は2つ。demo は1つ目、demo2 は2つ目の薬局の人で、互いの患者は見えない
 const USERS = [
-  { id: 1, loginId: DEMO_LOGIN.loginId, displayName: "デモ 薬剤師", password: DEMO_LOGIN.password },
+  { id: 1, pharmacyId: 1, loginId: DEMO_LOGIN.loginId, displayName: "デモ 薬剤師", password: DEMO_LOGIN.password },
   // 過去の薬歴の入力者。パスワードは乱数でログインには使わない
-  { id: 2, loginId: "sato", displayName: "佐藤 薬剤師", password: randomHex(16) },
+  { id: 2, pharmacyId: 1, loginId: "sato", displayName: "佐藤 薬剤師", password: randomHex(16) },
+  { id: 3, pharmacyId: 2, loginId: "demo2", displayName: "デモ2 薬剤師", password: DEMO_LOGIN.password },
 ];
+const SATO = { id: 2, pharmacy_id: 1 };
 
 // 医薬品コード（支払基金の医薬品マスター）。金額は令和8年3月31日まで → 4月1日から
 const D = {
@@ -221,10 +224,12 @@ const PATIENTS = [
 ];
 
 // 薬局（架空）。領収証・お薬手帳に出す
-const PHARMACY = {
-  name: "サンプル薬局（デモ用・架空）", prefectureCode: "13", pharmacyCode: "9999999",
-  postalCode: "100-0000", address: "東京都千代田区（架空の住所）", phone: "03-0000-0000",
-};
+const PHARMACIES = [
+  { id: 1, name: "サンプル薬局（デモ用・架空）", prefectureCode: "13", pharmacyCode: "9999999",
+    postalCode: "100-0000", address: "東京都千代田区（架空の住所）", phone: "03-0000-0000" },
+  { id: 2, name: "サンプル第二薬局（デモ用・架空）", prefectureCode: "20", pharmacyCode: "9999998",
+    postalCode: "386-0000", address: "長野県上田市（架空の住所）", phone: "0268-00-0000" },
+];
 // 届出（施設基準）。令和8年6月の改定で区分の名前と点数が変わるので、改定日に届け直した形にする
 const FACILITY = [
   { validFrom: "2025-04-01", basicFee: "1", communitySupport: 0, renkei: 1, genericSystem: 2, iryoDx: 3, iryoJoho: 1, denshiRenkei: 0, baseUp: 0 },
@@ -234,20 +239,22 @@ const FACILITY = [
 const OUT = "db/generated/seed.sql";
 const db = openD1("db/schema.sql", "db/generated/master.sql");
 
-await db.prepare(`INSERT INTO pharmacy_profile (id, name, prefecture_code, pharmacy_code, postal_code, address, phone)
-                  VALUES (1, ?1, ?2, ?3, ?4, ?5, ?6)`)
-  .bind(PHARMACY.name, PHARMACY.prefectureCode, PHARMACY.pharmacyCode, PHARMACY.postalCode, PHARMACY.address, PHARMACY.phone).run();
-for (const f of FACILITY) {
-  await db.prepare(`INSERT INTO pharmacy_facility (valid_from, basic_fee, community_support, renkei, generic_system, iryo_dx, iryo_joho, denshi_renkei, base_up)
-                    VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)`)
-    .bind(f.validFrom, f.basicFee, f.communitySupport, f.renkei, f.genericSystem, f.iryoDx, f.iryoJoho, f.denshiRenkei, f.baseUp).run();
+for (const ph of PHARMACIES) {
+  await db.prepare(`INSERT INTO pharmacies (id, name, prefecture_code, pharmacy_code, postal_code, address, phone)
+                    VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)`)
+    .bind(ph.id, ph.name, ph.prefectureCode, ph.pharmacyCode, ph.postalCode, ph.address, ph.phone).run();
+  for (const f of FACILITY) {
+    await db.prepare(`INSERT INTO pharmacy_facility (pharmacy_id, valid_from, basic_fee, community_support, renkei, generic_system, iryo_dx, iryo_joho, denshi_renkei, base_up)
+                      VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)`)
+      .bind(ph.id, f.validFrom, f.basicFee, f.communitySupport, f.renkei, f.genericSystem, f.iryoDx, f.iryoJoho, f.denshiRenkei, f.baseUp).run();
+  }
 }
 
 for (const u of USERS) {
   const salt = randomHex(16);
   await db
-    .prepare("INSERT INTO users (id, login_id, display_name, password_hash, password_salt, password_iterations) VALUES (?1, ?2, ?3, ?4, ?5, ?6)")
-    .bind(u.id, u.loginId, u.displayName, await hashPassword(u.password, salt), salt, ITERATIONS)
+    .prepare("INSERT INTO users (id, pharmacy_id, login_id, display_name, password_hash, password_salt, password_iterations) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)")
+    .bind(u.id, u.pharmacyId, u.loginId, u.displayName, await hashPassword(u.password, salt), salt, ITERATIONS)
     .run();
 }
 
@@ -255,27 +262,27 @@ for (const u of USERS) {
 const at = (date, hhmm) => `${date}T${hhmm}:00.000Z`;
 const patientIds = new Map(); // 氏名 → 患者ID
 for (const p of PATIENTS) {
-  const { id } = await createPatient(db, { id: 2 }, p);
+  const { id } = await createPatient(db, SATO, p);
   patientIds.set(p.name, id);
   await db.prepare("UPDATE patients SET created_at = ?1 WHERE id = ?2").bind(at(p.registeredOn, "01:00"), id).run();
   for (const n of p.notes) {
-    const note = await createNote(db, { id: 2 }, id, n);
+    const note = await createNote(db, SATO, id, n);
     await db.prepare("UPDATE patient_notes SET created_at = ?1 WHERE id = ?2").bind(at(n.on, "01:10"), note.id).run();
   }
   for (const v of p.visits) {
-    const rx = await createPrescription(db, { id: v.by }, {
+    const rx = await createPrescription(db, { id: v.by, pharmacy_id: 1 }, {
       patientId: id, prescribedOn: v.on, dispensedOn: v.on, handbook: v.handbook ?? "paper", inquiries: v.inquiries ?? [],
       rps: v.rps.map((rp) => ({ rxDays: rp.days, daysChange: null, ...rp })),
     });
     await db.prepare("UPDATE prescriptions SET created_at = ?1 WHERE id = ?2").bind(at(v.on, "01:30"), rx.id).run();
     await db.prepare("UPDATE inquiries SET created_at = ?1 WHERE prescription_id = ?2").bind(at(v.on, "01:20"), rx.id).run();
     if (v.record) {
-      const rec = await createRecord(db, { id: v.by }, rx.id, v.record);
+      const rec = await createRecord(db, { id: v.by, pharmacy_id: 1 }, rx.id, v.record);
       await db.prepare("UPDATE guidance_records SET created_at = ?1 WHERE id = ?2").bind(at(v.on, "01:45"), rec.id).run();
     }
   }
   for (const l of p.labs ?? []) {
-    await createMeasurements(db, { id: 2 }, id, { measuredOn: l.on, source: l.source, values: l.values });
+    await createMeasurements(db, SATO, id, { measuredOn: l.on, source: l.source, values: l.values });
     await db.prepare("UPDATE measurements SET created_at = ?1 WHERE patient_id = ?2 AND measured_on = ?3").bind(at(l.on, "01:15"), id, l.on).run();
   }
   // つながる薬局のやり取り（受信は送信時刻で入れる）
@@ -285,21 +292,25 @@ for (const p of PATIENTS) {
   }
 }
 
+// 2つ目の薬局の患者。demo では見えず、demo2 でログインすると見える
+await createPatient(db, { id: 3, pharmacy_id: 2 },
+  { name: "上田　一郎", kana: "ウエダ　イチロウ", birthDate: "1960-05-05", sex: "M", burdenPercent: 30 });
+
 // 指導記録のテンプレート
 const TEMPLATES = [
   { title: "定期・変わりなし", subjective: "体調に変わりはない。", objective: "前回と同じ処方。", assessment: "服薬は良好。", plan: "同じ飲み方で続けるよう説明。次回も体調の変化と飲み忘れを確認。" },
   { title: "新しい薬が始まった", subjective: "", objective: "今回から新しい薬が追加。", assessment: "初期の副作用の確認が必要。", plan: "飲み方と主な副作用を説明。気になる症状があれば連絡するよう伝えた。次回、副作用の有無を確認。" },
   { title: "残薬あり", subjective: "飲み忘れることがある。", objective: "残薬あり。", assessment: "飲み忘れの原因の確認が必要。", plan: "飲み忘れやすい時間を一緒に確認。お薬カレンダーの利用を提案。次回、残薬の数を確認。" },
 ];
-for (const t of TEMPLATES) await createTemplate(db, { id: 2 }, t);
+for (const t of TEMPLATES) await createTemplate(db, SATO, t);
 
 // 在宅：遠藤さん（自宅）。計画書 → 10月に2回訪問して記録 → 11月の予定
 const endo = patientIds.get("遠藤　和子");
-await registerHomePatient(db, { id: 2 }, {
+await registerHomePatient(db, SATO, {
   patientId: endo, facilityId: null, institution: "○○内科クリニック（架空）", doctor: "山田", careManager: "佐々木",
   intensive: false, startedOn: "2026-10-01",
 });
-await createPlan(db, { id: 2 }, endo, {
+await createPlan(db, SATO, endo, {
   madeOn: "2026-10-01", visitsPerMonth: 2, intervalText: "第2・第4木曜",
   management: "1回分ずつの一包化はせず、お薬カレンダー（朝・昼・夕）に娘さんが1週間分をセットする",
   drugNotes: "マグミット（酸化マグネシウム）：腎機能が低い（eGFR 48）ため高マグネシウム血症に注意。吐き気・だるさ・脱力の有無を確認",
@@ -312,17 +323,17 @@ const VISITS = [
   { on: "2026-11-19" },
 ];
 for (const v of VISITS) {
-  const { id: scheduleId } = await createSchedule(db, { id: 2 }, { patientId: endo, visitOn: v.on, pharmacistId: 2 });
+  const { id: scheduleId } = await createSchedule(db, SATO, { patientId: endo, visitOn: v.on, pharmacistId: 2 });
   if (v.record) {
     const report = composeReport({ visit: v.record, record: { subjective: "お通じは毎日ある。昼の薬を飲み忘れることがある", assessment: "Mg 値は基準内。便秘は改善", plan: "症状の聞き取りを続ける。Mg 値の定期測定を処方医に確認" } });
-    await createVisitRecord(db, { id: 2 }, scheduleId, { ...v.record, report });
+    await createVisitRecord(db, SATO, scheduleId, { ...v.record, report });
     await db.prepare("UPDATE visit_records SET created_at = ?1 WHERE schedule_id = ?2").bind(at(v.on, "06:00"), scheduleId).run();
   }
 }
 
 // トレーシングレポート：遠藤さんの9月の来局（残薬調整）から、処方医へ
 const endoRx = await db.prepare("SELECT id FROM prescriptions WHERE patient_id = ?1 AND dispensed_on = '2026-09-17'").bind(endo).first();
-await createTracing(db, { id: 2 }, endo, {
+await createTracing(db, SATO, endo, {
   prescriptionId: endoRx.id, institution: "○○内科クリニック（架空）", department: "内科", doctor: "山田", consent: "agreed",
   adherence: "昼の分を週2回ほど飲み忘れています（本人・娘さんより）。朝・夕は飲めています。",
   leftover: "マグミット錠が7日分残っていたため、9月17日の処方を28日分から21日分に減らしました（疑義照会でご了承いただきました）。",
@@ -334,7 +345,7 @@ await createTracing(db, { id: 2 }, endo, {
 await db.prepare("UPDATE tracing_reports SET created_at = ?1").bind(at("2026-09-17", "03:00")).run();
 
 // 作った行を INSERT 文にして書き出す。アクセスログは本物の操作だけを残したいので書き出さない
-const TABLES = ["pharmacy_profile", "pharmacy_facility", "users", "patients", "patient_notes", "prescriptions", "prescription_rps",
+const TABLES = ["pharmacies", "pharmacy_facility", "users", "patients", "patient_notes", "prescriptions", "prescription_rps",
   "prescription_items", "inquiries", "prescription_fees", "conversations", "guidance_records", "measurements", "guidance_templates",
   "tracing_reports", "facilities", "home_patients", "care_plans", "visit_schedules", "visit_records", "line_messages"];
 const lines = ["DELETE FROM access_logs;", "DELETE FROM sessions;", "DELETE FROM mfa_challenges;", "DELETE FROM inspection_scans;", "DELETE FROM inspections;",
