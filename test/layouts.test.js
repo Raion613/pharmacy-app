@@ -34,7 +34,7 @@ test("12列を超える幅・同じ箱の重複・知らない選び方・知ら
   await bad({ boxes: [{ id: "patient", w: 0, h: 1 }] });
   await bad({ boxes: [{ id: "patient", w: "2", h: 1 }] });
   await bad({ boxes: [{ id: "patient", w: 2, h: 1 }, { id: "patient", w: 2, h: 1 }] });
-  await bad({ boxes: [{ id: "patient", w: 2, h: 1 }], options: { historyRows: 4 } });
+  await bad({ boxes: [{ id: "patient", w: 2, h: 1 }], options: { historyRows: 3 } });
   await bad({ boxes: [{ id: "patient", w: 2, h: 1 }], options: { other: 1 } });
   await bad({ boxes: [] });
   await assert.rejects(saveLayout(db, A, "rx", LAYOUT), (e) => e.status === 404);

@@ -228,3 +228,12 @@ dialog .dialog-foot { display: flex; justify-content: flex-end; gap: 8px; paddin
   .content.split { flex-direction: column; overflow: auto; }
   .actionbar .keys { display: none; }
 }
+
+/* 操作の帯：パンくずの下に、その画面でできる操作をすべて並べる */
+.toolbar {
+  flex-shrink: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px 16px;
+  background: var(--panel); border-bottom: 1px solid var(--border);
+}
+.toolbar .btn { height: 30px; padding: 0 10px; font-size: 13px; }
+.toolbar .sep { width: 1px; align-self: stretch; margin: 2px 4px; background: var(--border); }
+.toolbar .spacer { flex: 1; }

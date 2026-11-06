@@ -10,6 +10,7 @@ import {
   unitText, toast,
 } from "./app.js";
 import { setupLayout } from "./layout-grid.js";
+import { setupMemoPad, memoText, memoMeta } from "./memo-pad.js";
 import { dailyCost, formatYen, formatSen, formatQuantity } from "./yakuzairyo.js";
 import { NOTE_CATEGORIES, NOTE_LABEL, SOAP, LEFTOVER, NOTEBOOK, NOTE_MAX } from "./record-kinds.js";
 import { setTour, autoStartTour, tourActive } from "./tour.js";
@@ -31,11 +32,14 @@ const savedId = params.get("saved");
 renderShell({ page: "patients", title: "薬歴", crumbs: [{ label: "患者一覧", href: "/patients" }, { label: "薬歴" }] });
 
 // prescriptions は新しい順（調剤日の降順）でサーバーから来る
-const { patient, notes, prescriptions, measurements, messages } = await api(`/api/patients/${patientId}`);
+const { patient, notes, prescriptions, measurements, messages, memo } = await api(`/api/patients/${patientId}`);
 
 setCrumbs([{ label: "患者一覧", href: "/patients" }, { label: `${patient.name}（${patient.patientNo}）` }, { label: "薬歴" }]);
 document.querySelector("#new-rx").href = `/rx?patient=${patient.id}`;
+document.querySelector("#to-logs").href = `/logs?patient=${patient.id}`;
+const tracingLink = document.querySelector("#to-tracing");
 const tracingHref = (rx) => `/tracing?patient=${patient.id}${rx ? `&rx=${rx.id}` : ""}`;
+tracingLink.href = tracingHref(null);
 
 const band = document.querySelector("#band");
 const cautionsEl = document.querySelector("#cautions");
@@ -43,7 +47,8 @@ const nextEl = document.querySelector("#next");
 const medsEl = document.querySelector("#current-meds");
 const otherEl = document.querySelector("#other");
 const labsEl = document.querySelector("#labs");
-// 初期の配置。並び順に左上から詰める（12列）。上の2段に要点、その下に処方の推移、いちばん下に経過
+// 初期の配置。並び順に左上から詰める（12列）。左に患者・検査値・メモ帳、その右に注意点・次に確認すること・今の処方、
+// その下に処方の推移、いちばん下に経過（下へいくらでも伸びる）
 const layout = setupLayout({
   grid: document.querySelector("#pt-grid"),
   page: "patient",
@@ -52,17 +57,21 @@ const layout = setupLayout({
   defaults: {
     boxes: [
       { id: "patient", w: 2, h: 1 },
-      { id: "cautions", w: 4, h: 2 },
-      { id: "next", w: 3, h: 1 },
-      { id: "meds", w: 3, h: 2 },
+      { id: "cautions", w: 4, h: 3 },
+      { id: "next", w: 3, h: 2 },
+      { id: "meds", w: 3, h: 3 },
       { id: "labs", w: 2, h: 1 },
+      { id: "memo", w: 2, h: 1 },
       { id: "other", w: 3, h: 1 },
       { id: "matrix", w: 12, h: 1 },
       { id: "history", w: 12, h: 1 },
     ],
-    options: { historyRows: 0 },
+    options: { historyRows: 0, matrixFold: 0 },
   },
-  onOptions: (options) => applyShape(options.historyRows),
+  onOptions: (options) => {
+    applyShape(options.historyRows);
+    applyMatrixFold(options.matrixFold);
+  },
 });
 const timeline = document.querySelector("#timeline");
 const matrixView = document.querySelector("#matrix-view");
@@ -332,6 +341,7 @@ function transcriptHtml(text) {
 
 function select(i, scroll = true) {
   selectedIndex = i;
+  tracingLink.href = tracingHref(prescriptions[i]);
   doButton.disabled = false;
   for (const card of timeline.querySelectorAll(".visit-card")) {
     const on = Number(card.dataset.index) === i;
@@ -351,31 +361,64 @@ timeline.addEventListener("keydown", (e) => {
 
 // ---------- 中央：処方の推移（薬 × 来局日） ----------
 
+let matrixFold = 0;
 function renderMatrix() {
   if (prescriptions.length === 0) {
     matrixView.innerHTML = '<p class="empty">まだ来局の記録がありません。</p>';
     return;
   }
-  const visits = [...prescriptions].reverse(); // 古い順（右が最新）
+  const visits = [...prescriptions].reverse(); // 古い順（右が新しい）
   const maps = visits.map(drugsOf);
   const rows = [];
   for (const m of maps) for (const d of m.values()) if (!rows.some((r) => r.code === d.code)) rows.push(d);
-  const head = visits.map((v, k) => `<th class="${k === visits.length - 1 ? "latest" : ""}">${formatDate(v.dispensedOn)}</th>`).join("");
-  const body = rows.map((row) => {
-    const latestUsage = [...maps].reverse().find((m) => m.has(row.code)).get(row.code).usage;
-    const cells = maps.map((m, k) => {
-      const d = m.get(row.code);
-      const prev = k > 0 ? maps[k - 1].get(row.code) : undefined;
-      if (!d) return prev ? '<td class="stop">中止</td>' : "<td></td>";
-      const cls = !prev ? "start" : prev.qty !== d.qty || prev.days !== d.days || prev.usage !== d.usage ? "change" : "on";
-      return `<td class="${cls}">${qtyText(d)}<small>${d.days}日分</small></td>`;
-    }).join("");
-    return `<tr data-code="${row.code}"><th>${escapeHtml(row.name)}<span class="usage">${escapeHtml(latestUsage)}</span></th>${cells}</tr>`;
-  }).join("");
+  // 来局ごとのセル（開始・変更・中止は1つ前の来局と比べる。表を分けても比べる相手は変わらない）
+  const cellOf = (row, k) => {
+    const d = maps[k].get(row.code);
+    const prev = k > 0 ? maps[k - 1].get(row.code) : undefined;
+    if (!d) return prev ? '<td class="stop">中止</td>' : "<td></td>";
+    const cls = !prev ? "start" : prev.qty !== d.qty || prev.days !== d.days || prev.usage !== d.usage ? "change" : "on";
+    return `<td class="${cls}">${qtyText(d)}<small>${d.days}日分</small></td>`;
+  };
+  const table = (ks) => {
+    const shown = rows.filter((row) => ks.some((k) => maps[k].has(row.code) || (k > 0 && maps[k - 1].has(row.code))));
+    return `<table class="matrix"><thead><tr><th>薬</th>${ks.map((k) => `<th class="${k === visits.length - 1 ? "latest" : ""}">${formatDate(visits[k].dispensedOn)}</th>`).join("")}</tr></thead>
+      <tbody>${shown.map((row) => {
+        const latestUsage = [...maps].reverse().find((m) => m.has(row.code)).get(row.code).usage;
+        return `<tr data-code="${row.code}"><th>${escapeHtml(row.name)}<span class="usage">${escapeHtml(latestUsage)}</span></th>${ks.map((k) => cellOf(row, k)).join("")}</tr>`;
+      }).join("")}</tbody></table>`;
+  };
+  const all = visits.map((_, k) => k);
+  let tables;
+  if (matrixFold === 1) {
+    // 薬の名前の列（約240px）を除いた幅に入る来局の数ずつに分け、新しい来局の表を上にする
+    const per = Math.max(1, Math.floor((matrixView.clientWidth - 240) / 92));
+    tables = [];
+    for (let end = all.length; end > 0; end -= per) tables.push(table(all.slice(Math.max(0, end - per), end)));
+  } else {
+    tables = [table(all)];
+  }
   matrixView.innerHTML = `
     <div class="legend"><span class="l-start">開始・再開</span><span class="l-change">1日量・用法・日数の変更</span><span class="l-stop">中止</span><span class="l-on">前回と同じ</span></div>
-    <div><table class="matrix"><thead><tr><th>薬</th>${head}</tr></thead><tbody>${body}</tbody></table></div>`;
+    ${tables.map((h) => `<div class="matrix-part">${h}</div>`).join("")}`;
+  if (matrixFold === 0) matrixView.scrollLeft = matrixView.scrollWidth; // 入りきらないときは新しい側を見せる
 }
+
+const matrixButtons = [...document.querySelectorAll("#matrix-shape [data-fold]")];
+function applyMatrixFold(fold) {
+  matrixFold = fold;
+  matrixView.classList.toggle("folded", fold === 1);
+  for (const b of matrixButtons) b.setAttribute("aria-checked", String(Number(b.dataset.fold) === fold));
+  renderMatrix();
+}
+for (const b of matrixButtons) b.addEventListener("click", () => layout.setOption("matrixFold", Number(b.dataset.fold)));
+// 折り返しのときは、箱の幅が変わったら分け方を作り直す
+let matrixWidth = 0;
+new ResizeObserver(() => {
+  if (matrixFold === 1 && matrixView.clientWidth !== matrixWidth) {
+    matrixWidth = matrixView.clientWidth;
+    renderMatrix();
+  }
+}).observe(matrixView);
 
 // ---------- 経過の並べ方 ----------
 // 0＝折り返し（横に並べ、入りきらなければ次の行へ）。1〜3＝その段数の帯（左が新しい、右が古い。入りきらない古い来局は帯を横に送る）
@@ -799,6 +842,16 @@ for (const form of [noteForm, recordForm, labForm]) {
 document.querySelector("#add-note").addEventListener("click", openNoteDialog);
 document.querySelector("#add-lab").addEventListener("click", openLabDialog);
 
+// ---------- メモ帳 ----------
+const memoPad = setupMemoPad({ patientId: patient.id, memo, onSaved: renderMemo });
+function renderMemo(m) {
+  document.querySelector("#memo").innerHTML = memoText(m);
+  document.querySelector("#memo-meta").textContent = memoMeta(m);
+}
+document.querySelector("#edit-memo").addEventListener("click", () => memoPad.open());
+document.querySelector("#memo").addEventListener("click", () => memoPad.open());
+renderMemo(memo);
+
 // ---------- ショートカット ----------
 
 function openDo(i = selectedIndex) {
@@ -823,7 +876,8 @@ document.addEventListener("keydown", (e) => {
     KeyK: () => openRecordDialog(),
     KeyM: openNoteDialog,
     KeyL: openLabDialog,
-    KeyT: () => { location.href = tracingHref(prescriptions[selectedIndex]); },
+    KeyE: () => memoPad.open(),
+    KeyT: () => { location.href = tracingLink.href; },
   };
   if (actions[e.code]) {
     e.preventDefault();
@@ -837,7 +891,6 @@ renderBand();
 renderSummary();
 renderTimeline();
 renderMatrix();
-matrixView.scrollLeft = matrixView.scrollWidth; // 推移は右が最新。来局が多くて入りきらないときは最新の側を見せる
 if (prescriptions.length > 0) {
   const savedIndex = prescriptions.findIndex((rx) => rx.id === savedId);
   select(savedIndex >= 0 ? savedIndex : 0);
@@ -854,8 +907,7 @@ setTour("patient", [
         <div><b>上</b>患者・注意点・次に確認すること・今の処方・生活・検査値</div>
         <div><b>中</b>処方の推移（薬 × 来局日）</div>
         <div><b>下</b>来局ごとの経過（処方の変化・指導記録）</div>
-        <div><b>左下</b>配置を変える（箱を動かす・大きさを変える）</div>
-        <div><b>右下</b>次の操作（指導記録・Do・新規処方）</div>
+        <div><b>上の帯</b>この画面でできる操作のすべてと、配置を変える</div>
       </div>`,
   },
   {
@@ -875,6 +927,11 @@ setTour("patient", [
     body: "<p>前回の指導記録で「次に確かめる」と決めたこと（P）と、薬剤師どうしの申し送りです。</p>",
   },
   {
+    target: "#memo",
+    title: "メモ帳",
+    body: "<p>決まった分類に入らないことを自由に書く場所です。家族構成、気がかりなこと、スタッフ間の伝言など、薬局の使い方に合わせて書きます。<kbd>Alt</kbd>+<kbd>E</kbd> か、箱を押すと書けます。処方入力の画面からも同じメモ帳を開けます。</p>",
+  },
+  {
     target: "#labs",
     title: "検査値・体重",
     body: `<p>項目ごとに、いちばん新しい値と検査日です。前回より上がった・下がったは矢印で分かります。<kbd>Alt</kbd>+<kbd>L</kbd> で入力します。</p>`,
@@ -883,7 +940,7 @@ setTour("patient", [
     target: ".visit-card",
     optional: true,
     title: "経過：来局ごとのカード",
-    body: `<p>新しい来局から順に左から並べます。見出しの<strong>並べ方</strong>で「折り返し」（入りきらなければ次の行へ）か「1〜3段の帯」（左が新しい、右が古い）を選べます。開かなくても中身が読めます。</p>
+    body: `<p>新しい来局から順に左から並べます。見出しの<strong>並べ方</strong>で「折り返し」（入りきらなければ次の行へ。下へ伸びる）か「1段・2段の帯」（左が新しい、右が古い）を選べます。開かなくても中身が読めます。</p>
       <ul>
         <li><b>処方の変化</b>：前回と比べて <span class="change add"><b>＋追加</b></span> <span class="change stop"><b>−中止</b></span> <span class="change mod"><b>変更</b></span></li>
         <li><b>指導記録</b>：S 会話・訴え、O 服薬状況や検査値、A 薬剤師の所見、<strong>P 次回の留意点</strong></li>
@@ -907,24 +964,24 @@ setTour("patient", [
   {
     target: "[data-box=matrix]",
     title: "処方の推移",
-    body: `<p>薬 × 来局日の表です。どの薬が<strong>いつ始まり、いつ変わり、いつ止まったか</strong>が一目で分かります。</p>`,
+    body: `<p>薬 × 来局日の表です。見出しの<strong>並べ方</strong>で、1つの表を横に送って見るか、入りきらない古い来局を下の表へ回すかを選べます。どの薬が<strong>いつ始まり、いつ変わり、いつ止まったか</strong>が一目で分かります。</p>`,
   },
   {
     target: "#layout-edit",
-    placement: "top",
     title: "配置を変える",
     body: `<p>押すと箱の見出しを引っぱって動かせます。ほかの箱の上へ持っていくと、そこに割り込み、後ろの箱は右へ、入らなければ次の段へ押し出されます。右下の角を引っぱると幅と高さ（段）が変わります。「完了」で保存し、次からもその配置で開きます（利用者ごと）。</p>
       <p>箱の高さは中身に合わせて伸びます。幅を広げると、長い注意点や処方が少ない行数で収まります。</p>`,
   },
   {
-    target: "#write-record",
-    placement: "top",
-    title: "次の操作",
-    body: `<ul>
-        <li><b>指導記録を書く</b> <kbd>Alt</kbd>+<kbd>K</kbd>：選んでいる来局の記録を書く</li>
-        <li><b>選んだ処方でDo</b> <kbd>Alt</kbd>+<kbd>D</kbd>：選んだ来局の処方を複写して入力する（薬価は今日の日付で引き直す）</li>
-        <li><b>新規処方</b> <kbd>Alt</kbd>+<kbd>N</kbd>：今日の処方を入力する</li>
+    target: "#toolbar",
+    title: "操作の帯",
+    body: `<p>この画面でできる操作は、すべてこの帯にあります。</p>
+      <ul>
+        <li><b>新規処方</b> <kbd>Alt</kbd>+<kbd>N</kbd>・<b>選んだ処方でDo</b> <kbd>Alt</kbd>+<kbd>D</kbd>・<b>指導記録を書く</b> <kbd>Alt</kbd>+<kbd>K</kbd></li>
+        <li><b>患者メモを追加</b> <kbd>Alt</kbd>+<kbd>M</kbd>（注意点・申し送りなど分類つき）・<b>検査値を入力</b> <kbd>Alt</kbd>+<kbd>L</kbd>・<b>メモ帳を書く</b> <kbd>Alt</kbd>+<kbd>E</kbd></li>
+        <li><b>トレーシングレポート</b> <kbd>Alt</kbd>+<kbd>T</kbd>・<b>閲覧記録</b>（この患者の情報を誰がいつ開いたか）</li>
       </ul>`,
   },
+
 ]);
 autoStartTour();

@@ -11,6 +11,7 @@ import { setTour, autoStartTour } from "./tour.js";
 import { checkPediatricDose, CHILD_AGE_LIMIT } from "./pediatric-dose.js";
 import { latestByItem, labText } from "./lab-items.js";
 import { ageOn } from "./guidance-suggest.js";
+import { setupMemoPad } from "./memo-pad.js";
 
 const params = new URLSearchParams(location.search);
 const patientId = params.get("patient");
@@ -19,7 +20,7 @@ const receptionId = params.get("reception") === null ? null : Number(params.get(
 
 renderShell({ page: "patients", title: "処方入力", crumbs: [{ label: "患者一覧", href: "/patients" }, { label: "処方入力" }] });
 
-const { patient, notes, prescriptions, measurements } = await api(`/api/patients/${patientId}?purpose=rx`);
+const { patient, notes, prescriptions, measurements, memo } = await api(`/api/patients/${patientId}?purpose=rx`);
 setCrumbs([
   { label: "患者一覧", href: "/patients" },
   { label: `${patient.name}（${patient.patientNo}）`, href: `/patient?id=${patient.id}` },
@@ -983,9 +984,16 @@ function clearErrors() {
 $("#save").addEventListener("click", save);
 $("#add-rp").addEventListener("click", addRp);
 
+// メモ帳（薬歴と同じもの）
+const memoPad = setupMemoPad({ patientId: patient.id, memo, onSaved: () => {} });
+$("#edit-memo").addEventListener("click", () => memoPad.open());
+
 document.addEventListener("keydown", (e) => {
-  if (e.isComposing) return;
-  if (e.ctrlKey && e.key === "Enter") {
+  if (e.isComposing || document.querySelector("dialog[open]")) return;
+  if (e.altKey && e.code === "KeyE") {
+    e.preventDefault();
+    memoPad.open();
+  } else if (e.ctrlKey && e.key === "Enter") {
     e.preventDefault();
     save();
   } else if (e.altKey && e.code === "KeyR") {

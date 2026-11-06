@@ -16,13 +16,28 @@
 <div class="main">
   <header class="topbar"></header>
   <nav class="crumbs"></nav>
+  <div class="toolbar" id="toolbar">
+    <a class="btn btn-primary" id="new-rx">新規処方 <kbd>Alt+N</kbd></a>
+    <button type="button" class="btn" id="do-rx" disabled>選んだ処方でDo <kbd>Alt+D</kbd></button>
+    <button type="button" class="btn" id="write-record">指導記録を書く <kbd>Alt+K</kbd></button>
+    <span class="sep"></span>
+    <button type="button" class="btn" id="add-note">患者メモを追加 <kbd>Alt+M</kbd></button>
+    <button type="button" class="btn" id="add-lab">検査値を入力 <kbd>Alt+L</kbd></button>
+    <button type="button" class="btn" id="edit-memo">メモ帳を書く <kbd>Alt+E</kbd></button>
+    <span class="sep"></span>
+    <a class="btn" id="to-tracing">トレーシングレポート <kbd>Alt+T</kbd></a>
+    <a class="btn" id="to-logs">閲覧記録</a>
+    <span class="spacer"></span>
+    <button type="button" class="btn" id="layout-reset" hidden>初期の配置</button>
+    <button type="button" class="btn" id="layout-edit"></button>
+  </div>
   <main class="pt-grid" id="pt-grid">
     <section class="pbox" data-box="patient">
       <div class="pbox-head">患者</div>
       <div class="pbox-body" id="band"></div>
     </section>
     <section class="pbox warn" data-box="cautions">
-      <div class="pbox-head">注意点<span class="spacer"></span><button type="button" class="btn btn-small" id="add-note">メモを追加 <kbd>Alt+M</kbd></button></div>
+      <div class="pbox-head">注意点</div>
       <div class="pbox-body" id="cautions"></div>
     </section>
     <section class="pbox" data-box="next">
@@ -38,11 +53,21 @@
       <div class="pbox-body" id="other"></div>
     </section>
     <section class="pbox" data-box="labs">
-      <div class="pbox-head">検査値・体重<span class="spacer"></span><button type="button" class="btn btn-small" id="add-lab">入力 <kbd>Alt+L</kbd></button></div>
+      <div class="pbox-head">検査値・体重</div>
       <div class="pbox-body" id="labs"></div>
     </section>
+    <section class="pbox" data-box="memo">
+      <div class="pbox-head">メモ帳<span class="sub" id="memo-meta"></span></div>
+      <div class="pbox-body memo-body" id="memo"></div>
+    </section>
     <section class="pbox" data-box="matrix">
-      <div class="pbox-head">処方の推移<span class="sub">薬 × 来局日（右が最新）</span></div>
+      <div class="pbox-head">処方の推移<span class="sub">薬 × 来局日（右が新しい）</span><span class="spacer"></span>
+        <span class="shape-label" id="matrix-shape-label">並べ方</span>
+        <div class="seg" role="radiogroup" aria-labelledby="matrix-shape-label" id="matrix-shape">
+          <button type="button" role="radio" data-fold="0" title="1つの表。入りきらない古い来局は表を横に送って見る">横に送る</button>
+          <button type="button" role="radio" data-fold="1" title="入りきらない来局は下の表へ回す。上の表が新しい">折り返し</button>
+        </div>
+      </div>
       <div class="pbox-body matrix-view" id="matrix-view"></div>
     </section>
     <section class="pbox" data-box="history" id="history">
@@ -52,7 +77,6 @@
           <button type="button" role="radio" data-rows="0" title="横に並べ、入りきらなければ次の行へ">折り返し</button>
           <button type="button" role="radio" data-rows="1" title="1段の帯。左が新しい、右が古い">1段</button>
           <button type="button" role="radio" data-rows="2" title="2段の帯。左が新しい、右が古い">2段</button>
-          <button type="button" role="radio" data-rows="3" title="3段の帯。左が新しい、右が古い">3段</button>
         </div>
       </div>
       <div class="pbox-body history-body">
@@ -60,14 +84,6 @@
       </div>
     </section>
   </main>
-  <footer class="actionbar">
-    <button type="button" class="btn" id="layout-edit">配置を変える</button>
-    <button type="button" class="btn" id="layout-reset" hidden>初期の配置</button>
-    <span class="spacer"></span>
-    <button type="button" class="btn" id="write-record">指導記録を書く <kbd>Alt+K</kbd></button>
-    <button type="button" class="btn" id="do-rx" disabled>選んだ処方でDo <kbd>Alt+D</kbd></button>
-    <a class="btn btn-primary" id="new-rx">新規処方 <kbd>Alt+N</kbd></a>
-  </footer>
 </div>
 
 <dialog id="note-dialog" aria-labelledby="note-dialog-title">

@@ -7,6 +7,7 @@
 //   - 「完了」で利用者ごとにサーバーへ保存する。「初期の配置」で画面が決めた配置に戻す
 //   - 画面ごとの表示の選び方（options）も一緒に保存する。setOption は押した時点で保存する
 import { api, toast } from "./app.js";
+import { icon } from "./icons.js";
 
 const COLS = 12;
 const ROWS = 12; // 1つの箱がまたげる段の上限
@@ -120,10 +121,12 @@ export function setupLayout({ grid, page, defaults, editButton, resetButton, onO
   function setEditing(on) {
     editing = on;
     grid.classList.toggle("editing", on);
-    editButton.textContent = on ? "完了" : "配置を変える";
+    editButton.innerHTML = on ? "完了" : `${icon("wrench", 16)}配置を変える`;
     editButton.classList.toggle("btn-primary", on);
     resetButton.hidden = !on;
   }
+
+  setEditing(false);
 
   editButton.addEventListener("click", async () => {
     if (!editing) return setEditing(true);

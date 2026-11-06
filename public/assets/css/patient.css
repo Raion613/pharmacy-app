@@ -208,3 +208,12 @@ dialog.wide { width: 780px; }
 .fee-lines td:first-child { color: var(--sub); white-space: nowrap; }
 /* 選んだ来局は処方と指導記録を横に並べるので、2枚ぶんの幅にする（縦に長くならないように） */
 .timeline:not(.band) .visit-card[aria-selected="true"] { grid-column: span 2; }
+
+/* メモ帳：書いたままの改行で出す。押すと書ける */
+.memo-body { white-space: pre-wrap; cursor: pointer; }
+.memo-body:hover { background: #f7fbfd; }
+.memo-dialog .textarea { width: 100%; }
+
+/* 処方の推移の折り返し：幅に入る来局ずつの表を、新しい表を上にして縦に並べる */
+.matrix-view.folded { overflow-x: visible; }
+.matrix-part + .matrix-part { margin-top: 6px; }

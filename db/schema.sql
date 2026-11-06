@@ -3,6 +3,7 @@
 -- 日付は 'YYYY-MM-DD' の文字列。文字列のまま大小比較できる。
 
 DROP TABLE IF EXISTS user_layouts;
+DROP TABLE IF EXISTS patient_memos;
 DROP TABLE IF EXISTS access_logs;
 DROP TABLE IF EXISTS mfa_challenges;
 DROP TABLE IF EXISTS line_messages;
@@ -577,3 +578,15 @@ CREATE TABLE user_layouts (
   updated_at TEXT NOT NULL,
   PRIMARY KEY (user_id, page)
 );
+
+-- メモ帳（患者ごとの自由なメモ。家族構成・懸念事項・スタッフ間の伝言など、薬局が好きに使う）。
+-- 書き換えるたびに新しい行を足し、いちばん新しい行を今の内容とする（前の内容は消さない）
+CREATE TABLE patient_memos (
+  id         INTEGER PRIMARY KEY,
+  patient_id INTEGER NOT NULL REFERENCES patients(id),
+  body       TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  created_by INTEGER NOT NULL REFERENCES users(id)
+);
+
+CREATE INDEX idx_patient_memos_patient ON patient_memos(patient_id, id);

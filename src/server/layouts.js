@@ -6,7 +6,8 @@ import { HttpError, nowIso } from "./http.js";
 
 export const GRID = { cols: 12, rows: 12 };
 const PAGES = new Set(["patient"]);
-const OPTIONS = { historyRows: [0, 1, 2, 3] }; // 経過の並べ方：0＝折り返し、1〜3＝その段数の帯
+// 経過の並べ方（0＝折り返し、1・2＝その段数の帯）と、処方の推移の並べ方（0＝横に送る、1＝折り返し）
+const OPTIONS = { historyRows: [0, 1, 2], matrixFold: [0, 1] };
 
 function checkPage(page) {
   if (!PAGES.has(page)) throw new HttpError(404, "画面が見つかりません");
