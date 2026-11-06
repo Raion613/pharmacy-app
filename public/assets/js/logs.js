@@ -1,5 +1,6 @@
 import { renderShell, api, escapeHtml, formatDateTime } from "./app.js";
 import { setTour, autoStartTour } from "./tour.js";
+import "./overlay.js"; // data-overlay のリンクは重なる窓で開く
 
 const patientId = new URLSearchParams(location.search).get("patient");
 renderShell({ page: "logs", title: "閲覧記録", crumbs: [{ label: "閲覧記録" }] });
@@ -41,7 +42,7 @@ document.querySelector("#empty").hidden = logs.length > 0;
 document.querySelector("#rows").innerHTML = logs.map((l) => {
   const [label, cls] = ACTIONS[l.action];
   const patient = l.patient
-    ? `<a href="/patient?id=${l.patient.id}">${escapeHtml(l.patient.name)}</a> <span class="sub">${escapeHtml(l.patient.patientNo)}</span>`
+    ? `<a data-overlay href="/patient?id=${l.patient.id}">${escapeHtml(l.patient.name)}</a> <span class="sub">${escapeHtml(l.patient.patientNo)}</span>`
     : "";
   return `<tr>
     <td class="num">${formatDateTime(l.at)}</td>

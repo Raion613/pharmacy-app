@@ -5,6 +5,7 @@
 import { renderShell, api, ApiError, escapeHtml, formatDate, today, toast } from "./app.js";
 import { limitsFor, weekStart, composeReport } from "./home-visit-rules.js";
 import { setTour, autoStartTour, tourActive } from "./tour.js";
+import "./overlay.js"; // data-overlay のリンクは重なる窓で開く
 
 renderShell({ page: "homecare", title: "在宅", crumbs: [{ label: "在宅" }] });
 
@@ -54,7 +55,7 @@ function renderPatients() {
         const plan = p.plan;
         const due = plan && plan.reviewDue < now;
         return `<li>
-          <div class="hp-head"><a href="/patient?id=${p.patientId}" class="hp-name">${escapeHtml(p.name)}</a><span class="num hp-visits ${visits >= perMonth ? "full" : ""}" title="この月の訪問予定 / 上限">${visits} / ${perMonth}回</span></div>
+          <div class="hp-head"><a href="/patient?id=${p.patientId}" data-overlay class="hp-name">${escapeHtml(p.name)}</a><span class="num hp-visits ${visits >= perMonth ? "full" : ""}" title="この月の訪問予定 / 上限">${visits} / ${perMonth}回</span></div>
           <div class="hp-sub">${escapeHtml(p.institution)} ${escapeHtml(p.doctor)} 医師${p.careManager ? `・ケアマネ ${escapeHtml(p.careManager)}` : ""}</div>
           <div class="hp-plan ${plan ? (due ? "due" : "") : "none"}">${plan
             ? `計画書 ${formatDate(plan.madeOn)}・見直しの目安 ${formatDate(plan.reviewDue)}${due ? "（過ぎています）" : ""}`
@@ -108,7 +109,7 @@ async function submitForm(form, action) {
   }
 }
 
-for (const dialog of document.querySelectorAll("dialog")) {
+for (const dialog of document.querySelectorAll("dialog:has(form)")) { // 入力のダイアログだけ（重なる窓は除く）
   const form = dialog.querySelector("form");
   form.querySelector("[data-close]").addEventListener("click", () => dialog.close());
   form.addEventListener("keydown", (e) => {

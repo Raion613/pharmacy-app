@@ -24,9 +24,10 @@ if (EMBED) {
   });
 }
 
-// 別の画面へ移る。窓の中なら親に頼む（薬歴に戻るなら窓を閉じる。それ以外は窓の中で開き直す）
-export function leave(url) {
-  if (EMBED) toParent({ type: "overlay:navigate", url });
+// 別の画面へ移る。窓の中なら親に頼む（親の画面へ戻るなら窓を閉じる。refresh なら親を新しい内容で開き直す。
+// それ以外の画面なら窓の中で開き直す）
+export function leave(url, { refresh = false } = {}) {
+  if (EMBED) toParent({ type: "overlay:navigate", url, refresh });
   else location.href = url;
 }
 

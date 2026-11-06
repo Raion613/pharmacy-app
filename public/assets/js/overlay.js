@@ -1,9 +1,11 @@
-// 薬歴の上に重なる窓。処方入力・領収証・お薬手帳・調剤監査・トレーシングレポート・閲覧記録を、薬歴から離れずに開く。
+// 画面の上に重なる窓。1つの業務（来局した患者の対応、今日の受付の進み具合など）を、画面を移らずに1画面で終えるための仕組み。
+// 薬歴からは処方入力・領収証・お薬手帳・調剤監査・トレーシングレポート・閲覧記録を、受付状況からは処方入力・調剤監査・薬歴を開く。
 // 中身はそれぞれの画面をそのまま読み込む（iframe。URL に embed=1 を付けると、その画面は左のメニューと上の帯を隠す）。
 //   閉じ方はどれでも同じ：Esc（窓の中でも外でも）、右上の ×、ブラウザの「戻る」。閉じた窓は「進む」でまた開く
 //   窓を開くと履歴に1つ積む（pushState）。「戻る」で積んだ分が外れると popstate が来るので、そこで窓を閉じる
 //   iframe の中身を差し替えるとブラウザの履歴にも積まれてしまうので、開くたびに iframe を作り直し、窓の中で移るときは replace で移る
-//   窓の中で保存して薬歴へ戻るとき（例：処方を保存した）は、窓を閉じて薬歴を新しい内容で開き直す
+//   窓の中で保存して元の画面へ戻るとき（例：処方を保存した）は、窓を閉じて元の画面を新しい内容で開き直す
+//   画面の中のリンクに data-overlay を付けると、そのリンク先も重なる窓で開く（受付状況から薬歴を開く、など）
 const dialog = document.createElement("dialog");
 dialog.className = "overlay";
 dialog.setAttribute("aria-labelledby", "overlay-title");
@@ -35,6 +37,13 @@ function hide() {
   frame = null;
 }
 
+document.addEventListener("click", (e) => {
+  const a = e.target.closest("a[data-overlay]");
+  if (!a || e.defaultPrevented || e.ctrlKey || e.shiftKey || e.metaKey) return;
+  e.preventDefault();
+  openOverlay(a.getAttribute("href"));
+});
+
 export function openOverlay(url) {
   history.pushState({ overlay: url }, "", location.href);
   show(url);
@@ -58,12 +67,12 @@ window.addEventListener("popstate", (e) => {
 // 窓の中の画面からの頼み（app.js の EMBED を参照）
 window.addEventListener("message", (e) => {
   if (e.origin !== location.origin || frame === null || e.source !== frame.contentWindow) return;
-  const { type, url } = e.data;
+  const { type, url, refresh } = e.data;
   if (type === "overlay:close") return close();
   if (type !== "overlay:navigate") return;
-  // 薬歴（この画面）へ戻る：保存した結果を見せるときは開き直し、ただ戻るだけなら窓を閉じる
-  if (url.startsWith(location.pathname)) {
-    if (new URL(url, location.origin).searchParams.has("saved")) location.replace(url);
+  // この画面へ戻る：保存した結果を見せるときは開き直し、ただ戻るだけなら窓を閉じる
+  if (new URL(url, location.origin).pathname === location.pathname) {
+    if (refresh) location.replace(url);
     else close();
     return;
   }

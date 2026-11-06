@@ -31,7 +31,7 @@
         <span class="spacer"></span>
         <label class="hint" for="report-facility">報告書</label>
         <select class="input input-small" id="report-facility"></select>
-        <a class="btn btn-small" id="print-reports" target="_blank" rel="noopener">この月の報告書を一括印刷</a>
+        <a class="btn btn-small" id="print-reports" data-overlay>この月の報告書を一括印刷</a>
         <button type="button" class="btn btn-small btn-primary" id="add-visit">訪問を予定 <kbd>Alt+V</kbd></button>
       </div>
       <div class="calendar" id="calendar"></div>
@@ -98,7 +98,7 @@
       <div class="field"><label for="p-drug">薬剤特性（副作用・相互作用等）</label><textarea class="input textarea" id="p-drug" name="drugNotes" rows="2" maxlength="400"></textarea><span class="error-text" data-error="drugNotes"></span></div>
       <div class="field"><label for="p-guidance">実施すべき指導の内容</label><textarea class="input textarea" id="p-guidance" name="guidance" rows="2" maxlength="400"></textarea><span class="error-text" data-error="guidance"></span></div>
     </div>
-    <div class="dialog-foot"><a class="btn" id="print-plan" target="_blank" rel="noopener">最新の計画書を印刷</a><span class="spacer"></span><button type="button" class="btn" data-close>閉じる <kbd>Esc</kbd></button><button type="submit" class="btn btn-primary">計画書を保存 <kbd>Ctrl+Enter</kbd></button></div>
+    <div class="dialog-foot"><a class="btn" id="print-plan" data-overlay>最新の計画書を印刷</a><span class="spacer"></span><button type="button" class="btn" data-close>閉じる <kbd>Esc</kbd></button><button type="submit" class="btn btn-primary">計画書を保存 <kbd>Ctrl+Enter</kbd></button></div>
   </form>
 </dialog>
 
@@ -117,7 +117,7 @@
         <textarea class="input textarea" id="r-report" name="report" rows="6" maxlength="1200"></textarea><span class="error-text" data-error="report"></span></div>
       <div class="field"><label for="r-shared">他職種と共有した内容</label><textarea class="input textarea" id="r-shared" name="shared" rows="2" maxlength="400"></textarea><span class="error-text" data-error="shared"></span></div>
     </div>
-    <div class="dialog-foot"><a class="btn" id="print-one" target="_blank" rel="noopener" hidden>この報告書を印刷</a><span class="spacer"></span><button type="button" class="btn" data-close>閉じる <kbd>Esc</kbd></button><button type="submit" class="btn btn-primary" id="record-save">記録を保存 <kbd>Ctrl+Enter</kbd></button></div>
+    <div class="dialog-foot"><a class="btn" id="print-one" data-overlay hidden>この報告書を印刷</a><span class="spacer"></span><button type="button" class="btn" data-close>閉じる <kbd>Esc</kbd></button><button type="submit" class="btn btn-primary" id="record-save">記録を保存 <kbd>Ctrl+Enter</kbd></button></div>
   </form>
 </dialog>
 </body>

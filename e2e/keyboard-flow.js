@@ -28,8 +28,9 @@ async function newPage({ toursSeen }) {
 let page = await newPage({ toursSeen: true });
 // 薬歴の操作（処方入力・トレーシングレポートなど）は、薬歴の上に重なる窓で開く。
 // 窓に読み込んだ画面の URL を確かめ、続きはその画面を直接開いて操作する（窓そのものの動きは「重なる窓」の手順で確かめる）
-async function viaOverlay(key, pattern) {
-  await page.keyboard.press(key);
+async function viaOverlay(action, pattern) {
+  if (typeof action === "string") await page.keyboard.press(action);
+  else await action();
   await page.waitForFunction(() => document.querySelector("dialog.overlay[open] iframe")?.src.includes("embed=1"));
   const src = new URL(await page.locator("dialog.overlay iframe").evaluate((f) => f.src));
   src.searchParams.delete("embed");
@@ -413,7 +414,7 @@ await page.keyboard.press("Enter");
 await page.waitForSelector(".col-received .board-card");
 assert.match(await text(".col-received .board-card"), /宇野　健太[\s\S]*受付 \d\d:\d\d[\s\S]*0分待ち/);
 assert.match(await page.evaluate(() => document.activeElement.textContent), /処方を入力/);
-await Promise.all([page.waitForURL(/\/rx\?patient=5&reception=\d+$/), page.keyboard.press("Enter")]);
+await viaOverlay("Enter", /^\/rx\?patient=5&reception=\d+$/);
 await page.waitForSelector('[data-field="drug"]');
 await page.keyboard.type("のるばすく錠５");
 await page.waitForSelector("#suggest li[aria-selected=true]");
@@ -426,7 +427,7 @@ await page.keyboard.press("Enter");
 await page.keyboard.type("14");
 await Promise.all([page.waitForURL(/\/board$/), page.keyboard.press("Control+Enter")]);
 await page.waitForSelector(".col-entered .board-card");
-await Promise.all([page.waitForURL(/\/inspect\?id=/), page.click(".col-entered .board-card .btn")]);
+await viaOverlay(() => page.click(".col-entered .board-card .btn"), /^\/inspect\?id=/);
 await page.waitForFunction(() => document.activeElement?.id === "scan-input");
 assert.match(await text("#check-items"), /ノルバスク錠５ｍｇ[\s\S]*総量 14錠[\s\S]*まだ読んでいません/);
 assert.equal(await page.locator("#save").isDisabled(), true);

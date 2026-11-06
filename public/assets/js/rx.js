@@ -939,7 +939,7 @@ async function save() {
     const saved = await api("/api/prescriptions", { method: "POST", body });
     state.dirty = false;
     toastNext(`処方を保存しました（合計 ${pointsText(saved.totalPoints)}・窓口で ${(saved.copayYen + (saved.specialFeeYen ?? 0)).toLocaleString()}円）`);
-    leave(receptionId === null ? `/patient?id=${patient.id}&saved=${saved.id}` : "/board");
+    leave(receptionId === null ? `/patient?id=${patient.id}&saved=${saved.id}` : "/board", { refresh: true });
   } catch (err) {
     state.saving = false;
     $("#save").disabled = false;

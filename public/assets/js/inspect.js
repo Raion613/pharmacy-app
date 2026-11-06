@@ -93,7 +93,7 @@ async function save() {
   try {
     const r = await api(`/api/prescriptions/${rx.id}/inspections`, { method: "POST", body: { scans: scans.map((s) => s.raw) } });
     toastNext(`調剤監査を保存しました${r.ng ? `（合わない読み取り ${r.ng}件も記録）` : ""}`);
-    leave(rx.receptionId === null ? `/patient?id=${patient.id}&saved=${rx.id}` : backHref); // 薬歴から開いたときは、監査した来局を選んで薬歴を開き直す
+    leave(rx.receptionId === null ? `/patient?id=${patient.id}&saved=${rx.id}` : backHref, { refresh: true }); // 元の画面を開き直す（薬歴なら監査した来局を選ぶ）
   } catch (e) {
     document.querySelector("#save").disabled = false;
     if (!(e instanceof ApiError) || e.status !== 422) throw e;

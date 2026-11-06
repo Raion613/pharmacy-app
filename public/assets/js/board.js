@@ -6,6 +6,7 @@
 import { renderShell, api, ApiError, escapeHtml, today, toast, debounce, listNavigator } from "./app.js";
 import { icon } from "./icons.js";
 import { setTour, autoStartTour, tourActive } from "./tour.js";
+import "./overlay.js"; // data-overlay のリンクは重なる窓で開く
 
 renderShell({ page: "board", title: "受付状況", crumbs: [{ label: "受付状況" }] });
 
@@ -58,8 +59,8 @@ function cardHtml(r, stage, now) {
   const wait = minutes(r.receivedAt, r.steps.handed?.at ?? now);
   const long = !r.steps.handed && wait >= LONG_WAIT_MIN;
   const action = {
-    received: `<a class="btn btn-small btn-primary" href="/rx?patient=${r.patientId}&reception=${r.id}">処方を入力</a>`,
-    entered: `<a class="btn btn-small btn-primary" href="/inspect?id=${r.prescriptionId}">調剤監査</a>`,
+    received: `<a class="btn btn-small btn-primary" data-overlay href="/rx?patient=${r.patientId}&reception=${r.id}">処方を入力</a>`,
+    entered: `<a class="btn btn-small btn-primary" data-overlay href="/inspect?id=${r.prescriptionId}">調剤監査</a>`,
     audited: `<button type="button" class="btn btn-small btn-primary" data-step="handed" data-id="${r.id}">投薬した</button>`,
     handed: `<button type="button" class="btn btn-small btn-primary" data-step="paid" data-id="${r.id}">会計した</button>`,
     paid: "",
@@ -67,7 +68,7 @@ function cardHtml(r, stage, now) {
   const steps = ["entered", "audited", "handed", "paid"].filter((s) => r.steps[s])
     .map((s) => `${{ entered: "入力", audited: "監査", handed: "投薬", paid: "会計" }[s]} ${hhmm(r.steps[s].at)}`).join(" → ");
   return `<article class="board-card ${long ? "long" : ""}" data-id="${r.id}">
-    <div class="bc-head"><a href="/patient?id=${r.patientId}" class="bc-name">${escapeHtml(r.patient.name)}</a><span class="bc-no">${escapeHtml(r.patient.patientNo)}</span></div>
+    <div class="bc-head"><a href="/patient?id=${r.patientId}" data-overlay class="bc-name">${escapeHtml(r.patient.name)}</a><span class="bc-no">${escapeHtml(r.patient.patientNo)}</span></div>
     <div class="bc-time"><span>受付 ${hhmm(r.receivedAt)}</span><span class="bc-wait num" title="受付から${r.steps.handed ? "投薬まで" : "今まで"}">${wait}分${r.steps.handed ? "" : "待ち"}</span></div>
     ${steps ? `<div class="bc-steps">${steps}</div>` : ""}
     ${action ? `<div class="bc-actions">${action}</div>` : ""}

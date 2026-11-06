@@ -3,6 +3,7 @@
 // 実際のサービスとはつないでいないので、受信は左下の「デモ」から行う。返信は保存するだけで、どこにも送らない。
 import { renderShell, api, ApiError, escapeHtml, formatDateTime, toast, debounce, listNavigator } from "./app.js";
 import { setTour, autoStartTour } from "./tour.js";
+import "./overlay.js"; // data-overlay のリンクは重なる窓で開く
 
 renderShell({ page: "messages", title: "つながる薬局", crumbs: [{ label: "つながる薬局" }] });
 
@@ -24,7 +25,7 @@ async function openThread(patientId) {
   current = patientId;
   const list = await api(`/api/line/${patientId}`);
   const name = threads.find((t) => t.patientId === patientId)?.patient.name ?? list[0]?.patient.name;
-  $("#chat-head").innerHTML = `${escapeHtml(name)}<span class="spacer"></span><a class="btn btn-small" href="/patient?id=${patientId}">薬歴を開く</a>`;
+  $("#chat-head").innerHTML = `${escapeHtml(name)}<span class="spacer"></span><a class="btn btn-small" data-overlay href="/patient?id=${patientId}">薬歴を開く</a>`;
   $("#chat-log").innerHTML = list.map((m) => `<li class="msg ${m.direction}"><div class="bubble">${escapeHtml(m.body).replaceAll("\n", "<br>")}</div>
     <span class="meta">${formatDateTime(m.sentAt)}${m.direction === "out" ? `・${escapeHtml(m.by)}` : ""}</span></li>`).join("");
   $("#chat-log").scrollTop = $("#chat-log").scrollHeight;

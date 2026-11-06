@@ -217,3 +217,16 @@ dialog.wide { width: 780px; }
 /* 処方の推移の折り返し：幅に入る来局ずつの表を、新しい表を上にして縦に並べる */
 .matrix-view.folded { overflow-x: visible; }
 .matrix-part + .matrix-part { margin-top: 6px; }
+
+/* 箱の見出しの「＋」：その箱の中身を書き足す入口 */
+.pbox-head .head-add { height: 24px; padding: 0 8px; font-size: 12px; font-weight: 700; color: var(--accent-strong); border-color: var(--accent-line); background: #fff; }
+.pbox-head .head-add:hover { background: var(--accent-soft); }
+.pbox-head .head-add kbd { font-size: 10px; }
+
+/* 経過の見出しと、選んだ来局への操作の帯。スクロールしても経過の箱の上に残る */
+.history-sticky { position: sticky; top: -10px; z-index: 3; background: #fff; border-radius: var(--radius) var(--radius) 0 0; }
+.visit-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px 10px; background: var(--accent-soft); border-bottom: 1px solid var(--accent-line); }
+.visit-bar .visit-label { font-weight: 700; color: var(--accent-strong); margin-right: 4px; white-space: nowrap; }
+.visit-bar .btn { height: 30px; padding: 0 10px; font-size: 13px; }
+.visit-bar .btn[disabled] { opacity: .45; cursor: default; }
+.pt-grid.editing .visit-bar { pointer-events: none; }

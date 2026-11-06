@@ -432,13 +432,20 @@ const noteBody = noteForm.elements.body;
 document.querySelector("#note-categories").innerHTML = NOTE_CATEGORIES.map((c) =>
   `<label><input type="radio" name="category" value="${c.key}">${escapeHtml(c.label)}</label>`).join("");
 
-function openNoteDialog() {
+// category を渡すと、その分類を選んだ状態で開く（箱の見出しの「＋」から）
+function openNoteDialog(category = null) {
   noteForm.reset();
   clearFormErrors(noteForm);
   updateCounter();
   noteDialog.showModal();
-  noteForm.querySelector('input[name="category"]').focus();
+  if (category === null) {
+    noteForm.querySelector('input[name="category"]').focus();
+  } else {
+    noteForm.querySelector(`input[name="category"][value="${category}"]`).checked = true;
+    noteBody.focus();
+  }
 }
+for (const b of document.querySelectorAll("[data-note]")) b.addEventListener("click", () => openNoteDialog(b.dataset.note));
 
 function updateCounter() {
   noteForm.querySelector('[data-counter="note-body"]').textContent = `${noteBody.value.length} / ${NOTE_MAX}文字`;
@@ -833,7 +840,7 @@ for (const form of [noteForm, recordForm, labForm]) {
   });
   form.querySelector("[data-close]").addEventListener("click", () => form.closest("dialog").close());
 }
-document.querySelector("#add-note").addEventListener("click", openNoteDialog);
+document.querySelector("#add-note").addEventListener("click", () => openNoteDialog());
 document.querySelector("#add-lab").addEventListener("click", openLabDialog);
 
 // ---------- メモ帳 ----------
@@ -880,7 +887,7 @@ document.addEventListener("keydown", (e) => {
     KeyN: openNewRx,
     KeyD: () => openDo(),
     KeyK: () => openRecordDialog(),
-    KeyM: openNoteDialog,
+    KeyM: () => openNoteDialog(),
     KeyL: openLabDialog,
     KeyE: () => memoPad.open(),
     KeyT: openTracing,
@@ -911,8 +918,9 @@ setTour("patient", [
     body: `<p>来局した患者を開くと、最初にこの画面が出ます。箱に分けて並べています。</p>
       <div class="tour-map">
         <div><b>いちばん上</b>戻る（患者一覧へ）・画面の名前・患者の氏名</div>
-        <div><b>青い帯</b>この画面でできる操作のすべて</div>
-        <div><b>箱</b>患者・注意点・次に確認すること・今の処方・メモ帳・検査値、処方の推移、経過</div>
+        <div><b>青い帯</b>右端に新規処方。左に閲覧記録と配置を変える</div>
+        <div><b>箱</b>患者・注意点・次に確認すること・今の処方・メモ帳・検査値、処方の推移、経過。書き足すときは箱の見出しの「＋」</div>
+        <div><b>経過の帯</b>選んだ来局への操作（Do・指導記録・領収証など）</div>
       </div>`,
   },
   {
@@ -950,7 +958,7 @@ setTour("patient", [
         <li><b>処方の変化</b>：前回と比べて <span class="change add"><b>＋追加</b></span> <span class="change stop"><b>−中止</b></span> <span class="change mod"><b>変更</b></span></li>
         <li><b>指導記録</b>：S 会話・訴え、O 服薬状況や検査値、A 薬剤師の所見、<strong>P 次回の留意点</strong></li>
       </ul>
-      <p><kbd>↑</kbd><kbd>↓</kbd>（帯では <kbd>←</kbd><kbd>→</kbd> も）で来局を選ぶと、その来局が大きくなり、処方の中身が出ます。青い帯の「選んだ来局」の操作は、この来局に対して働きます。見出しの<strong>薬剤料</strong>は、その日の薬の値段を点数にしたもの（1点＝10円）です。</p>`,
+      <p><kbd>↑</kbd><kbd>↓</kbd>（帯では <kbd>←</kbd><kbd>→</kbd> も）で来局を選ぶと、その来局が大きくなり、処方の中身が出ます。経過の見出しの下の帯の操作は、この来局に対して働きます。見出しの<strong>薬剤料</strong>は、その日の薬の値段を点数にしたもの（1点＝10円）です。</p>`,
   },
   {
     target: () => document.querySelector(".no-record") ?? document.querySelector(".vc-records"),
@@ -979,15 +987,21 @@ setTour("patient", [
   },
   {
     target: "#toolbar",
-    title: "操作の帯",
-    body: `<p>この画面でできる操作は、すべてこの帯にあります。</p>
-      <ul>
-        <li><b>新規処方</b> <kbd>Alt</kbd>+<kbd>N</kbd></li>
-        <li><b>選んだ来局</b>：この処方でDo <kbd>Alt</kbd>+<kbd>D</kbd>・指導記録 <kbd>Alt</kbd>+<kbd>K</kbd>・領収証・明細書・お薬手帳・調剤監査・トレーシングレポート <kbd>Alt</kbd>+<kbd>T</kbd></li>
-        <li><b>この患者</b>：患者メモ <kbd>Alt</kbd>+<kbd>M</kbd>・検査値 <kbd>Alt</kbd>+<kbd>L</kbd>・メモ帳 <kbd>Alt</kbd>+<kbd>E</kbd>・閲覧記録</li>
-      </ul>
+    title: "青い帯",
+    body: `<p>右端の<strong>新規処方</strong> <kbd>Alt</kbd>+<kbd>N</kbd> で、今日の処方を入力します。</p>
+      <p>左の<b>閲覧記録</b>は、この患者の情報を誰がいつ開いたかの記録です。<b>配置を変える</b>で箱の並びを変えられます。</p>
       <p>処方入力や領収証などは、この画面の上に<strong>重なる窓</strong>で開きます。<kbd>Esc</kbd>・右上の ×・ブラウザの「戻る」のどれでも閉じて、この画面の同じ場所に戻ります。</p>`,
   },
+  {
+    target: "#visit-bar",
+    title: "選んだ来局への操作",
+    body: `<p>経過で選んでいる来局に対して働きます。</p>
+      <ul>
+        <li><b>この処方でDo</b> <kbd>Alt</kbd>+<kbd>D</kbd>：その処方を写して新しい処方を入力する（薬価は今日の日付で引き直す）</li>
+        <li><b>指導記録を書く</b> <kbd>Alt</kbd>+<kbd>K</kbd>・<b>領収証・明細書</b>・<b>お薬手帳</b>・<b>調剤監査</b>・<b>トレーシングレポート</b> <kbd>Alt</kbd>+<kbd>T</kbd></li>
+      </ul>`,
+  },
+
 
 ]);
 autoStartTour();

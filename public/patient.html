@@ -16,24 +16,11 @@
 <div class="main">
   <header class="topbar"></header>
   <div class="toolbar main-toolbar" id="toolbar">
-    <button type="button" class="btn btn-primary" id="new-rx">新規処方 <kbd>Alt+N</kbd></button>
-    <span class="sep"></span>
-    <span class="group-label" id="visit-label">選んだ来局</span>
-    <button type="button" class="btn" id="do-rx">この処方でDo <kbd>Alt+D</kbd></button>
-    <button type="button" class="btn" id="write-record">指導記録を書く <kbd>Alt+K</kbd></button>
-    <button type="button" class="btn" id="open-receipt">領収証・明細書</button>
-    <button type="button" class="btn" id="open-handbook">お薬手帳</button>
-    <button type="button" class="btn" id="open-inspect">調剤監査</button>
-    <button type="button" class="btn" id="to-tracing">トレーシングレポート <kbd>Alt+T</kbd></button>
-    <span class="sep"></span>
-    <span class="group-label">この患者</span>
-    <button type="button" class="btn" id="add-note">患者メモ <kbd>Alt+M</kbd></button>
-    <button type="button" class="btn" id="add-lab">検査値 <kbd>Alt+L</kbd></button>
-    <button type="button" class="btn" id="edit-memo">メモ帳 <kbd>Alt+E</kbd></button>
-    <button type="button" class="btn" id="to-logs">閲覧記録</button>
+    <button type="button" class="btn btn-quiet" id="layout-edit"></button>
+    <button type="button" class="btn btn-quiet" id="layout-reset" hidden>初期の配置</button>
+    <button type="button" class="btn btn-quiet" id="to-logs">閲覧記録</button>
     <span class="spacer"></span>
-    <button type="button" class="btn" id="layout-reset" hidden>初期の配置</button>
-    <button type="button" class="btn" id="layout-edit"></button>
+    <button type="button" class="btn btn-primary" id="new-rx">新規処方 <kbd>Alt+N</kbd></button>
   </div>
   <main class="pt-grid" id="pt-grid">
     <section class="pbox" data-box="patient">
@@ -41,11 +28,11 @@
       <div class="pbox-body" id="band"></div>
     </section>
     <section class="pbox warn" data-box="cautions">
-      <div class="pbox-head">注意点</div>
+      <div class="pbox-head">注意点<span class="spacer"></span><button type="button" class="btn head-add" id="add-note">＋ 患者メモ <kbd>Alt+M</kbd></button></div>
       <div class="pbox-body" id="cautions"></div>
     </section>
     <section class="pbox" data-box="next">
-      <div class="pbox-head">次に確認すること</div>
+      <div class="pbox-head">次に確認すること<span class="spacer"></span><button type="button" class="btn head-add" data-note="handover">＋ 申し送り</button></div>
       <div class="pbox-body" id="next"></div>
     </section>
     <section class="pbox" data-box="meds">
@@ -53,15 +40,15 @@
       <div class="pbox-body" id="current-meds"></div>
     </section>
     <section class="pbox" data-box="other">
-      <div class="pbox-head">生活・後発品の意向</div>
+      <div class="pbox-head">生活・後発品の意向<span class="spacer"></span><button type="button" class="btn head-add" data-note="lifestyle">＋ 追加</button></div>
       <div class="pbox-body" id="other"></div>
     </section>
     <section class="pbox" data-box="labs">
-      <div class="pbox-head">検査値・体重</div>
+      <div class="pbox-head">検査値・体重<span class="spacer"></span><button type="button" class="btn head-add" id="add-lab">＋ 入力 <kbd>Alt+L</kbd></button></div>
       <div class="pbox-body" id="labs"></div>
     </section>
     <section class="pbox" data-box="memo">
-      <div class="pbox-head">メモ帳<span class="sub" id="memo-meta"></span></div>
+      <div class="pbox-head">メモ帳<span class="sub" id="memo-meta"></span><span class="spacer"></span><button type="button" class="btn head-add" id="edit-memo">書く <kbd>Alt+E</kbd></button></div>
       <div class="pbox-body memo-body" id="memo"></div>
     </section>
     <section class="pbox" data-box="matrix">
@@ -75,6 +62,7 @@
       <div class="pbox-body matrix-view" id="matrix-view"></div>
     </section>
     <section class="pbox" data-box="history" id="history">
+      <div class="history-sticky">
       <div class="pbox-head">経過<span class="count" id="visit-count"></span><span class="spacer"></span>
         <span class="shape-label" id="shape-label">並べ方</span>
         <div class="seg" role="radiogroup" aria-labelledby="shape-label" id="history-shape">
@@ -82,6 +70,16 @@
           <button type="button" role="radio" data-rows="1" title="1段の帯。左が新しい、右が古い">1段</button>
           <button type="button" role="radio" data-rows="2" title="2段の帯。左が新しい、右が古い">2段</button>
         </div>
+      </div>
+      <div class="visit-bar" id="visit-bar">
+        <span class="visit-label" id="visit-label">選んだ来局</span>
+        <button type="button" class="btn" id="do-rx">この処方でDo <kbd>Alt+D</kbd></button>
+        <button type="button" class="btn" id="write-record">指導記録を書く <kbd>Alt+K</kbd></button>
+        <button type="button" class="btn" id="open-receipt">領収証・明細書</button>
+        <button type="button" class="btn" id="open-handbook">お薬手帳</button>
+        <button type="button" class="btn" id="open-inspect">調剤監査</button>
+        <button type="button" class="btn" id="to-tracing">トレーシングレポート <kbd>Alt+T</kbd></button>
+      </div>
       </div>
       <div class="pbox-body history-body">
         <div class="timeline" id="timeline" tabindex="0" aria-label="経過（上下の矢印で来局を選ぶ）"></div>
