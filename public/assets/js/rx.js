@@ -1,7 +1,7 @@
 // 処方入力。入力中の値は state に持ち、画面はそこから描く。
 // 点数はサーバーと同じ yakuzairyo.js で入力のたびに計算する（保存時はサーバーが改めて計算し直す）。
 import {
-  renderShell, setCrumbs, api, ApiError, escapeHtml, formatDate, today, addDays, renderPatientBand, priceText, unitText,
+  renderShell, setCrumbs, leave, api, ApiError, escapeHtml, formatDate, today, addDays, renderPatientBand, priceText, unitText,
   pointsText, drugTags, toast, toastNext,
 } from "./app.js";
 import { calcRp, parseQuantity, formatQuantity, dailyCost, formatYen, formatSen, specialFee } from "./yakuzairyo.js";
@@ -939,7 +939,7 @@ async function save() {
     const saved = await api("/api/prescriptions", { method: "POST", body });
     state.dirty = false;
     toastNext(`処方を保存しました（合計 ${pointsText(saved.totalPoints)}・窓口で ${(saved.copayYen + (saved.specialFeeYen ?? 0)).toLocaleString()}円）`);
-    location.href = receptionId === null ? `/patient?id=${patient.id}&saved=${saved.id}` : "/board";
+    leave(receptionId === null ? `/patient?id=${patient.id}&saved=${saved.id}` : "/board");
   } catch (err) {
     state.saving = false;
     $("#save").disabled = false;

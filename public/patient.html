@@ -15,18 +15,22 @@
 <nav class="sidebar"></nav>
 <div class="main">
   <header class="topbar"></header>
-  <nav class="crumbs"></nav>
-  <div class="toolbar" id="toolbar">
-    <a class="btn btn-primary" id="new-rx">新規処方 <kbd>Alt+N</kbd></a>
-    <button type="button" class="btn" id="do-rx" disabled>選んだ処方でDo <kbd>Alt+D</kbd></button>
+  <div class="toolbar main-toolbar" id="toolbar">
+    <button type="button" class="btn btn-primary" id="new-rx">新規処方 <kbd>Alt+N</kbd></button>
+    <span class="sep"></span>
+    <span class="group-label" id="visit-label">選んだ来局</span>
+    <button type="button" class="btn" id="do-rx">この処方でDo <kbd>Alt+D</kbd></button>
     <button type="button" class="btn" id="write-record">指導記録を書く <kbd>Alt+K</kbd></button>
+    <button type="button" class="btn" id="open-receipt">領収証・明細書</button>
+    <button type="button" class="btn" id="open-handbook">お薬手帳</button>
+    <button type="button" class="btn" id="open-inspect">調剤監査</button>
+    <button type="button" class="btn" id="to-tracing">トレーシングレポート <kbd>Alt+T</kbd></button>
     <span class="sep"></span>
-    <button type="button" class="btn" id="add-note">患者メモを追加 <kbd>Alt+M</kbd></button>
-    <button type="button" class="btn" id="add-lab">検査値を入力 <kbd>Alt+L</kbd></button>
-    <button type="button" class="btn" id="edit-memo">メモ帳を書く <kbd>Alt+E</kbd></button>
-    <span class="sep"></span>
-    <a class="btn" id="to-tracing">トレーシングレポート <kbd>Alt+T</kbd></a>
-    <a class="btn" id="to-logs">閲覧記録</a>
+    <span class="group-label">この患者</span>
+    <button type="button" class="btn" id="add-note">患者メモ <kbd>Alt+M</kbd></button>
+    <button type="button" class="btn" id="add-lab">検査値 <kbd>Alt+L</kbd></button>
+    <button type="button" class="btn" id="edit-memo">メモ帳 <kbd>Alt+E</kbd></button>
+    <button type="button" class="btn" id="to-logs">閲覧記録</button>
     <span class="spacer"></span>
     <button type="button" class="btn" id="layout-reset" hidden>初期の配置</button>
     <button type="button" class="btn" id="layout-edit"></button>

@@ -1,8 +1,34 @@
 // 全画面共通：画面の骨組み、API 呼び出し、表示用の整形、通知。
 import { icon } from "./icons.js";
 import { formatSen } from "./yakuzairyo.js";
-import { startTour } from "./tour.js";
+import { startTour, tourActive } from "./tour.js";
 import { NOTE_LABEL } from "./record-kinds.js";
+
+// ---------- 重なる窓の中で開かれたとき ----------
+// 薬歴から開く処方入力・領収証などは、薬歴の上に重なる窓（overlay.js）の中に読み込む。そのとき URL に embed=1 が付く。
+// 窓の中では左のメニューと上の帯を隠し、「閉じる」「別の画面へ移る」は親（薬歴）に頼む。Esc はどの画面でも窓を閉じる
+export const EMBED = new URLSearchParams(location.search).get("embed") === "1";
+const toParent = (message) => parent.postMessage(message, location.origin);
+if (EMBED) {
+  document.documentElement.classList.add("embed");
+  window.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !e.defaultPrevented && !document.querySelector("dialog[open]") && !tourActive()) {
+      toParent({ type: "overlay:close" });
+    }
+  });
+  document.addEventListener("click", (e) => {
+    const a = e.target.closest("a[href]");
+    if (!a || a.target === "_blank" || e.defaultPrevented) return;
+    e.preventDefault();
+    leave(a.getAttribute("href"));
+  });
+}
+
+// 別の画面へ移る。窓の中なら親に頼む（薬歴に戻るなら窓を閉じる。それ以外は窓の中で開き直す）
+export function leave(url) {
+  if (EMBED) toParent({ type: "overlay:navigate", url });
+  else location.href = url;
+}
 
 const NAV = [
   { page: "patients", href: "/patients", label: "患者", icon: "users", key: "1" },
@@ -15,8 +41,9 @@ const NAV = [
   { page: "master", href: "/master", label: "マスター取込", icon: "upload", key: "8" },
 ];
 
-// 左のアイコン列と上の帯を描く。crumbs は [{ label, href? }]
-export function renderShell({ page, title, crumbs }) {
+// 左のアイコン列と上の帯を描く。crumbs は [{ label, href? }]。
+// back（{ label, href }）を渡した画面は、パンくずの代わりに左上へ「← 戻る」を置き、画面の名前を大きく出す
+export function renderShell({ page, title, crumbs, back }) {
   document.title = `${title} | 薬剤料計算・薬歴`;
   const sidebar = document.querySelector(".sidebar");
   sidebar.innerHTML = `<div class="mark" title="薬剤料計算・薬歴"><span>薬</span></div>` + NAV.map((n) =>
@@ -24,7 +51,9 @@ export function renderShell({ page, title, crumbs }) {
   ).join("");
 
   const topbar = document.querySelector(".topbar");
-  topbar.innerHTML = `<h1>${escapeHtml(title)}</h1><span class="spacer"></span>
+  topbar.classList.toggle("with-back", back !== undefined);
+  topbar.innerHTML = `${back ? `<a class="back-button" id="back-button" href="${back.href}">${icon("arrowLeft", 18)}${escapeHtml(back.label)}</a>` : ""}
+    <h1>${escapeHtml(title)}</h1>${back ? '<div class="subject" id="subject"></div>' : ""}<span class="spacer"></span>
     <button type="button" class="btn tour-button" id="tour-button" title="この画面の使い方をもう一度見る">${icon("help", 16)}チュートリアル</button>
     <a class="user" id="current-user" href="/account" title="アカウント（多要素認証の設定）"></a>
     <button type="button" class="btn btn-ghost" id="logout">${icon("logOut", 16)}ログアウト</button>`;
@@ -37,10 +66,10 @@ export function renderShell({ page, title, crumbs }) {
     topbar.querySelector("#current-user").textContent = `${me.pharmacyName}　${me.displayName}`;
   });
 
-  setCrumbs(crumbs);
+  if (!back) setCrumbs(crumbs);
 
   document.addEventListener("keydown", (e) => {
-    if (!e.altKey || e.ctrlKey || e.metaKey) return;
+    if (!e.altKey || e.ctrlKey || e.metaKey || EMBED) return;
     const nav = NAV.find((n) => n.key === e.key);
     if (nav) {
       e.preventDefault();

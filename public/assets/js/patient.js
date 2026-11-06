@@ -6,11 +6,12 @@
 //   指導記録を書く画面の右側：服薬指導の会話の録音と文字起こし、会話から拾った患者メモの候補、指導内容の提案、
 //   つながる薬局で届いたメッセージ。左の S・O・A・P には、下書き（会話と処方から組み立てた文）とテンプレートを写せる
 import {
-  renderShell, setCrumbs, api, ApiError, escapeHtml, formatDate, formatDateTime, birthText, SEX, priceText, pointsText,
+  renderShell, api, ApiError, escapeHtml, formatDate, formatDateTime, birthText, SEX, priceText, pointsText,
   unitText, toast,
 } from "./app.js";
 import { setupLayout } from "./layout-grid.js";
 import { setupMemoPad, memoText, memoMeta } from "./memo-pad.js";
+import { openOverlay } from "./overlay.js";
 import { dailyCost, formatYen, formatSen, formatQuantity } from "./yakuzairyo.js";
 import { NOTE_CATEGORIES, NOTE_LABEL, SOAP, LEFTOVER, NOTEBOOK, NOTE_MAX } from "./record-kinds.js";
 import { setTour, autoStartTour, tourActive } from "./tour.js";
@@ -29,17 +30,16 @@ const params = new URLSearchParams(location.search);
 const patientId = params.get("id");
 const savedId = params.get("saved");
 
-renderShell({ page: "patients", title: "薬歴", crumbs: [{ label: "患者一覧", href: "/patients" }, { label: "薬歴" }] });
+renderShell({ page: "patients", title: "薬歴", back: { label: "患者一覧", href: "/patients" } });
 
 // prescriptions は新しい順（調剤日の降順）でサーバーから来る
 const { patient, notes, prescriptions, measurements, messages, memo } = await api(`/api/patients/${patientId}`);
 
-setCrumbs([{ label: "患者一覧", href: "/patients" }, { label: `${patient.name}（${patient.patientNo}）` }, { label: "薬歴" }]);
-document.querySelector("#new-rx").href = `/rx?patient=${patient.id}`;
-document.querySelector("#to-logs").href = `/logs?patient=${patient.id}`;
-const tracingLink = document.querySelector("#to-tracing");
+// 上の帯：どの患者の薬歴かを大きく出す
+document.querySelector("#subject").innerHTML = `<span class="subject-name">${escapeHtml(patient.name)}</span>
+  <span class="subject-kana">${escapeHtml(patient.kana)}</span><span class="subject-facts">${birthText(patient.birthDate)}・${SEX[patient.sex]}・${escapeHtml(patient.patientNo)}</span>`;
+document.title = `薬歴 ${patient.name} | 薬剤料計算・薬歴`;
 const tracingHref = (rx) => `/tracing?patient=${patient.id}${rx ? `&rx=${rx.id}` : ""}`;
-tracingLink.href = tracingHref(null);
 
 const band = document.querySelector("#band");
 const cautionsEl = document.querySelector("#cautions");
@@ -75,7 +75,9 @@ const layout = setupLayout({
 });
 const timeline = document.querySelector("#timeline");
 const matrixView = document.querySelector("#matrix-view");
-const doButton = document.querySelector("#do-rx");
+// 操作の帯のうち、選んでいる来局に対して働くボタン
+const visitButtons = ["#do-rx", "#write-record", "#open-receipt", "#open-handbook", "#open-inspect"].map((s) => document.querySelector(s));
+const visitLabel = document.querySelector("#visit-label");
 let selectedIndex = -1;
 
 // ---------- 処方の比較 ----------
@@ -240,7 +242,6 @@ function renderTimeline() {
     card.querySelector(".vc-head").addEventListener("click", () => select(i));
     card.addEventListener("focusin", () => select(i, false));
     for (const b of card.querySelectorAll("[data-action=record]")) b.addEventListener("click", () => openRecordDialog(i));
-    card.querySelector("[data-action=do]").addEventListener("click", () => openDo(i));
     card.querySelector("[data-action=calc]").addEventListener("click", (e) => {
       const calc = card.querySelector(".vc-calc");
       calc.hidden = !calc.hidden;
@@ -288,13 +289,6 @@ function cardHtml(rx, i) {
     </div>
     <div class="vc-foot">
       <button type="button" class="btn btn-ghost btn-small" data-action="calc" aria-expanded="false">計算の内訳を見る</button>
-      <span class="spacer"></span>
-      ${rx.records.length ? '<button type="button" class="btn btn-small" data-action="record">指導記録を追記</button>' : ""}
-      <a class="btn btn-small" href="/receipt?id=${rx.id}" target="_blank" rel="noopener">領収証・明細書</a>
-      <a class="btn btn-small" href="/handbook?id=${rx.id}" target="_blank" rel="noopener">お薬手帳</a>
-      <a class="btn btn-small" href="/inspect?id=${rx.id}">調剤監査</a>
-      <a class="btn btn-small" href="${tracingHref(rx)}">トレーシングレポート</a>
-      <button type="button" class="btn btn-small" data-action="do">この処方でDo</button>
     </div>
     <div class="vc-calc" hidden>${rx.rps.map(calcHtml).join("")}
       <table class="fee-lines">${rx.fees.map((f) => `<tr><td>${SECTION[f.section]}</td><td>${escapeHtml(f.name)}</td>
@@ -341,8 +335,8 @@ function transcriptHtml(text) {
 
 function select(i, scroll = true) {
   selectedIndex = i;
-  tracingLink.href = tracingHref(prescriptions[i]);
-  doButton.disabled = false;
+  visitLabel.textContent = `選んだ来局 ${formatDate(prescriptions[i].dispensedOn)}`;
+  for (const b of visitButtons) b.disabled = false;
   for (const card of timeline.querySelectorAll(".visit-card")) {
     const on = Number(card.dataset.index) === i;
     card.setAttribute("aria-selected", String(on));
@@ -854,11 +848,23 @@ renderMemo(memo);
 
 // ---------- ショートカット ----------
 
+// ---------- 操作の帯 ----------
+// 別の作業は薬歴の上に重なる窓で開く（overlay.js）。Esc・×・ブラウザの「戻る」で閉じ、薬歴の同じ場所に戻る
+const selected = () => prescriptions[selectedIndex];
 function openDo(i = selectedIndex) {
-  if (i >= 0) location.href = `/rx?patient=${patient.id}&from=${prescriptions[i].id}`;
+  if (i >= 0) openOverlay(`/rx?patient=${patient.id}&from=${prescriptions[i].id}`);
 }
-doButton.addEventListener("click", () => openDo());
+const openNewRx = () => openOverlay(`/rx?patient=${patient.id}`);
+const openTracing = () => openOverlay(tracingHref(selected()));
+document.querySelector("#new-rx").addEventListener("click", openNewRx);
+document.querySelector("#do-rx").addEventListener("click", () => openDo());
 document.querySelector("#write-record").addEventListener("click", () => openRecordDialog());
+document.querySelector("#open-receipt").addEventListener("click", () => openOverlay(`/receipt?id=${selected().id}`));
+document.querySelector("#open-handbook").addEventListener("click", () => openOverlay(`/handbook?id=${selected().id}`));
+document.querySelector("#open-inspect").addEventListener("click", () => openOverlay(`/inspect?id=${selected().id}`));
+document.querySelector("#to-tracing").addEventListener("click", openTracing);
+document.querySelector("#to-logs").addEventListener("click", () => openOverlay(`/logs?patient=${patient.id}`));
+for (const b of visitButtons) b.disabled = prescriptions.length === 0;
 
 // 指導記録を書いている間の Alt+G（下書き）
 recordForm.addEventListener("keydown", (e) => {
@@ -871,13 +877,13 @@ recordForm.addEventListener("keydown", (e) => {
 document.addEventListener("keydown", (e) => {
   if (!e.altKey || tourActive() || document.querySelector("dialog[open]")) return;
   const actions = {
-    KeyN: () => { location.href = `/rx?patient=${patient.id}`; },
+    KeyN: openNewRx,
     KeyD: () => openDo(),
     KeyK: () => openRecordDialog(),
     KeyM: openNoteDialog,
     KeyL: openLabDialog,
     KeyE: () => memoPad.open(),
-    KeyT: () => { location.href = tracingLink.href; },
+    KeyT: openTracing,
   };
   if (actions[e.code]) {
     e.preventDefault();
@@ -893,7 +899,7 @@ renderTimeline();
 renderMatrix();
 if (prescriptions.length > 0) {
   const savedIndex = prescriptions.findIndex((rx) => rx.id === savedId);
-  select(savedIndex >= 0 ? savedIndex : 0);
+  select(savedIndex >= 0 ? savedIndex : 0, savedIndex >= 0); // 開いたときは上（注意点など）から見せる。保存した直後だけ、その来局まで送る
   if (savedIndex >= 0) timeline.querySelector(`.visit-card[data-index="${savedIndex}"]`).classList.add("saved");
   timeline.focus({ preventScroll: true });
 }
@@ -904,10 +910,9 @@ setTour("patient", [
     title: "薬歴：この患者のことを1画面で",
     body: `<p>来局した患者を開くと、最初にこの画面が出ます。箱に分けて並べています。</p>
       <div class="tour-map">
-        <div><b>上</b>患者・注意点・次に確認すること・今の処方・生活・検査値</div>
-        <div><b>中</b>処方の推移（薬 × 来局日）</div>
-        <div><b>下</b>来局ごとの経過（処方の変化・指導記録）</div>
-        <div><b>上の帯</b>この画面でできる操作のすべてと、配置を変える</div>
+        <div><b>いちばん上</b>戻る（患者一覧へ）・画面の名前・患者の氏名</div>
+        <div><b>青い帯</b>この画面でできる操作のすべて</div>
+        <div><b>箱</b>患者・注意点・次に確認すること・今の処方・メモ帳・検査値、処方の推移、経過</div>
       </div>`,
   },
   {
@@ -945,7 +950,7 @@ setTour("patient", [
         <li><b>処方の変化</b>：前回と比べて <span class="change add"><b>＋追加</b></span> <span class="change stop"><b>−中止</b></span> <span class="change mod"><b>変更</b></span></li>
         <li><b>指導記録</b>：S 会話・訴え、O 服薬状況や検査値、A 薬剤師の所見、<strong>P 次回の留意点</strong></li>
       </ul>
-      <p><kbd>↑</kbd><kbd>↓</kbd>（帯では <kbd>←</kbd><kbd>→</kbd> も）で来局を選ぶと、その来局だけ処方の中身と、領収証・お薬手帳などのボタンが出ます。見出しの<strong>薬剤料</strong>は、その日の薬の値段を点数にしたもの（1点＝10円）です。</p>`,
+      <p><kbd>↑</kbd><kbd>↓</kbd>（帯では <kbd>←</kbd><kbd>→</kbd> も）で来局を選ぶと、その来局が大きくなり、処方の中身が出ます。青い帯の「選んだ来局」の操作は、この来局に対して働きます。見出しの<strong>薬剤料</strong>は、その日の薬の値段を点数にしたもの（1点＝10円）です。</p>`,
   },
   {
     target: () => document.querySelector(".no-record") ?? document.querySelector(".vc-records"),
@@ -977,10 +982,11 @@ setTour("patient", [
     title: "操作の帯",
     body: `<p>この画面でできる操作は、すべてこの帯にあります。</p>
       <ul>
-        <li><b>新規処方</b> <kbd>Alt</kbd>+<kbd>N</kbd>・<b>選んだ処方でDo</b> <kbd>Alt</kbd>+<kbd>D</kbd>・<b>指導記録を書く</b> <kbd>Alt</kbd>+<kbd>K</kbd></li>
-        <li><b>患者メモを追加</b> <kbd>Alt</kbd>+<kbd>M</kbd>（注意点・申し送りなど分類つき）・<b>検査値を入力</b> <kbd>Alt</kbd>+<kbd>L</kbd>・<b>メモ帳を書く</b> <kbd>Alt</kbd>+<kbd>E</kbd></li>
-        <li><b>トレーシングレポート</b> <kbd>Alt</kbd>+<kbd>T</kbd>・<b>閲覧記録</b>（この患者の情報を誰がいつ開いたか）</li>
-      </ul>`,
+        <li><b>新規処方</b> <kbd>Alt</kbd>+<kbd>N</kbd></li>
+        <li><b>選んだ来局</b>：この処方でDo <kbd>Alt</kbd>+<kbd>D</kbd>・指導記録 <kbd>Alt</kbd>+<kbd>K</kbd>・領収証・明細書・お薬手帳・調剤監査・トレーシングレポート <kbd>Alt</kbd>+<kbd>T</kbd></li>
+        <li><b>この患者</b>：患者メモ <kbd>Alt</kbd>+<kbd>M</kbd>・検査値 <kbd>Alt</kbd>+<kbd>L</kbd>・メモ帳 <kbd>Alt</kbd>+<kbd>E</kbd>・閲覧記録</li>
+      </ul>
+      <p>処方入力や領収証などは、この画面の上に<strong>重なる窓</strong>で開きます。<kbd>Esc</kbd>・右上の ×・ブラウザの「戻る」のどれでも閉じて、この画面の同じ場所に戻ります。</p>`,
   },
 
 ]);

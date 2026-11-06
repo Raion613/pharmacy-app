@@ -26,6 +26,16 @@ async function newPage({ toursSeen }) {
   return p;
 }
 let page = await newPage({ toursSeen: true });
+// 薬歴の操作（処方入力・トレーシングレポートなど）は、薬歴の上に重なる窓で開く。
+// 窓に読み込んだ画面の URL を確かめ、続きはその画面を直接開いて操作する（窓そのものの動きは「重なる窓」の手順で確かめる）
+async function viaOverlay(key, pattern) {
+  await page.keyboard.press(key);
+  await page.waitForFunction(() => document.querySelector("dialog.overlay[open] iframe")?.src.includes("embed=1"));
+  const src = new URL(await page.locator("dialog.overlay iframe").evaluate((f) => f.src));
+  src.searchParams.delete("embed");
+  assert.match(src.pathname + src.search, pattern);
+  await page.goto(src.href);
+}
 
 const focused = () => page.evaluate(() => {
   const el = document.activeElement;
@@ -124,7 +134,7 @@ await page.locator("#timeline").focus();
 
 // 4. Alt+N で処方入力。薬名 → Enter → 1日量 → Enter → 次の薬 …
 step("Alt+N で処方入力へ");
-await Promise.all([page.waitForURL(/\/rx\?patient=1$/), page.keyboard.press("Alt+N")]);
+await viaOverlay("Alt+N", /^\/rx\?patient=1$/);
 await page.waitForSelector('[data-field="drug"]');
 assert.deepEqual(await focused(), { id: "", field: "drug", r: "0", i: "0", tag: "INPUT" });
 
@@ -206,7 +216,7 @@ assert.match(await text(".toasts"), /処方を保存しました（合計 281点
 
 // 8. 前回Do：選んだ処方を複写。薬価は今日の日付で引き直す
 step("Alt+D で前回Do");
-await Promise.all([page.waitForURL(/\/rx\?patient=1&from=/), page.keyboard.press("Alt+D")]);
+await viaOverlay("Alt+D", /^\/rx\?patient=1&from=/);
 await page.waitForSelector("#do-note:not([hidden])");
 assert.equal((await focused()).field, "qty");
 assert.equal(await text("#total"), "56点");
@@ -256,7 +266,7 @@ await page.waitForSelector(selectedCard);
 // ロキソニン（選）10.65円 × 3 + ムコスタ 10.80円 × 3 = 64.35円 → 6点 × 14日 = 84点。
 // 特別の料金：価格差 0.15円 × 3 = 0.45円 → 1点 × 14日 = 14点 → 140円 + 消費税 = 154円
 assert.match(await text(selectedCard), /2026\/10\/22[\s\S]*薬剤料 84点[\s\S]*特別の料金 154円[\s\S]*ロキソニン錠６０ｍｇ（選）/);
-await Promise.all([page.waitForURL(/\/rx\?patient=7&from=/), page.keyboard.press("Alt+D")]);
+await viaOverlay("Alt+D", /^\/rx\?patient=7&from=/);
 await page.waitForFunction(() => document.querySelector("#bill-special").textContent === "154円");
 assert.equal(await text("#total"), "84点");
 assert.match(await text('tr.item[data-r="0"][data-i="0"] .drug-meta'), /選定療養（患者希望）[\s\S]*価格差 0\.15円\/錠/);
@@ -363,7 +373,7 @@ await page.keyboard.press("Escape");
 // 16. トレーシングレポート：薬歴から写す → 保存 → 印刷の画面
 step("トレーシングレポート（Alt+T → Alt+W で薬歴から写す → 保存 → 印刷）");
 await page.locator("#timeline").focus();
-await Promise.all([page.waitForURL(/\/tracing\?patient=3&rx=/), page.keyboard.press("Alt+T")]);
+await viaOverlay("Alt+T", /^\/tracing\?patient=3&rx=/);
 await page.waitForFunction(() => document.activeElement?.id === "t-institution");
 await page.keyboard.press("Alt+W");
 assert.match(await page.inputValue("#t-leftover"), /マグミット錠が7日分残っている[\s\S]*回答：21日分で可/);
@@ -383,7 +393,7 @@ assert.match(await text(".tracing-sheet"), /○○内科クリニック（架空
 step("処方入力：小児の分量（体重当たり）");
 await page.goto(`${BASE}/patient?id=4`);
 await page.waitForSelector(selectedCard);
-await Promise.all([page.waitForURL(/\/rx\?patient=4&from=/), page.keyboard.press("Alt+D")]);
+await viaOverlay("Alt+D", /^\/rx\?patient=4&from=/);
 await page.waitForSelector("#peds:not([hidden]) #peds-list li");
 assert.match(await text("#peds-weight"), /5歳・体重 18\.0kg/);
 assert.equal(await page.locator("#peds-list li.peds-ok").count(), 3);
@@ -632,7 +642,7 @@ const medsHead = await page.locator('[data-box="meds"] .pbox-head').boundingBox(
 const patientBox = await page.locator('[data-box="patient"]').boundingBox();
 await page.mouse.move(medsHead.x + 20, medsHead.y + medsHead.height / 2);
 await page.mouse.down();
-await page.mouse.move(patientBox.x + 10, patientBox.y + patientBox.height / 2, { steps: 8 });
+await page.mouse.move(patientBox.x + 10, patientBox.y + patientBox.height / 2); // 途中の箱に割り込まないよう、まっすぐ動かす
 await page.mouse.up();
 assert.deepEqual(await order(), ["meds", "patient", "cautions", "next", "labs", "memo", "other", "matrix", "history"]);
 // 右下の角で「患者」を3列に広げる
@@ -680,6 +690,36 @@ await page.keyboard.press("Alt+E");
 await page.waitForSelector(".memo-dialog[open]");
 assert.equal(await page.inputValue(".memo-dialog textarea"), "妻と二人暮らし。娘さんが月1回来る");
 await page.keyboard.press("Escape");
+
+step("重なる窓：Esc・×・ブラウザの戻る/進むで閉じたり開いたりする。窓の中で処方を保存すると、薬歴が保存した来局を選んで開き直す");
+await page.goto(`${BASE}/patient?id=1`);
+await page.waitForSelector(selectedCard);
+assert.match(await text("#subject"), /青木　誠/);
+await page.locator("#timeline").focus();
+await page.keyboard.press("Alt+N");
+await page.waitForSelector("dialog.overlay[open]");
+await page.waitForFunction(() => document.querySelector("#overlay-title").textContent === "処方入力");
+const inFrame = page.frameLocator("dialog.overlay iframe");
+await inFrame.locator('[data-field="drug"]').first().waitFor();
+assert.equal(await inFrame.locator(".sidebar").isHidden(), true); // 窓の中では左のメニューを出さない
+await page.keyboard.press("Escape");                               // 窓の中にフォーカスがあっても Esc で閉じる
+await page.waitForSelector("dialog.overlay:not([open])", { state: "attached" });
+assert.match(page.url(), /\/patient\?id=1$/);
+await page.click("#open-handbook");
+await page.waitForFunction(() => document.querySelector("#overlay-title").textContent === "お薬手帳");
+await page.click(".overlay-close");
+await page.waitForSelector("dialog.overlay:not([open])", { state: "attached" });
+await page.goForward();                                             // 進むで、閉じた窓がまた開く
+await page.waitForSelector("dialog.overlay[open]");
+await page.goBack();                                                // 戻るで閉じる
+await page.waitForSelector("dialog.overlay:not([open])", { state: "attached" });
+await page.keyboard.press("Alt+D");
+await page.waitForSelector("dialog.overlay[open]");
+await inFrame.locator('[data-field="drug"]').first().waitFor();
+await page.waitForFunction(() => document.querySelector("dialog.overlay iframe").contentDocument.querySelector("#total").textContent !== "—");
+await Promise.all([page.waitForURL(/\/patient\?id=1&saved=/), page.keyboard.press("Control+Enter")]);
+await page.waitForSelector('#timeline .visit-card.saved[aria-selected="true"]');
+assert.equal(await page.locator("dialog.overlay[open]").count(), 0);
 
 // ---------- 多要素認証（最後に。終わったら無効に戻す） ----------
 step("多要素認証：設定 → ログインで6桁を求める → 無効にする");

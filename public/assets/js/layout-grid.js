@@ -127,6 +127,7 @@ export function setupLayout({ grid, page, defaults, editButton, resetButton, onO
   }
 
   setEditing(false);
+  apply(); // 保存した配置を読み終えるまでの間も、初期の配置で並べておく（大きさの無い箱が細長く崩れないように）
 
   editButton.addEventListener("click", async () => {
     if (!editing) return setEditing(true);

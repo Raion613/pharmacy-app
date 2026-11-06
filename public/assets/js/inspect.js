@@ -2,7 +2,7 @@
 // 読み取り機（USB・Bluetooth）はキーボードとして文字と Enter を送ってくるので、入力欄で Enter を受けたら照合する。
 // 照合はサーバーで行う（バーコードの GTIN → HOT コードマスター → 医薬品コード → 処方の薬に入っているか、有効期限）。
 // 処方の薬がすべて「合っている」になったら保存できる。合わなかった読み取りも一緒に記録に残す。
-import { renderShell, setCrumbs, api, ApiError, escapeHtml, formatDate, formatDateTime, renderPatientBand, unitText, toast, toastNext } from "./app.js";
+import { renderShell, setCrumbs, leave, api, ApiError, escapeHtml, formatDate, formatDateTime, renderPatientBand, unitText, toast, toastNext } from "./app.js";
 import { formatQuantity } from "./yakuzairyo.js";
 import { icon } from "./icons.js";
 import { setTour, autoStartTour } from "./tour.js";
@@ -93,7 +93,7 @@ async function save() {
   try {
     const r = await api(`/api/prescriptions/${rx.id}/inspections`, { method: "POST", body: { scans: scans.map((s) => s.raw) } });
     toastNext(`調剤監査を保存しました${r.ng ? `（合わない読み取り ${r.ng}件も記録）` : ""}`);
-    location.href = backHref;
+    leave(rx.receptionId === null ? `/patient?id=${patient.id}&saved=${rx.id}` : backHref); // 薬歴から開いたときは、監査した来局を選んで薬歴を開き直す
   } catch (e) {
     document.querySelector("#save").disabled = false;
     if (!(e instanceof ApiError) || e.status !== 422) throw e;

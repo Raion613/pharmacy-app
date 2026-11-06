@@ -1,7 +1,7 @@
 // トレーシングレポート（服薬情報提供書）。?patient=…&rx=… で作る画面、?id=… で印刷する画面。
 // 欄は病院が公開している様式（服薬状況・残薬調整・併用薬・患者の訴え・家族からの情報・薬学的な提案・その他）に合わせた。
 // 「薬歴から写す」は、空いている欄にだけ、その来局の指導記録・疑義照会・患者メモの内容を入れる（入れた後に薬剤師が直す）。
-import { renderShell, setCrumbs, api, ApiError, escapeHtml, formatDate, birthText, SEX, toast } from "./app.js";
+import { renderShell, setCrumbs, leave, api, ApiError, escapeHtml, formatDate, birthText, SEX, toast } from "./app.js";
 import { NOTE_LABEL } from "./record-kinds.js";
 import { setTour, autoStartTour, tourActive } from "./tour.js";
 
@@ -60,7 +60,7 @@ async function showForm(patientId, rxId) {
     body.prescriptionId = rx?.id ?? null;
     try {
       const { id } = await api(`/api/patients/${patient.id}/tracings`, { method: "POST", body });
-      location.href = `/tracing?id=${id}`;
+      leave(`/tracing?id=${id}`);
     } catch (err) {
       if (!(err instanceof ApiError) || err.status !== 422) throw err;
       for (const d of err.details) form.querySelector(`[data-error="${d.path}"]`).textContent = d.message;
