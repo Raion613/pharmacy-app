@@ -1,4 +1,4 @@
-import { renderShell, api, ApiError, escapeHtml, formatDate, birthText, SEX, debounce, listNavigator, toastNext } from "./app.js";
+import { renderShell, api, ApiError, escapeHtml, formatDate, birthText, SEX, debounce, listNavigator, toastNext, today } from "./app.js";
 import { icon } from "./icons.js";
 import { NOTE_LABEL } from "./record-kinds.js";
 import { setTour, autoStartTour, tourActive } from "./tour.js";
@@ -83,6 +83,8 @@ document.addEventListener("keydown", (e) => {
 function openDialog() {
   form.reset();
   showErrors([]);
+  // 上限を今日にすると、ブラウザは年を4桁まで打った所で月へ進む（上限が無いと6桁まで打てる）
+  form.elements.birthDate.max = today();
   dialog.showModal();
   form.elements.name.focus();
 }

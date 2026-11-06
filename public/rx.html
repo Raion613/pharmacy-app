@@ -22,11 +22,11 @@
       <div class="panel-head dates">
         <div class="date-field">
           <label for="prescribed-on">処方日</label>
-          <input class="input" type="date" id="prescribed-on">
+          <input class="input" type="date" max="9999-12-31" id="prescribed-on">
         </div>
         <div class="date-field">
           <label for="dispensed-on">調剤日</label>
-          <input class="input" type="date" id="dispensed-on">
+          <input class="input" type="date" max="9999-12-31" id="dispensed-on">
         </div>
         <div class="date-field">
           <label for="handbook">お薬手帳</label>
@@ -82,7 +82,7 @@
           <div class="compare-body" id="compare-body" hidden>
             <div class="date-field">
               <label for="compare-on">比べる日付</label>
-              <input class="input" type="date" id="compare-on">
+              <input class="input" type="date" max="9999-12-31" id="compare-on">
             </div>
             <dl class="compare-result">
               <div><dt id="compare-label">比較日</dt><dd class="num" id="compare-total">—</dd></div>
