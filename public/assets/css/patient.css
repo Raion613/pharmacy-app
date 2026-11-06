@@ -64,14 +64,21 @@
 .labs .since { grid-column: 1 / -1; font-size: 11px; color: var(--sub); }
 
 /* 経過：来局を横に並べ、入りきらなければ次の行へ（カードは途中で切らない）。選んだ来局だけ処方の中身と操作を出す */
-.history-head { padding-top: 0; padding-bottom: 0; align-items: stretch; }
-.history-head .count { align-self: center; font-weight: 400; font-size: 12px; color: var(--sub); }
 .history-body { padding: 8px 10px; }
+.pbox-head .count { font-weight: 400; font-size: 12px; color: var(--sub); }
+.shape-label { font-weight: 400; font-size: 12px; color: var(--sub); }
+.seg { display: inline-flex; border: 1px solid var(--border-strong); border-radius: var(--radius); overflow: hidden; }
+.seg button { border: 0; background: #fff; padding: 2px 10px; font-size: 12px; cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--border-strong); }
+.seg button[aria-checked="true"] { background: var(--accent); color: #fff; font-weight: 700; }
+.seg button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .timeline { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 8px; align-items: start; outline: none; }
 .visit-card:not([aria-selected="true"]) .vc-rx,
 .visit-card:not([aria-selected="true"]) .vc-foot { display: none; }
 .visit-card:not([aria-selected="true"]) .vc-body { grid-template-columns: 1fr; }
 .timeline .vc-head { flex-wrap: wrap; row-gap: 2px; }
+/* 帯：段数は画面が決めた列の数で決まる（列＝来局の数 ÷ 段数）。左が新しい。入りきらない古い来局は帯ごと横に送る */
+.timeline.band { overflow-x: auto; padding-bottom: 4px; }
 
 /* 配置を変えている間：格子を見せ、見出しで動かし右下の角で大きさを変える */
 .pt-grid.editing {
@@ -81,23 +88,15 @@
 .pt-grid.editing .pbox { outline: 2px dashed var(--accent-line); outline-offset: -1px; }
 .pt-grid.editing .pbox-head { cursor: move; background: var(--accent-soft); color: var(--accent-strong); }
 .pt-grid.editing .pbox-body { pointer-events: none; opacity: .75; }
-.pt-grid.editing .pbox-head .btn, .pt-grid.editing .pbox-head [role="tab"] { pointer-events: none; }
+.pt-grid.editing .pbox-head .btn, .pt-grid.editing .pbox-head .seg { pointer-events: none; }
 .pbox-resize { display: none; }
 .pt-grid.editing .pbox-resize {
   display: block; position: absolute; right: 0; bottom: 0; width: 22px; height: 22px; cursor: nwse-resize; touch-action: none;
   background: linear-gradient(135deg, transparent 50%, var(--accent) 50%); border-radius: 0 0 var(--radius) 0;
 }
-.pbox.dragging { z-index: 5; box-shadow: 0 6px 20px rgba(0, 0, 0, .18); }
-.pbox.blocked { outline-color: var(--danger) !important; background: var(--danger-soft); }
+.pbox.dragging { z-index: 5; opacity: .7; box-shadow: 0 6px 20px rgba(0, 0, 0, .18); }
 
 /* ---------- 中央：経過・処方の推移 ---------- */
-.tabs { display: flex; gap: 2px; }
-.tabs [role="tab"] {
-  border: 0; background: transparent; padding: 0 16px; font-weight: 700; color: var(--sub); cursor: pointer;
-  border-bottom: 3px solid transparent; margin-bottom: -1px;
-}
-.tabs [role="tab"][aria-selected="true"] { color: var(--accent-strong); border-bottom-color: var(--accent); background: #fff; }
-.tabs [role="tab"]:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 
 .visit-card { border: 1px solid var(--border-strong); border-radius: var(--radius); background: #fff; scroll-margin: 12px; }
 .visit-card[aria-selected="true"] { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-line); }
@@ -149,7 +148,7 @@
 .rp-foot { display: flex; justify-content: flex-end; gap: 6px; padding: 5px 10px; background: #fbfcfc; font-size: 13px; }
 
 /* 処方の推移：薬 × 来局日。始まり・変更・中止に色を付け、続いているだけの所は控えめにする */
-.matrix-view { display: grid; gap: 8px; align-content: start; }
+.matrix-view { display: grid; gap: 8px; align-content: start; overflow-x: auto; } /* 表は来局が多いと横に長くなる。そのときだけ横に送る（縦には伸びる） */
 .matrix { border-collapse: separate; border-spacing: 0; background: #fff; }
 .matrix th, .matrix td { border-bottom: 1px solid var(--border); border-right: 1px solid var(--border); padding: 5px 8px; white-space: nowrap; }
 .matrix thead th { position: sticky; top: 0; z-index: 2; background: var(--head); font-size: 12px; color: var(--sub); text-align: center; }
@@ -208,4 +207,4 @@ dialog.wide { width: 780px; }
 .fee-lines td { padding: 3px 6px; border-bottom: 1px solid var(--border); }
 .fee-lines td:first-child { color: var(--sub); white-space: nowrap; }
 /* 選んだ来局は処方と指導記録を横に並べるので、2枚ぶんの幅にする（縦に長くならないように） */
-.timeline .visit-card[aria-selected="true"] { grid-column: span 2; }
+.timeline:not(.band) .visit-card[aria-selected="true"] { grid-column: span 2; }

@@ -41,17 +41,22 @@
       <div class="pbox-head">検査値・体重<span class="spacer"></span><button type="button" class="btn btn-small" id="add-lab">入力 <kbd>Alt+L</kbd></button></div>
       <div class="pbox-body" id="labs"></div>
     </section>
+    <section class="pbox" data-box="matrix">
+      <div class="pbox-head">処方の推移<span class="sub">薬 × 来局日（右が最新）</span></div>
+      <div class="pbox-body matrix-view" id="matrix-view"></div>
+    </section>
     <section class="pbox" data-box="history" id="history">
-      <div class="pbox-head history-head">
-        <div class="tabs" role="tablist" aria-label="薬歴の表示">
-          <button type="button" role="tab" id="tab-timeline" aria-controls="timeline" aria-selected="true">経過</button>
-          <button type="button" role="tab" id="tab-matrix" aria-controls="matrix-view" aria-selected="false" tabindex="-1">処方の推移</button>
+      <div class="pbox-head">経過<span class="count" id="visit-count"></span><span class="spacer"></span>
+        <span class="shape-label" id="shape-label">並べ方</span>
+        <div class="seg" role="radiogroup" aria-labelledby="shape-label" id="history-shape">
+          <button type="button" role="radio" data-rows="0" title="横に並べ、入りきらなければ次の行へ">折り返し</button>
+          <button type="button" role="radio" data-rows="1" title="1段の帯。左が新しい、右が古い">1段</button>
+          <button type="button" role="radio" data-rows="2" title="2段の帯。左が新しい、右が古い">2段</button>
+          <button type="button" role="radio" data-rows="3" title="3段の帯。左が新しい、右が古い">3段</button>
         </div>
-        <span class="count" id="visit-count"></span>
       </div>
       <div class="pbox-body history-body">
-        <div class="timeline" id="timeline" role="tabpanel" aria-labelledby="tab-timeline" tabindex="0"></div>
-        <div class="matrix-view" id="matrix-view" role="tabpanel" aria-labelledby="tab-matrix" hidden></div>
+        <div class="timeline" id="timeline" tabindex="0" aria-label="経過（上下の矢印で来局を選ぶ）"></div>
       </div>
     </section>
   </main>

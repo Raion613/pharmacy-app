@@ -1,8 +1,8 @@
 // 薬歴：再来局した患者を開いたときに、この人について知っておくべきことを1画面で見渡す。
 //   箱：患者・注意点（アレルギー歴・副作用歴・疾患・併用薬）・次に確認すること（前回の P・申し送り）・今の処方・生活・検査値
-//   箱「経過」：全来局を新しい順に、横に並べて入りきらなければ次の行へ。処方の変化と指導記録を開かずに読める。選んだ来局だけ処方の中身と操作を出す
-//   箱「経過」のタブ「処方の推移」：薬 × 来局日の表。いつ始まり・変わり・止まったか
-//   箱の置き場所と大きさは「配置を変える」で利用者ごとに変えられる（layout-grid.js）
+//   箱「処方の推移」：薬 × 来局日の表。いつ始まり・変わり・止まったか
+//   箱「経過」：全来局を新しい順に。並べ方は「折り返し」か「1〜3段の帯（左が新しい）」を選べる。選んだ来局だけ処方の中身と操作を出す
+//   箱の並び順と大きさは「配置を変える」で利用者ごとに変えられる（layout-grid.js）
 //   指導記録を書く画面の右側：服薬指導の会話の録音と文字起こし、会話から拾った患者メモの候補、指導内容の提案、
 //   つながる薬局で届いたメッセージ。左の S・O・A・P には、下書き（会話と処方から組み立てた文）とテンプレートを写せる
 import {
@@ -43,21 +43,26 @@ const nextEl = document.querySelector("#next");
 const medsEl = document.querySelector("#current-meds");
 const otherEl = document.querySelector("#other");
 const labsEl = document.querySelector("#labs");
-// 初期の配置（12列。段の高さは中身で決まる）。上の2段に要点、3段目に経過を全幅で
+// 初期の配置。並び順に左上から詰める（12列）。上の2段に要点、その下に処方の推移、いちばん下に経過
 const layout = setupLayout({
   grid: document.querySelector("#pt-grid"),
   page: "patient",
   editButton: document.querySelector("#layout-edit"),
   resetButton: document.querySelector("#layout-reset"),
   defaults: {
-    patient: { c: 1, r: 1, w: 2, h: 1 },
-    labs: { c: 1, r: 2, w: 2, h: 1 },
-    cautions: { c: 3, r: 1, w: 4, h: 2 },
-    next: { c: 7, r: 1, w: 3, h: 1 },
-    other: { c: 7, r: 2, w: 3, h: 1 },
-    meds: { c: 10, r: 1, w: 3, h: 2 },
-    history: { c: 1, r: 3, w: 12, h: 1 },
+    boxes: [
+      { id: "patient", w: 2, h: 1 },
+      { id: "cautions", w: 4, h: 2 },
+      { id: "next", w: 3, h: 1 },
+      { id: "meds", w: 3, h: 2 },
+      { id: "labs", w: 2, h: 1 },
+      { id: "other", w: 3, h: 1 },
+      { id: "matrix", w: 12, h: 1 },
+      { id: "history", w: 12, h: 1 },
+    ],
+    options: { historyRows: 0 },
   },
+  onOptions: (options) => applyShape(options.historyRows),
 });
 const timeline = document.querySelector("#timeline");
 const matrixView = document.querySelector("#matrix-view");
@@ -338,7 +343,7 @@ function select(i, scroll = true) {
 timeline.addEventListener("keydown", (e) => {
   if (prescriptions.length === 0 || e.target !== timeline) return;
   const last = prescriptions.length - 1;
-  const next = { ArrowDown: selectedIndex + 1, ArrowUp: selectedIndex - 1, Home: 0, End: last }[e.key];
+  const next = { ArrowDown: selectedIndex + 1, ArrowRight: selectedIndex + 1, ArrowUp: selectedIndex - 1, ArrowLeft: selectedIndex - 1, Home: 0, End: last }[e.key];
   if (next === undefined) return;
   e.preventDefault();
   select(Math.max(0, Math.min(last, next)));
@@ -372,28 +377,15 @@ function renderMatrix() {
     <div><table class="matrix"><thead><tr><th>薬</th>${head}</tr></thead><tbody>${body}</tbody></table></div>`;
 }
 
-// ---------- タブ ----------
-
-const tabs = [document.querySelector("#tab-timeline"), document.querySelector("#tab-matrix")];
-function showTab(tab) {
-  for (const t of tabs) {
-    const on = t === tab;
-    t.setAttribute("aria-selected", String(on));
-    t.tabIndex = on ? 0 : -1;
-    document.getElementById(t.getAttribute("aria-controls")).hidden = !on;
-  }
-  if (tab.id === "tab-matrix") matrixView.parentElement.scrollLeft = matrixView.parentElement.scrollWidth; // 最新の来局が見えるように
+// ---------- 経過の並べ方 ----------
+// 0＝折り返し（横に並べ、入りきらなければ次の行へ）。1〜3＝その段数の帯（左が新しい、右が古い。入りきらない古い来局は帯を横に送る）
+const shapeButtons = [...document.querySelectorAll("#history-shape [data-rows]")];
+function applyShape(rows) {
+  timeline.classList.toggle("band", rows > 0);
+  timeline.style.gridTemplateColumns = rows > 0 ? `repeat(${Math.max(1, Math.ceil(prescriptions.length / rows))}, 340px)` : "";
+  for (const b of shapeButtons) b.setAttribute("aria-checked", String(Number(b.dataset.rows) === rows));
 }
-for (const t of tabs) {
-  t.addEventListener("click", () => showTab(t));
-  t.addEventListener("keydown", (e) => {
-    if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
-    e.preventDefault();
-    const other = tabs[(tabs.indexOf(t) + 1) % 2];
-    showTab(other);
-    other.focus();
-  });
-}
+for (const b of shapeButtons) b.addEventListener("click", () => layout.setOption("historyRows", Number(b.dataset.rows)));
 
 // ---------- 患者メモの追加 ----------
 
@@ -845,7 +837,7 @@ renderBand();
 renderSummary();
 renderTimeline();
 renderMatrix();
-showTab(tabs[0]);
+matrixView.scrollLeft = matrixView.scrollWidth; // 推移は右が最新。来局が多くて入りきらないときは最新の側を見せる
 if (prescriptions.length > 0) {
   const savedIndex = prescriptions.findIndex((rx) => rx.id === savedId);
   select(savedIndex >= 0 ? savedIndex : 0);
@@ -860,6 +852,7 @@ setTour("patient", [
     body: `<p>来局した患者を開くと、最初にこの画面が出ます。箱に分けて並べています。</p>
       <div class="tour-map">
         <div><b>上</b>患者・注意点・次に確認すること・今の処方・生活・検査値</div>
+        <div><b>中</b>処方の推移（薬 × 来局日）</div>
         <div><b>下</b>来局ごとの経過（処方の変化・指導記録）</div>
         <div><b>左下</b>配置を変える（箱を動かす・大きさを変える）</div>
         <div><b>右下</b>次の操作（指導記録・Do・新規処方）</div>
@@ -890,12 +883,12 @@ setTour("patient", [
     target: ".visit-card",
     optional: true,
     title: "経過：来局ごとのカード",
-    body: `<p>新しい来局から順に左から並べ、入りきらなければ次の行へ続けます。開かなくても中身が読めます。</p>
+    body: `<p>新しい来局から順に左から並べます。見出しの<strong>並べ方</strong>で「折り返し」（入りきらなければ次の行へ）か「1〜3段の帯」（左が新しい、右が古い）を選べます。開かなくても中身が読めます。</p>
       <ul>
         <li><b>処方の変化</b>：前回と比べて <span class="change add"><b>＋追加</b></span> <span class="change stop"><b>−中止</b></span> <span class="change mod"><b>変更</b></span></li>
         <li><b>指導記録</b>：S 会話・訴え、O 服薬状況や検査値、A 薬剤師の所見、<strong>P 次回の留意点</strong></li>
       </ul>
-      <p><kbd>↑</kbd><kbd>↓</kbd> で来局を選ぶと、その来局だけ処方の中身と、領収証・お薬手帳などのボタンが出ます。見出しの<strong>薬剤料</strong>は、その日の薬の値段を点数にしたもの（1点＝10円）です。</p>`,
+      <p><kbd>↑</kbd><kbd>↓</kbd>（帯では <kbd>←</kbd><kbd>→</kbd> も）で来局を選ぶと、その来局だけ処方の中身と、領収証・お薬手帳などのボタンが出ます。見出しの<strong>薬剤料</strong>は、その日の薬の値段を点数にしたもの（1点＝10円）です。</p>`,
   },
   {
     target: () => document.querySelector(".no-record") ?? document.querySelector(".vc-records"),
@@ -912,15 +905,15 @@ setTour("patient", [
       <p><strong>「下書きを作る」</strong>（<kbd>Alt</kbd>+<kbd>G</kbd>）で、会話・処方の変化・検査値・提案から S・O・A・P をまとめて組み立てます。テンプレートも写せます。</p>`,
   },
   {
-    target: "#tab-matrix",
+    target: "[data-box=matrix]",
     title: "処方の推移",
-    body: `<p>薬 × 来局日の表に切り替えます。どの薬が<strong>いつ始まり、いつ変わり、いつ止まったか</strong>が一目で分かります。</p>`,
+    body: `<p>薬 × 来局日の表です。どの薬が<strong>いつ始まり、いつ変わり、いつ止まったか</strong>が一目で分かります。</p>`,
   },
   {
     target: "#layout-edit",
     placement: "top",
     title: "配置を変える",
-    body: `<p>押すと箱の見出しを引っぱって動かせ、右下の角を引っぱって大きさを変えられます。「完了」で保存し、次からもその配置で開きます（利用者ごと）。</p>
+    body: `<p>押すと箱の見出しを引っぱって動かせます。ほかの箱の上へ持っていくと、そこに割り込み、後ろの箱は右へ、入らなければ次の段へ押し出されます。右下の角を引っぱると幅と高さ（段）が変わります。「完了」で保存し、次からもその配置で開きます（利用者ごと）。</p>
       <p>箱の高さは中身に合わせて伸びます。幅を広げると、長い注意点や処方が少ない行数で収まります。</p>`,
   },
   {

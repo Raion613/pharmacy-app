@@ -80,13 +80,9 @@ assert.match(await text("#current-meds"), /ノルバスク錠５ｍｇ[\s\S]*202
 assert.match(await text('[data-category="handover"]'), /家庭血圧の手帳を毎回持参/);
 
 step("薬歴：処方の推移（薬 × 来局日）");
-await page.click("#tab-matrix");
-assert.equal(await page.locator("#timeline").isHidden(), true);
 const cells = (code) => page.locator(`.matrix tr[data-code="${code}"] td`).evaluateAll((tds) => tds.map((td) => td.className || "-"));
 assert.deepEqual(await cells("620000094"), ["start", "on", "on", "stop"]);  // ビオフェルミン：5/14 に中止
 assert.deepEqual(await cells("622098501"), ["-", "-", "start", "on"]);     // アトルバスタチン：4/16 に追加
-await page.keyboard.press("ArrowLeft");
-assert.equal(await page.locator("#timeline").isVisible(), true);
 await page.locator("#timeline").focus();
 
 // 3-2. Alt+K で、選んでいる来局（3/19）の指導記録を書く。空のままだと保存できない
@@ -623,29 +619,45 @@ for (const [url, ready, firstTarget] of [
 }
 
 // ---------- 薬歴の配置を変える ----------
-step("薬歴：配置を変える（右下の角で箱を1段に縮めて保存 → 開き直しても同じ → 初期の配置に戻す）。箱の中はスクロールしない");
+step("薬歴：配置を変える（ほかの箱の上へ動かすと割り込んで押し出す・角で幅を変える・保存 → 開き直しても同じ・初期に戻す）。経過の並べ方");
 await page.goto(`${BASE}/patient?id=1`);
 await page.waitForSelector(selectedCard);
-// どの箱も中身が切れていない（箱の中でスクロールさせない）
+// どの箱も中身が切れていない（箱の中で縦にスクロールさせない）
 assert.equal(await page.evaluate(() => [...document.querySelectorAll(".pbox")].every((b) => b.scrollHeight <= b.clientHeight + 1)), true);
-const medsRow = () => page.locator('[data-box="meds"]').evaluate((el) => el.style.gridRow);
-assert.equal(await medsRow(), "1 / span 2");
+const order = () => page.evaluate(() => [...document.querySelectorAll("[data-box]")].sort((a, b) => a.style.order - b.style.order).map((el) => el.dataset.box));
+assert.deepEqual(await order(), ["patient", "cautions", "next", "meds", "labs", "other", "matrix", "history"]);
 await page.click("#layout-edit");
-const handle = await page.locator('[data-box="meds"] .pbox-resize').boundingBox();
-const row1 = await page.locator('[data-box="next"]').boundingBox(); // 1段目だけの箱
+// 「今の処方」の見出しを「患者」の左半分へ → 先頭に割り込み、患者以降が後ろへ押し出される
+const medsHead = await page.locator('[data-box="meds"] .pbox-head').boundingBox();
+const patientBox = await page.locator('[data-box="patient"]').boundingBox();
+await page.mouse.move(medsHead.x + 20, medsHead.y + medsHead.height / 2);
+await page.mouse.down();
+await page.mouse.move(patientBox.x + 10, patientBox.y + patientBox.height / 2, { steps: 8 });
+await page.mouse.up();
+assert.deepEqual(await order(), ["meds", "patient", "cautions", "next", "labs", "other", "matrix", "history"]);
+// 右下の角で「患者」を3列に広げる
+const handle = await page.locator('[data-box="patient"] .pbox-resize').boundingBox();
+const colWidth = (await page.locator("#pt-grid").boundingBox()).width / 12;
 await page.mouse.move(handle.x + 11, handle.y + 11);
 await page.mouse.down();
-await page.mouse.move(handle.x + 11, row1.y + row1.height / 2, { steps: 6 }); // 1段目まで引き上げる
+await page.mouse.move(handle.x + 11 + colWidth, handle.y + 11, { steps: 6 });
 await page.mouse.up();
-assert.equal(await medsRow(), "1 / span 1");
+assert.equal(await page.locator('[data-box="patient"]').evaluate((el) => el.style.gridColumn), "span 3");
 await page.click("#layout-edit"); // 完了で保存
 await page.waitForFunction(() => document.querySelector(".toasts")?.textContent.includes("配置を保存しました"));
+// 経過の並べ方：2段の帯（列の数 ＝ 来局の数 ÷ 2 の切り上げ）
+await page.click('#history-shape [data-rows="2"]');
+const visits = await page.locator("#timeline .visit-card").count();
+assert.equal(await page.locator("#timeline").evaluate((el) => el.classList.contains("band") && el.style.gridTemplateColumns), `repeat(${Math.ceil(visits / 2)}, 340px)`);
 await page.reload();
 await page.waitForSelector(selectedCard);
-await page.waitForFunction(() => document.querySelector('[data-box="meds"]').style.gridRow === "1 / span 1");
+await page.waitForFunction(() => document.querySelector('[data-box="meds"]').style.order === "0");
+assert.equal(await page.locator('[data-box="patient"]').evaluate((el) => el.style.gridColumn), "span 3");
+assert.equal(await page.getAttribute('#history-shape [data-rows="2"]', "aria-checked"), "true");
 await page.click("#layout-edit");
 await page.click("#layout-reset");
-await page.waitForFunction(() => document.querySelector('[data-box="meds"]').style.gridRow === "1 / span 2");
+await page.waitForFunction(() => document.querySelector('[data-box="patient"]').style.order === "0");
+assert.equal(await page.getAttribute('#history-shape [data-rows="0"]', "aria-checked"), "true");
 
 // ---------- 多要素認証（最後に。終わったら無効に戻す） ----------
 step("多要素認証：設定 → ログインで6桁を求める → 無効にする");

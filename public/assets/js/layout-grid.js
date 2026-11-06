@@ -1,98 +1,119 @@
-// 箱を並べる画面の仕組み。横は 12列、縦は段（行）に分け、箱（data-box を付けた要素）を「何列目から何列ぶん・何段目から何段ぶん」で置く。
-//   - 箱の高さは中身で決まる（段の高さは、その段でいちばん背の高い箱に合う）。箱の中ではスクロールさせない。
-//     画面に入りきらないときは、箱を並べた領域全体が1本のスクロールで動く
-//   - 文字の大きさは変えない（ほかの画面と同じ）
-//   - 「配置を変える」を押すと編集になり、箱の見出しを引っぱると動き、右下の角を引っぱると幅と段数が変わる（指でもマウスでも）
+// 箱を並べる画面の仕組み。iPhone のホーム画面と同じ考え方で、箱は「並び順」と「大きさ（何列ぶん・何段ぶん）」だけを持つ。
+// 置き場所は、並び順に左上から詰めて決まる（横は12列。右に入らなければ次の段の左から）。これは CSS グリッドの自動配置そのもので、
+// 箱に order（並び順）と span（大きさ）を付けるだけで、ブラウザが重ならないように並べる。
+//   - 「配置を変える」で編集になる。箱の見出しを引っぱってほかの箱の上へ持っていくと、その位置に割り込み、後ろの箱が押し出される
+//   - 右下の角を引っぱると幅（列）と高さ（段）が変わり、まわりの箱が詰め直される
+//   - 箱の高さは中身で決まる。箱の中ではスクロールさせない（入りきらないときは並べた領域全体が1本のスクロールで動く）
 //   - 「完了」で利用者ごとにサーバーへ保存する。「初期の配置」で画面が決めた配置に戻す
+//   - 画面ごとの表示の選び方（options）も一緒に保存する。setOption は押した時点で保存する
 import { api, toast } from "./app.js";
 
 const COLS = 12;
-const ROWS = 12; // 段の数の上限
-const MIN = { w: 2, h: 1 };
+const ROWS = 12; // 1つの箱がまたげる段の上限
 
-export function setupLayout({ grid, page, defaults, editButton, resetButton }) {
-  const boxes = new Map([...grid.querySelectorAll("[data-box]")].map((el) => [el.dataset.box, el]));
-  let pos = structuredClone(defaults);
+export function setupLayout({ grid, page, defaults, editButton, resetButton, onOptions }) {
+  const els = new Map([...grid.querySelectorAll("[data-box]")].map((el) => [el.dataset.box, el]));
+  let state = structuredClone(defaults);
   let editing = false;
 
-  const place = (el, p) => {
-    el.style.gridColumn = `${p.c} / span ${p.w}`;
-    el.style.gridRow = `${p.r} / span ${p.h}`;
-  };
   const apply = () => {
-    for (const [id, el] of boxes) place(el, pos[id]);
+    state.boxes.forEach((b, i) => {
+      const el = els.get(b.id);
+      el.style.order = String(i);
+      el.style.gridColumn = `span ${b.w}`;
+      el.style.gridRow = `span ${b.h}`;
+    });
   };
+  const save = () => api(`/api/layouts/${page}`, { method: "PUT", body: { layout: state } });
 
-  const overlaps = (id, p) => [...boxes.keys()].some((other) => {
-    if (other === id) return false;
-    const q = pos[other];
-    return p.c < q.c + q.w && q.c < p.c + p.w && p.r < q.r + q.h && q.r < p.r + p.h;
-  });
-
-  // 画面上の座標 → 列・段（1から）。列は等分、段は高さがまちまちなので、実際の段の高さ（計算済みの値）で数える
-  function cellAt(x, y) {
-    const rect = grid.getBoundingClientRect();
+  // 段の境目（画面上の y 座標）。段の高さはまちまちなので、計算済みの段の高さから求める
+  function rowTops() {
     const style = getComputedStyle(grid);
-    const left = rect.left + parseFloat(style.paddingLeft);
-    const width = rect.width - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
-    const c = Math.floor(((x - left) / width) * COLS) + 1;
     const gap = parseFloat(style.rowGap);
-    const tracks = style.gridTemplateRows.split(" ").map(parseFloat);
-    let top = rect.top + parseFloat(style.paddingTop) - grid.scrollTop;
-    let r = tracks.length + 1; // いちばん下の段より下なら、新しい段
-    for (let i = 0; i < tracks.length; i++) {
-      if (y < top + tracks[i] + gap / 2) {
-        r = i + 1;
-        break;
+    let top = grid.getBoundingClientRect().top + parseFloat(style.paddingTop) - grid.scrollTop;
+    return style.gridTemplateRows.split(" ").map(parseFloat).map((h) => {
+      const t = top;
+      top += h + gap;
+      return t;
+    });
+  }
+  const rowAt = (tops, y) => tops.filter((t) => t <= y + 1).length; // y がある段（1から）
+
+  // 見出しを引っぱる：指の下にある箱の前（左半分）か後ろ（右半分）に割り込む
+  function dragMove(e, id) {
+    const dragged = els.get(id);
+    dragged.classList.add("dragging");
+    dragged.setPointerCapture(e.pointerId);
+    const move = (ev) => {
+      const target = [...els.entries()].find(([other, el]) => {
+        if (other === id) return false;
+        const r = el.getBoundingClientRect();
+        return ev.clientX >= r.left && ev.clientX <= r.right && ev.clientY >= r.top && ev.clientY <= r.bottom;
+      });
+      if (!target) return;
+      const r = target[1].getBoundingClientRect();
+      const after = ev.clientX > r.left + r.width / 2;
+      const moving = state.boxes.find((b) => b.id === id);
+      const rest = state.boxes.filter((b) => b.id !== id);
+      const at = rest.findIndex((b) => b.id === target[0]) + (after ? 1 : 0);
+      rest.splice(at, 0, moving);
+      if (rest.some((b, i) => b !== state.boxes[i])) {
+        state.boxes = rest;
+        apply();
       }
-      top += tracks[i] + gap;
-    }
-    return { c: Math.max(1, Math.min(COLS, c)), r: Math.max(1, Math.min(ROWS, r)) };
+    };
+    const end = () => {
+      dragged.removeEventListener("pointermove", move);
+      dragged.classList.remove("dragging");
+    };
+    dragged.addEventListener("pointermove", move);
+    dragged.addEventListener("pointerup", end, { once: true });
+    dragged.addEventListener("pointercancel", end, { once: true });
   }
 
-  function startDrag(e, id, mode) {
-    if (!editing) return;
-    e.preventDefault();
-    const el = boxes.get(id);
-    const before = { ...pos[id] };
-    const start = cellAt(e.clientX, e.clientY);
-    const offset = { c: start.c - before.c, r: start.r - before.r };
+  // 右下の角を引っぱる：指の位置までの列数・段数にする
+  function dragResize(e, id) {
+    const el = els.get(id);
+    const box = state.boxes.find((b) => b.id === id);
     el.classList.add("dragging");
     el.setPointerCapture(e.pointerId);
+    const style = getComputedStyle(grid);
+    const colWidth = (grid.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight) + parseFloat(style.columnGap)) / COLS;
     const move = (ev) => {
-      const at = cellAt(ev.clientX, ev.clientY);
-      const p = { ...before };
-      if (mode === "move") {
-        p.c = Math.max(1, Math.min(COLS - p.w + 1, at.c - offset.c));
-        p.r = Math.max(1, Math.min(ROWS - p.h + 1, at.r - offset.r));
-      } else {
-        p.w = Math.max(MIN.w, Math.min(COLS - p.c + 1, at.c - p.c + 1));
-        p.h = Math.max(MIN.h, Math.min(ROWS - p.r + 1, at.r - p.r + 1));
+      const rect = el.getBoundingClientRect();
+      const tops = rowTops();
+      const w = Math.max(2, Math.min(COLS, Math.round((ev.clientX - rect.left) / colWidth)));
+      const h = Math.max(1, Math.min(ROWS, rowAt(tops, ev.clientY) - rowAt(tops, rect.top) + 1));
+      if (w !== box.w || h !== box.h) {
+        box.w = w;
+        box.h = h;
+        apply();
       }
-      pos[id] = p;
-      el.classList.toggle("blocked", overlaps(id, p));
-      place(el, p);
     };
     const end = () => {
       el.removeEventListener("pointermove", move);
-      el.classList.remove("dragging", "blocked");
-      if (overlaps(id, pos[id])) {
-        pos[id] = before;
-        toast("ほかの箱と重なる所には置けません", "error");
-      }
-      apply();
+      el.classList.remove("dragging");
     };
     el.addEventListener("pointermove", move);
     el.addEventListener("pointerup", end, { once: true });
     el.addEventListener("pointercancel", end, { once: true });
   }
 
-  for (const [id, el] of boxes) {
-    el.querySelector(".pbox-head").addEventListener("pointerdown", (e) => startDrag(e, id, "move"));
+  for (const [id, el] of els) {
+    el.querySelector(".pbox-head").addEventListener("pointerdown", (e) => {
+      if (!editing) return;
+      e.preventDefault();
+      dragMove(e, id);
+    });
     const handle = document.createElement("span");
     handle.className = "pbox-resize";
-    handle.title = "引っぱって幅と段数を変える";
-    handle.addEventListener("pointerdown", (e) => startDrag(e, id, "resize"));
+    handle.title = "引っぱって幅と高さ（段）を変える";
+    handle.addEventListener("pointerdown", (e) => {
+      if (!editing) return;
+      e.preventDefault();
+      e.stopPropagation();
+      dragResize(e, id);
+    });
     el.append(handle);
   }
 
@@ -107,27 +128,34 @@ export function setupLayout({ grid, page, defaults, editButton, resetButton }) {
   editButton.addEventListener("click", async () => {
     if (!editing) return setEditing(true);
     setEditing(false);
-    await api(`/api/layouts/${page}`, { method: "PUT", body: { layout: pos } });
+    await save();
     toast("配置を保存しました");
   });
   resetButton.addEventListener("click", async () => {
-    pos = structuredClone(defaults);
+    state = structuredClone(defaults);
     apply();
+    onOptions(state.options);
     setEditing(false);
     await api(`/api/layouts/${page}`, { method: "DELETE", body: {} });
     toast("初期の配置に戻しました");
   });
 
   return {
-    // 保存した配置を読む。画面の箱が増減していても、知らない箱は捨て、無い箱は初期の配置を使う
+    // 保存した配置を読む。画面の箱が増減していても、知らない箱は捨て、保存に無い箱は最後に初期の大きさで足す
     async load() {
       const { layout } = await api(`/api/layouts/${page}`);
       if (layout) {
-        const merged = structuredClone(defaults);
-        for (const id of Object.keys(defaults)) if (layout[id]) merged[id] = layout[id];
-        pos = merged;
+        const known = layout.boxes.filter((b) => els.has(b.id));
+        const missing = defaults.boxes.filter((d) => !known.some((b) => b.id === d.id));
+        state = { boxes: [...known, ...structuredClone(missing)], options: { ...defaults.options, ...layout.options } };
       }
       apply();
+      onOptions(state.options);
+    },
+    async setOption(name, value) {
+      state.options[name] = value;
+      onOptions(state.options);
+      await save();
     },
   };
 }

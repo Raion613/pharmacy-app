@@ -569,7 +569,7 @@ CREATE INDEX idx_access_logs_at ON access_logs(at);
 CREATE INDEX idx_access_logs_patient ON access_logs(patient_id, at);
 
 -- 画面の箱の配置（利用者ごと・画面ごと）。薬局のタブレットは何人かで使い回すので、端末ではなく利用者に持たせる。
--- layout は {箱の名前: {c: 列, r: 行, w: 幅, h: 高さ}} の JSON。無ければ画面の初期の配置
+-- layout は { boxes: [{ id: 箱の名前, w: 列の数, h: 段の数 }, …（並び順）], options: { 表示の選び方 } } の JSON。無ければ画面の初期の配置
 CREATE TABLE user_layouts (
   user_id    INTEGER NOT NULL REFERENCES users(id),
   page       TEXT NOT NULL,

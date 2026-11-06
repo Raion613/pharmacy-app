@@ -1,9 +1,12 @@
-// 画面の箱の配置（利用者ごと）。画面は 12列 × 12行 の格子で、箱はその上の長方形（列・行・幅・高さ）。
+// 画面の箱の配置（利用者ごと）。iPhone のホーム画面と同じく、箱は「並び順」と「大きさ（何列ぶん・何段ぶん）」だけを持ち、
+// 置き場所は並び順に左上から詰めて決まる（横は12列）。画面ごとの表示の選び方（経過を何段の帯にするか等）も一緒に持つ。
 // 箱の名前と初期の配置は画面側（public/assets/js/layout-grid.js を使う各画面）が持つ。ここでは形だけを確かめて保存する
+//   layout = { boxes: [{ id, w, h }, …], options: { 名前: 整数, … } }
 import { HttpError, nowIso } from "./http.js";
 
 export const GRID = { cols: 12, rows: 12 };
 const PAGES = new Set(["patient"]);
+const OPTIONS = { historyRows: [0, 1, 2, 3] }; // 経過の並べ方：0＝折り返し、1〜3＝その段数の帯
 
 function checkPage(page) {
   if (!PAGES.has(page)) throw new HttpError(404, "画面が見つかりません");
@@ -11,16 +14,20 @@ function checkPage(page) {
 
 export function validateLayout(layout) {
   const bad = () => new HttpError(422, "配置が不正です");
-  if (typeof layout !== "object" || layout === null || Array.isArray(layout)) throw bad();
-  const entries = Object.entries(layout);
-  if (entries.length === 0 || entries.length > 20) throw bad();
-  for (const [id, b] of entries) {
-    if (!/^[a-z]{1,20}$/.test(id)) throw bad();
-    const { c, r, w, h } = b ?? {};
-    if (![c, r, w, h].every(Number.isInteger)) throw bad();
-    if (c < 1 || r < 1 || w < 1 || h < 1 || c + w - 1 > GRID.cols || r + h - 1 > GRID.rows) throw bad();
+  if (typeof layout !== "object" || layout === null || !Array.isArray(layout.boxes)) throw bad();
+  const { boxes, options = {} } = layout;
+  if (boxes.length === 0 || boxes.length > 20) throw bad();
+  const ids = new Set();
+  for (const b of boxes) {
+    if (typeof b !== "object" || b === null || !/^[a-z]{1,20}$/.test(b.id) || ids.has(b.id)) throw bad();
+    ids.add(b.id);
+    if (!Number.isInteger(b.w) || !Number.isInteger(b.h) || b.w < 1 || b.w > GRID.cols || b.h < 1 || b.h > GRID.rows) throw bad();
   }
-  return Object.fromEntries(entries.map(([id, b]) => [id, { c: b.c, r: b.r, w: b.w, h: b.h }]));
+  if (typeof options !== "object" || options === null) throw bad();
+  for (const [k, v] of Object.entries(options)) {
+    if (!OPTIONS[k]?.includes(v)) throw bad();
+  }
+  return { boxes: boxes.map((b) => ({ id: b.id, w: b.w, h: b.h })), options: { ...options } };
 }
 
 export async function getLayout(db, user, page) {
