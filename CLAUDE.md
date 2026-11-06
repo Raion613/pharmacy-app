@@ -39,6 +39,7 @@
 
 - [data/raw/master/](./data/raw/master/)：支払基金の医薬品マスター16ファイル（令和7年度版の最終の全件、令和8年度版の全件 3/5・3/19、改定分 4/14〜10/13、最新の全件 10/13）。公表順は [src/dev/load-master.js](./src/dev/load-master.js) の MASTER_FILES
 - 令和8年4月の改定前後が揃っているので、6週目の改定デモに使う。年度途中の変更（11月1日から等）・廃止・選定療養も入っている
+- **手元の DB を覗くときは `npm run db -- "SELECT ..."` だけを使う**（[scripts/local-db.js](./scripts/local-db.js)）。`.wrangler` の下の sqlite を自分で探して開かない（データの入ったファイルと miniflare の metadata.sqlite が並んでいて取り違える）
 - 出典：医療情報基盤・診療報酬審査支払機構（旧 支払基金）基本マスター 医薬品マスター（https://www.hpdx.or.jp/smph/seikyushiharai/tensuhyo/kihonmasta/kihonmasta_04.html ／ 令和7年度版 https://www.hpdx.or.jp/smph/seikyushiharai/tensuhyo/kihonmasta/r06/kihonmasta_04.html）
 - 仕様：レセプト電算処理システム マスターファイル仕様説明書 令和8年度版「医薬品マスター」（42項目、Shift_JIS）
 

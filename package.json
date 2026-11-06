@@ -6,6 +6,7 @@
   "scripts": {
     "test": "node --test",
     "dev": "wrangler pages dev public --port 8788",
+    "db": "node --no-warnings scripts/local-db.js",
     "db:init": "wrangler d1 execute pharmacy --local --file=db/schema.sql",
     "db:import": "node scripts/import-master.js && wrangler d1 execute pharmacy --local --file=db/generated/master.sql",
     "db:references": "node scripts/import-references.js && wrangler d1 execute pharmacy --local --file=db/generated/references.sql",
