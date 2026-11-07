@@ -224,3 +224,19 @@ test("多要素認証：設定 → ログインの2段目 → 同じ数字は2�
   assert.deepEqual(await mfaStatus(db, user), { enabled: false });
   assert.deepEqual((await actions()).filter((a) => a.startsWith("mfa")), ["mfa.enable", "mfa.disable"]);
 });
+
+test("監査：「（選）」のコードの処方は、対になる普通のコードの箱で合っているとする（箱は同じ物）", async () => {
+  db.exec(`
+    INSERT INTO drugs (code, yj_code, name, unit, generic, general_name, sentei, pair_code, narcotic, name_key, general_key, attrs_published_on) VALUES
+      ('612220508', '2233002Q1035', 'ムコダインシロップ５％', 'mL', 0, NULL, 1, NULL, 0, 'ムコダイン', '', '2026-03-19'),
+      ('672220508', '2233002Q1035', 'ムコダインシロップ５％（選）', 'mL', 0, NULL, 2, '612220508', 0, 'ムコダイン', '', '2026-03-19');
+    INSERT INTO drug_packages VALUES ('14987060003734', '612220508', '1', '調剤用 500ＭＬ');
+    INSERT INTO prescriptions (id, patient_id, prescribed_on, dispensed_on, handbook, drug_points, total_points, burden_percent, copay_yen, created_at, created_by)
+      VALUES ('rx-s', 1, '2026-10-01', '2026-10-01', 'paper', 7, 7, 30, 20, '2026-10-01T01:00:00Z', 1);
+    INSERT INTO prescription_rps (id, prescription_id, rp_no, usage, rx_days, days, daily_yen, points_per_day, points) VALUES ('rp-s', 'rx-s', 1, '1日3回', 7, 7, '10.00', 1, 7);
+    INSERT INTO prescription_items (rp_id, line_no, drug_code, daily_qty_milli, price_sen) VALUES ('rp-s', 1, '672220508', 10800, 645);`);
+  const s = await scan(db, "rx-s", { raw: "(01)14987060003734(17)991231(10)L1" });
+  assert.deepEqual([s.result, s.drugCode], ["match", "672220508"]);
+  const saved = await saveInspection(db, user, "rx-s", { scans: ["(01)14987060003734(17)991231(10)L1"] });
+  assert.equal(saved.ng, 0);
+});

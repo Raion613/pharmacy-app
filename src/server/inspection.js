@@ -1,6 +1,8 @@
 // 調剤監査（ピッキングの照合）。処方の薬を棚から取り出したら、箱のバーコードを読んで、処方の薬と同じかを確かめる。
 // バーコードの商品コード（GTIN）→ 医薬品コード は、MEDIS の HOT コードマスターの販売包装単位コードで引く。
 // 処方の薬がすべて読めたら保存できる。合わなかった読み取り（取り違え・期限切れ・マスターに無い）も一緒に残す。
+// 長期収載品を患者の希望で出したときの「（選）」のコードは、医薬品マスター上の区分で、箱は普通のコードの薬と同じ物。
+// HOT コードマスターの包装は普通のコードにひも付いているので、「（選）」のコードの処方は、対になる普通のコード（drugs.pair_code）の箱で合っているとする。
 import { HttpError, nowIso, todayJst } from "./http.js";
 import { auditStatement } from "./audit.js";
 import { parseGs1, Gs1Error } from "../../public/assets/js/gs1.js";
@@ -8,7 +10,8 @@ import { parseGs1, Gs1Error } from "../../public/assets/js/gs1.js";
 const MAX_SCANS = 200;
 
 // バーコード1つを読み、処方と照らし合わせた結果を返す（保存はしない）
-export async function lookupScan(db, prescriptionCodes, raw, today = todayJst()) {
+//   prescriptionCodes：処方の医薬品コード、aliases：箱のコード → 処方のコード（「（選）」のコードの対になる普通のコード）
+export async function lookupScan(db, prescriptionCodes, raw, today = todayJst(), aliases = new Map()) {
   let code;
   try {
     code = parseGs1(raw);
@@ -19,14 +22,15 @@ export async function lookupScan(db, prescriptionCodes, raw, today = todayJst())
   const pkg = await db.prepare(
     `SELECT p.drug_code, p.package, d.name FROM drug_packages p LEFT JOIN drugs d ON d.code = p.drug_code WHERE p.gtin = ?1`,
   ).bind(code.gtin).first();
+  const drugCode = pkg ? aliases.get(pkg.drug_code) ?? pkg.drug_code : null;
   let result;
   if (!pkg) result = "unknown";
   else if (code.expiry !== null && code.expiry < today) result = "expired";
-  else if (!prescriptionCodes.includes(pkg.drug_code)) result = "wrong";
+  else if (!prescriptionCodes.includes(drugCode)) result = "wrong";
   else result = "match";
   return {
     gtin: code.gtin, expiry: code.expiry, lot: code.lot, result,
-    drugCode: pkg?.drug_code ?? null, drugName: pkg?.name ?? null, package: pkg?.package ?? null,
+    drugCode, drugName: pkg?.name ?? null, package: pkg?.package ?? null,
   };
 }
 
@@ -34,14 +38,16 @@ async function prescriptionCodesOf(db, prescriptionId) {
   const rx = await db.prepare("SELECT id, patient_id, reception_id, dispensed_on FROM prescriptions WHERE id = ?1").bind(prescriptionId).first();
   if (!rx) throw new HttpError(404, "処方が見つかりません");
   const { results } = await db.prepare(
-    `SELECT DISTINCT i.drug_code FROM prescription_items i JOIN prescription_rps r ON r.id = i.rp_id WHERE r.prescription_id = ?1`,
+    `SELECT DISTINCT i.drug_code, d.pair_code FROM prescription_items i JOIN prescription_rps r ON r.id = i.rp_id
+       JOIN drugs d ON d.code = i.drug_code WHERE r.prescription_id = ?1`,
   ).bind(prescriptionId).all();
-  return { rx, codes: results.map((r) => r.drug_code) };
+  const aliases = new Map(results.filter((r) => r.pair_code !== null).map((r) => [r.pair_code, r.drug_code]));
+  return { rx, codes: results.map((r) => r.drug_code), aliases };
 }
 
 export async function scan(db, prescriptionId, body) {
-  const { codes } = await prescriptionCodesOf(db, prescriptionId);
-  return lookupScan(db, codes, String(body.raw ?? ""));
+  const { codes, aliases } = await prescriptionCodesOf(db, prescriptionId);
+  return lookupScan(db, codes, String(body.raw ?? ""), todayJst(), aliases);
 }
 
 // body：{ scans: [raw, …] }。サーバーで読み直して照合し、処方の薬がすべて match になっていれば保存する
@@ -49,9 +55,9 @@ export async function saveInspection(db, user, prescriptionId, body) {
   if (!Array.isArray(body.scans) || body.scans.length === 0 || body.scans.length > MAX_SCANS) {
     throw new HttpError(422, "バーコードを読んでください");
   }
-  const { rx, codes } = await prescriptionCodesOf(db, prescriptionId);
+  const { rx, codes, aliases } = await prescriptionCodesOf(db, prescriptionId);
   const scans = [];
-  for (const raw of body.scans) scans.push(await lookupScan(db, codes, String(raw)));
+  for (const raw of body.scans) scans.push(await lookupScan(db, codes, String(raw), todayJst(), aliases));
   const matched = new Set(scans.filter((s) => s.result === "match").map((s) => s.drugCode));
   const missing = codes.filter((c) => !matched.has(c));
   if (missing.length > 0) {
