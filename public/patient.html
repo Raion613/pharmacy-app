@@ -103,18 +103,21 @@
         <button type="button" class="btn btn-small" id="note-add-row">＋ 行を足す</button>
         <span class="error-text" data-error="body"></span>
       </div>
-      <section class="note-history" id="note-history" hidden>
-        <h3>直す前の内容</h3>
-        <ul></ul>
-      </section>
     </div>
     <div class="dialog-foot">
       <button type="button" class="btn" data-close>キャンセル <kbd>Esc</kbd></button>
-      <button type="submit" class="btn btn-primary" id="note-submit">追加 <kbd>Ctrl+Enter</kbd></button>
+      <button type="submit" class="btn btn-primary">追加 <kbd>Ctrl+Enter</kbd></button>
     </div>
   </form>
 </dialog>
 
+<dialog id="note-pop" class="note-pop" aria-label="患者メモを直す">
+  <form id="note-pop-form" novalidate>
+    <input class="input" name="body" maxlength="300" autocomplete="off" aria-label="メモの内容">
+    <span class="error-text" data-error="body"></span>
+    <ul class="note-pop-history" aria-label="直す前の内容"></ul>
+  </form>
+</dialog>
 <dialog id="record-dialog" class="wide assist-dialog" aria-labelledby="record-dialog-title">
   <form id="record-form" novalidate>
     <div class="panel-head" id="record-dialog-title">指導記録を記載</div>

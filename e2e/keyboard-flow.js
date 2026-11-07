@@ -137,19 +137,21 @@ assert.match(await text("#cautions"), /アレルギー[\s\S]*ペニシリン系�
 assert.match(await text('[data-category="allergy"]'), /ペニシリン系で発疹（本人申告）[\s\S]*デモ 薬剤師/);
 assert.equal(await page.locator('[data-category="allergy"] li').count() >= 2, true);
 
-step("患者メモを直す（直す前の内容は窓の下に残る）");
-await page.locator('[data-category="allergy"] li', { hasText: "卵" }).locator("[data-edit-note]").click();
-await page.waitForSelector("#note-dialog[open]");
-assert.equal(await text("#note-dialog-title"), "患者メモを直す");
-await page.fill("#note-rows input", "卵（加熱したものは食べられる）");
-await page.keyboard.press("Control+Enter");
-await page.waitForSelector("#note-dialog:not([open])", { state: "attached" });
+step("患者メモを直す（行を押すとその場に小さな窓。Enter で保存、Esc でやめる。直す前の内容は残る）");
+await page.locator('[data-category="allergy"] li[data-edit-note]', { hasText: "卵" }).click();
+await page.waitForSelector("#note-pop[open]");
+assert.equal(await page.inputValue("#note-pop input"), "卵");
+await page.fill("#note-pop input", "卵（加熱したものは食べられる）");
+await page.keyboard.press("Enter");
+await page.waitForSelector("#note-pop:not([open])", { state: "attached" });
 assert.match(await text('[data-category="allergy"]'), /卵（加熱したものは食べられる）[\s\S]*（修正）/);
-await page.locator('[data-category="allergy"] li', { hasText: "加熱" }).locator("[data-edit-note]").click();
-await page.waitForSelector("#note-dialog[open]");
-assert.match(await text("#note-history"), /直す前の内容[\s\S]*卵/);
+// キーボードでも：行にフォーカスして Enter
+await page.locator('[data-category="allergy"] li[data-edit-note]', { hasText: "加熱" }).focus();
+await page.keyboard.press("Enter");
+await page.waitForSelector("#note-pop[open]");
+assert.match(await page.locator(".note-pop-history").innerText(), /^卵/);
 await page.keyboard.press("Escape");
-await page.waitForSelector("#note-dialog:not([open])", { state: "attached" });
+await page.waitForSelector("#note-pop:not([open])", { state: "attached" });
 await page.locator("#timeline").focus();
 
 // 4. Alt+N で処方入力。薬名 → Enter → 1日量 → Enter → 次の薬 …
