@@ -128,6 +128,8 @@ assert.match(await text("#last-plan"), /減煙を続けられるよう/);
 step("Alt+M で患者メモを追加（アレルギー歴は帯に出る）");
 await page.keyboard.press("Alt+M");
 await page.waitForSelector("#note-dialog[open]");
+// 注意点で書けるのはアレルギー歴・副作用歴・疾患・併用薬だけ（生活・意向・申し送りはそれぞれの箱で）
+assert.deepEqual(await page.$$eval('#note-categories input[name="category"]', (rs) => rs.map((r) => r.value)), ["allergy", "adverse", "disease", "concomitant"]);
 await page.keyboard.press("Control+Enter");
 await page.waitForFunction(() => document.querySelector('#note-form [data-error="category"]').textContent !== "");
 assert.equal(await text('#note-form [data-error="body"]'), "内容を入力してください");
@@ -143,6 +145,14 @@ await page.waitForSelector("#note-dialog:not([open])", { state: "attached" });
 assert.match(await text("#cautions"), /アレルギー[\s\S]*ペニシリン系で発疹（本人申告）[\s\S]*卵[\s\S]*副作用/);
 assert.match(await text('[data-category="allergy"]'), /ペニシリン系で発疹（本人申告）[\s\S]*デモ 薬剤師/);
 assert.equal(await page.locator('[data-category="allergy"] li').count() >= 2, true);
+
+step("箱を押すと、その箱の入力が開く（次に確認すること → 申し送り）");
+await page.click('[data-box="next"] .pbox-head');
+await page.waitForSelector("#note-dialog[open]");
+assert.equal(await text("#note-dialog-title"), "患者メモを追加（申し送り）");
+assert.deepEqual(await page.$$eval('#note-categories input[name="category"]', (rs) => rs.map((r) => [r.value, r.checked])), [["handover", true]]);
+await page.keyboard.press("Escape");
+await page.waitForSelector("#note-dialog:not([open])", { state: "attached" });
 
 step("患者メモを直す（行を押すとその場に小さな窓。Enter で保存、Esc でやめる。直す前の内容は残る）");
 await page.locator('[data-category="allergy"] li[data-edit-note]', { hasText: "卵" }).click();

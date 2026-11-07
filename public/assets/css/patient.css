@@ -252,3 +252,7 @@ button.hc:hover, button.hc:focus-visible { border-color: var(--accent); }
 .hc.auto.done { border-style: solid; background: var(--accent-soft); color: var(--accent-strong); border-color: var(--accent-line); }
 .visit-bar .btn[disabled] { opacity: .45; cursor: default; }
 .pt-grid.editing .visit-bar { pointer-events: none; }
+
+/* 押すと入力が開く箱 */
+.pbox.box-input { cursor: pointer; }
+.pt-grid.editing .pbox.box-input { cursor: inherit; }

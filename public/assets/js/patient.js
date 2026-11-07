@@ -489,8 +489,12 @@ for (const b of shapeButtons) b.addEventListener("click", () => layout.setOption
 const noteDialog = document.querySelector("#note-dialog");
 const noteForm = document.querySelector("#note-form");
 const noteRows = document.querySelector("#note-rows");
-document.querySelector("#note-categories").innerHTML = NOTE_CATEGORIES.map((c) =>
-  `<label><input type="radio" name="category" value="${c.key}">${escapeHtml(c.label)}</label>`).join("");
+// 箱ごとに書ける分類（ほかの分類は、それぞれの箱で書く）
+const BOX_CATEGORIES = {
+  cautions: ["allergy", "adverse", "disease", "concomitant"],
+  next: ["handover"],
+  other: ["lifestyle", "generic"],
+};
 
 function addNoteRow() {
   noteRows.insertAdjacentHTML("beforeend", `<li><input class="input" name="body" maxlength="${NOTE_MAX}" autocomplete="off"
@@ -498,21 +502,24 @@ function addNoteRow() {
   return noteRows.lastElementChild.querySelector("input");
 }
 
-// category を渡すと、その分類を選んだ状態で開く（箱の見出しの「＋」から）
-function openNoteDialog(category = null) {
+// 箱の分類だけを選べる形で開く。分類が1つの箱（次に確認すること）は選ばずに書く
+function openNoteDialog(box = "cautions") {
+  const keys = BOX_CATEGORIES[box];
+  document.querySelector("#note-categories").innerHTML = NOTE_CATEGORIES.filter((c) => keys.includes(c.key)).map((c) =>
+    `<label><input type="radio" name="category" value="${c.key}">${escapeHtml(c.label)}</label>`).join("");
+  document.querySelector("#note-dialog-title").textContent = `患者メモを追加（${{ cautions: "注意点", next: "申し送り", other: "生活・後発品の意向" }[box]}）`;
   noteForm.reset();
   clearFormErrors(noteForm);
   noteRows.innerHTML = "";
   addNoteRow();
   noteDialog.showModal();
-  if (category === null) {
-    noteForm.querySelector('input[name="category"]').focus();
-  } else {
-    noteForm.querySelector(`input[name="category"][value="${category}"]`).checked = true;
+  if (keys.length === 1) {
+    noteForm.querySelector('input[name="category"]').checked = true;
     noteRows.querySelector("input").focus();
+  } else {
+    noteForm.querySelector('input[name="category"]').focus();
   }
 }
-for (const b of document.querySelectorAll("[data-note]")) b.addEventListener("click", () => openNoteDialog(b.dataset.note));
 
 document.querySelector("#note-add-row").addEventListener("click", () => addNoteRow().focus());
 // 行で Enter：次の行へ（最後の行に書いてあれば行を足す）
@@ -970,8 +977,21 @@ for (const form of [noteForm, recordForm, labForm]) {
   });
   form.querySelector("[data-close]").addEventListener("click", () => form.closest("dialog").close());
 }
-document.querySelector("#add-note").addEventListener("click", () => openNoteDialog());
-document.querySelector("#add-lab").addEventListener("click", openLabDialog);
+// 箱を押すと、その箱の入力が開く（メモの行を押したときは、その行を直す。配置を変えている間は開かない）
+const BOX_INPUT = {
+  cautions: () => openNoteDialog("cautions"),
+  next: () => openNoteDialog("next"),
+  other: () => openNoteDialog("other"),
+  labs: () => openLabDialog(),
+  memo: () => memoPad.open(),
+};
+const ptGrid = document.querySelector("#pt-grid");
+ptGrid.addEventListener("click", (e) => {
+  if (ptGrid.classList.contains("editing") || e.target.closest("[data-edit-note], button, a, input, select, textarea")) return;
+  const box = e.target.closest(".pbox[data-box]");
+  if (box && BOX_INPUT[box.dataset.box]) BOX_INPUT[box.dataset.box]();
+});
+for (const key of Object.keys(BOX_INPUT)) ptGrid.querySelector(`.pbox[data-box="${key}"]`).classList.add("box-input");
 
 // ---------- メモ帳 ----------
 const memoPad = setupMemoPad({ patientId: patient.id, memo, onSaved: renderMemo });
@@ -979,8 +999,6 @@ function renderMemo(m) {
   document.querySelector("#memo").innerHTML = memoText(m);
   document.querySelector("#memo-meta").textContent = memoMeta(m);
 }
-document.querySelector("#edit-memo").addEventListener("click", () => memoPad.open());
-document.querySelector("#memo").addEventListener("click", () => memoPad.open());
 renderMemo(memo);
 
 // ---------- ショートカット ----------
@@ -1009,7 +1027,7 @@ document.addEventListener("keydown", (e) => {
   const actions = {
     KeyN: openNewRx,
     KeyK: () => openRecordDialog(),
-    KeyM: () => openNoteDialog(),
+    KeyM: () => openNoteDialog("cautions"),
     KeyL: openLabDialog,
     KeyE: () => memoPad.open(),
     KeyT: openTracing,
@@ -1041,7 +1059,7 @@ setTour("patient", [
       <div class="tour-map">
         <div><b>いちばん上</b>戻る（患者一覧へ）・画面の名前・患者の氏名</div>
         <div><b>青い帯</b>右端に新規処方。左に閲覧記録と配置を変える</div>
-        <div><b>箱</b>患者・注意点・次に確認すること・今の処方・メモ帳・検査値、処方の推移、経過。書き足すときは箱の見出しの「＋」</div>
+        <div><b>箱</b>患者・注意点・次に確認すること・今の処方・メモ帳・検査値、処方の推移、経過。書き足すときは箱を押す</div>
         <div><b>経過の帯</b>選んだ来局の引き継ぎのチェックリストと、指導記録・トレーシングレポート</div>
       </div>`,
   },
@@ -1054,7 +1072,7 @@ setTour("patient", [
     target: "#cautions",
     title: "注意点",
     body: `<p>アレルギー歴・副作用歴・疾患・併用薬を1つの表にまとめています。<strong>赤い行</strong>はアレルギー歴と副作用歴です。</p>
-      <p><kbd>Alt</kbd>+<kbd>M</kbd> でメモを追加します。<strong>1行に1件</strong>（アレルギー1つ、併用薬1つ）で、<kbd>Enter</kbd> で次の行に進み、何件でもまとめて登録できます。分類は、厚労省の通知が薬歴に記載を求める項目に合わせています。</p>
+      <p>箱を押すか <kbd>Alt</kbd>+<kbd>M</kbd> で、アレルギー歴・副作用歴・疾患・併用薬のメモを追加します（生活・後発品の意向と申し送りは、それぞれの箱を押して書きます）。<strong>1行に1件</strong>（アレルギー1つ、併用薬1つ）で、<kbd>Enter</kbd> で次の行に進み、何件でもまとめて登録できます。分類は、厚労省の通知が薬歴に記載を求める項目に合わせています。</p>
       <p>メモの行を押すと、その場で書き直せます（<kbd>Enter</kbd> で保存、<kbd>Esc</kbd> でやめる）。直す前の内容は消えずに残ります。</p>`,
   },
   {
