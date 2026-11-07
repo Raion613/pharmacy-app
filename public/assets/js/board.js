@@ -62,8 +62,8 @@ function cardHtml(r, stage, now) {
   const action = {
     received: `<a class="btn btn-small btn-primary" data-overlay href="/rx?patient=${r.patientId}&reception=${r.id}">処方を入力</a>`,
     entered: `<a class="btn btn-small btn-primary" data-overlay href="/inspect?id=${r.prescriptionId}">調剤監査</a>`,
-    audited: `<button type="button" class="btn btn-small btn-primary" data-step="handed" data-id="${r.id}">投薬した</button>`,
-    handed: `<button type="button" class="btn btn-small btn-primary" data-step="paid" data-id="${r.id}">会計した</button>`,
+    audited: `<a class="btn btn-small" data-overlay href="/handbook?id=${r.prescriptionId}">お薬手帳</a><button type="button" class="btn btn-small btn-primary" data-step="handed" data-id="${r.id}">投薬した</button>`,
+    handed: `<a class="btn btn-small" data-overlay href="/receipt?id=${r.prescriptionId}">領収証・明細書</a><button type="button" class="btn btn-small btn-primary" data-step="paid" data-id="${r.id}">会計した</button>`,
     paid: "",
   }[stage];
   const steps = ["entered", "audited", "handed", "paid"].filter((s) => r.steps[s])
@@ -89,7 +89,7 @@ boardEl.addEventListener("click", async (e) => {
   await load();
   const moved = boardEl.querySelector(`.board-card[data-id="${b.dataset.id}"]`);
   moved.classList.add("flash");
-  (moved.querySelector(".bc-actions .btn") ?? moved.querySelector(".bc-name")).focus();
+  (moved.querySelector(".bc-actions .btn-primary") ?? moved.querySelector(".bc-name")).focus();
 });
 
 dateInput.addEventListener("change", load);
@@ -151,7 +151,7 @@ async function receive(p) {
   if (burdenCheck(p, today()).needed) await openBurdenDialog(p, today());
   const card = [...boardEl.querySelectorAll(".col-received .board-card")].at(-1);
   card.classList.add("flash");
-  card.querySelector(".btn").focus();
+  card.querySelector(".btn-primary").focus();
 }
 
 document.addEventListener("keydown", (e) => {
@@ -187,7 +187,8 @@ setTour("board", [
     body: `<ul>
         <li><b>入力待ち</b>：「処方を入力」で処方入力へ。保存すると、自動で次の列へ移ります</li>
         <li><b>監査待ち</b>：「調剤監査」で、取り出した薬の箱のバーコードを読みます。全部合えば次の列へ</li>
-        <li><b>投薬待ち・会計待ち</b>：渡した・会計したら、ボタンで進めます</li>
+        <li><b>投薬待ち</b>：お薬手帳（シール・電子版の QR コード）を出し、渡したら「投薬した」</li>
+        <li><b>会計待ち</b>：領収証・明細書を出し、受け取ったら「会計した」</li>
       </ul>
       <p>受付から${LONG_WAIT_MIN}分以上お待たせしている患者さんの札は<strong>赤</strong>になります。</p>`,
   },

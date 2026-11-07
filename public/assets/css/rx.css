@@ -166,3 +166,12 @@
 .peds li.peds-low, .peds li.peds-high, .peds li.peds-check { border-color: #e0b44a; background: #fffaf0; }
 .peds li.peds-over { border-color: #e3a19a; background: var(--danger-soft); box-shadow: inset 3px 0 0 var(--danger); }
 .peds li.none { color: var(--sub); border-style: dashed; }
+
+/* 会計の公費の行：使うかの印・管理票の累計・その公費の後の負担 */
+.kohi-rows { display: grid; gap: 4px; }
+.kohi-row { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 2px 8px; padding: 4px 0 4px 10px; }
+.kohi-row .kohi-use { display: flex; align-items: center; gap: 6px; font-size: 13px; }
+.kohi-row .kohi-use small { display: block; color: var(--sub); font-size: 11px; }
+.kohi-row .kohi-prior { grid-column: 1 / -1; display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--sub); }
+.kohi-row .kohi-prior .input { width: 90px; height: 26px; }
+.kohi-row dd { margin: 0; text-align: right; }

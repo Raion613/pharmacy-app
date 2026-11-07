@@ -5,7 +5,9 @@ import { pricesAt, STATUS_MESSAGE } from "./prices.js";
 import { feeContext, feeLookup } from "./fees.js";
 import { auditStatement } from "./audit.js";
 import { recordsByPrescription, conversationsByPrescription } from "./records.js";
-import { burdenError } from "./patients.js";
+import { burdenProblem } from "../../public/assets/js/burden.js";
+import { applyKohi, kohiName } from "../../public/assets/js/kohi.js";
+import { kohiForPrescription } from "./kohi.js";
 
 const MAX_RPS = 20;
 const MAX_ITEMS_PER_RP = 15;
@@ -129,7 +131,7 @@ export function validatePrescription(body, today = todayJst()) {
   }
 
   if (errors.length > 0) throw new HttpError(422, "入力に誤りがあります", errors);
-  return { patientId: body.patientId, prescribedOn, dispensedOn, handbook: body.handbook, rps, inquiries, receptionId };
+  return { patientId: body.patientId, prescribedOn, dispensedOn, handbook: body.handbook, rps, inquiries, receptionId, kohi: body.kohi };
 }
 
 function quantity(value, path, err) {
@@ -161,10 +163,13 @@ export async function createPrescription(db, user, body) {
   const statements = [
     db.prepare(
       `INSERT INTO prescriptions (id, patient_id, prescribed_on, dispensed_on, handbook, drug_points, total_points, burden_percent,
-                                  copay_yen, special_fee_yen, special_fee_method, reception_id, created_at, created_by)
-       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)`,
+                                  copay_yen, special_fee_yen, special_fee_method, reception_id, created_at, created_by, burden_reason)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)`,
     ).bind(id, rx.patientId, rx.prescribedOn, rx.dispensedOn, rx.handbook, bill.drugPoints, bill.totalPoints, bill.burdenPercent,
-      bill.copayYen, bill.special?.yen ?? null, bill.special?.method ?? null, rx.receptionId, now, user.id),
+      bill.copayYen, bill.special?.yen ?? null, bill.special?.method ?? null, rx.receptionId, now, user.id, bill.burdenReason),
+    ...bill.kohi.steps.map((s, i) => db.prepare(
+      "INSERT INTO prescription_kohi (prescription_id, order_no, kohi_id, prior_month_yen, pay_yen) VALUES (?1, ?2, ?3, ?4, ?5)",
+    ).bind(id, i + 1, s.id, s.priorMonthYen, s.payYen)),
   ];
   // 受付から入力したときは、業務の進み具合に「入力済み」を足す
   if (rx.receptionId !== null) {
@@ -200,10 +205,14 @@ export async function createPrescription(db, user, body) {
     ).bind(id, i + 1, l.section, l.code, l.name, l.points, l.count));
   });
   statements.push(auditStatement(db, user.id, "prescription.create", rx.patientId,
-    `調剤日 ${rx.dispensedOn} / 合計 ${bill.totalPoints}点（薬剤料 ${bill.drugPoints}点）/ 一部負担金 ${bill.copayYen}円${bill.special ? ` / 特別の料金 ${bill.special.yen}円` : ""}`));
+    `調剤日 ${rx.dispensedOn} / 合計 ${bill.totalPoints}点（薬剤料 ${bill.drugPoints}点）/ 一部負担金 ${bill.copayYen}円${
+      bill.kohi.steps.length ? ` / 公費の後 ${bill.kohi.patientPayYen}円` : ""}${bill.special ? ` / 特別の料金 ${bill.special.yen}円` : ""}`));
 
   await db.batch(statements);
-  return { id, drugPoints: bill.drugPoints, totalPoints: bill.totalPoints, copayYen: bill.copayYen, specialFeeYen: bill.special?.yen ?? null };
+  return {
+    id, drugPoints: bill.drugPoints, totalPoints: bill.totalPoints, copayYen: bill.copayYen, patientPayYen: bill.kohi.patientPayYen,
+    specialFeeYen: bill.special?.yen ?? null,
+  };
 }
 
 // 調剤日時点の薬価・点数表で、薬剤料・調剤報酬・一部負担金・特別の料金を出す
@@ -230,7 +239,7 @@ async function billPrescription(db, rx) {
     if (!(e instanceof RangeError)) throw e;
     throw new HttpError(422, "調剤日の算定の規則がありません", [{ path: "dispensedOn", message: e.message }]);
   }
-  const burdenMessage = burdenError(context.birthDate, rx.dispensedOn, context.burdenPercent);
+  const burdenMessage = burdenProblem(context, rx.dispensedOn);
   if (burdenMessage) throw new HttpError(422, "負担割合を確かめてください", [{ path: "burden", message: `負担割合：${burdenMessage}` }]);
 
   const special = specialFee(rps, rx.dispensedOn);
@@ -253,15 +262,20 @@ async function billPrescription(db, rx) {
     fee: feeLookup(context.fees, rx.dispensedOn),
   });
   const totalPoints = fees.tech + fees.mgmt + drugPoints + fees.other;
+  const copay = copayYen(totalPoints, context.burdenPercent);
+  const kohiList = await kohiForPrescription(db, rx.patientId, rx.dispensedOn, rx.kohi);
+  const applied = applyKohi({ totalPoints, burdenPercent: context.burdenPercent, copayYen: copay, kohi: kohiList });
+  const priorOf = new Map(kohiList.map((k) => [k.id, k.priorMonthYen]));
   return {
     rps: calculated, fees, special, drugPoints, totalPoints,
-    burdenPercent: context.burdenPercent, copayYen: copayYen(totalPoints, context.burdenPercent),
+    burdenPercent: context.burdenPercent, burdenReason: context.burdenReason, copayYen: copay,
+    kohi: { patientPayYen: applied.patientPayYen, steps: applied.steps.map((s) => ({ ...s, priorMonthYen: priorOf.get(s.id) })) },
   };
 }
 
 // 患者の薬歴（処方の一覧、新しい順）。剤と薬・疑義照会・算定項目まで入れて返す。
 export async function prescriptionsOf(db, patientId) {
-  const [rxs, rps, items, inquiries, fees] = await db.batch([
+  const [rxs, rps, items, inquiries, fees, kohi, checks] = await db.batch([
     db.prepare(
       `SELECT p.*, u.display_name AS created_by_name
          FROM prescriptions p JOIN users u ON u.id = p.created_by
@@ -287,7 +301,23 @@ export async function prescriptionsOf(db, patientId) {
       `SELECT f.* FROM prescription_fees f JOIN prescriptions p ON p.id = f.prescription_id
         WHERE p.patient_id = ?1 ORDER BY f.line_no`,
     ).bind(patientId),
+    db.prepare(
+      `SELECT x.*, k.kind, k.local_name, k.local_form, k.cap_yen, k.payer_no, k.recipient_no
+         FROM prescription_kohi x JOIN prescriptions p ON p.id = x.prescription_id JOIN patient_kohi k ON k.id = x.kohi_id
+        WHERE p.patient_id = ?1 ORDER BY x.order_no`,
+    ).bind(patientId),
+    db.prepare(
+      `SELECT c.*, u.display_name FROM handover_checks c JOIN prescriptions p ON p.id = c.prescription_id JOIN users u ON u.id = c.user_id
+        WHERE p.patient_id = ?1 ORDER BY c.id`,
+    ).bind(patientId),
   ]);
+  // 引き継ぎの確認：項目ごとに最後の行
+  const checksByRx = new Map();
+  for (const c of checks.results) {
+    if (!checksByRx.has(c.prescription_id)) checksByRx.set(c.prescription_id, {});
+    checksByRx.get(c.prescription_id)[c.item] = { checked: c.checked === 1, at: c.at, by: c.display_name };
+  }
+  const kohiByRx = Map.groupBy(kohi.results, (k) => k.prescription_id);
 
   const records = await recordsByPrescription(db, patientId);
   const conversations = await conversationsByPrescription(db, patientId);
@@ -303,12 +333,21 @@ export async function prescriptionsOf(db, patientId) {
     drugPoints: rx.drug_points,
     totalPoints: rx.total_points,
     burdenPercent: rx.burden_percent,
+    burdenReason: rx.burden_reason,
     copayYen: rx.copay_yen,
+    // 使った公費（国 → 自治体の順）。最後の pay が窓口で受け取る保険の分
+    kohi: (kohiByRx.get(rx.id) ?? []).map((k) => ({
+      id: k.kohi_id, name: kohiName({ kind: k.kind, localName: k.local_name }), kind: k.kind, payerNo: k.payer_no, recipientNo: k.recipient_no,
+      capYen: k.cap_yen, priorMonthYen: k.prior_month_yen, payYen: k.pay_yen,
+      monthTotalYen: k.prior_month_yen === null ? null : k.prior_month_yen + k.pay_yen,
+    })),
+    patientPayYen: (kohiByRx.get(rx.id) ?? []).at(-1)?.pay_yen ?? rx.copay_yen,
     specialFeeYen: rx.special_fee_yen,
     specialFeeMethod: rx.special_fee_method,
     createdAt: rx.created_at,
     createdBy: rx.created_by_name,
     receptionId: rx.reception_id,
+    checks: checksByRx.get(rx.id) ?? {},
     records: records.get(rx.id) ?? [], // 指導記録がまだ無い来局は空
     conversations: conversations.get(rx.id) ?? [],
     inquiries: (inquiriesByRx.get(rx.id) ?? []).map((q) => ({
@@ -341,4 +380,21 @@ export async function prescriptionsOf(db, patientId) {
       })),
     })),
   }));
+}
+
+// 引き継ぎの確認を付ける・外す（行を足す）
+export const HANDOVER_ITEMS = { plan: "前回の申し送り（P）に応えた", cautions: "アレルギー・副作用歴・併用薬を照らした", change: "処方が変わった理由を聞いた" };
+export async function checkHandover(db, user, prescriptionId, body) {
+  if (!Object.hasOwn(HANDOVER_ITEMS, body.item ?? "") || typeof body.checked !== "boolean") {
+    throw new HttpError(422, "入力に誤りがあります", [{ path: "item", message: "確認の項目が不正です" }]);
+  }
+  const rx = await db.prepare("SELECT patient_id, dispensed_on FROM prescriptions WHERE id = ?1").bind(prescriptionId).first();
+  if (!rx) throw new HttpError(404, "処方が見つかりません");
+  const now = nowIso();
+  await db.batch([
+    db.prepare("INSERT INTO handover_checks (prescription_id, item, checked, at, user_id) VALUES (?1, ?2, ?3, ?4, ?5)")
+      .bind(prescriptionId, body.item, body.checked ? 1 : 0, now, user.id),
+    auditStatement(db, user.id, "handover.check", rx.patient_id, `調剤日 ${rx.dispensed_on}：${HANDOVER_ITEMS[body.item]}${body.checked ? "" : "（外した）"}`),
+  ]);
+  return { item: body.item, checked: body.checked, at: now, by: user.display_name };
 }

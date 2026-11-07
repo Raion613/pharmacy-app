@@ -21,6 +21,9 @@ DROP TABLE IF EXISTS measurements;
 DROP TABLE IF EXISTS guidance_records;
 DROP TABLE IF EXISTS conversations;
 DROP TABLE IF EXISTS patient_notes;
+DROP TABLE IF EXISTS handover_checks;
+DROP TABLE IF EXISTS prescription_kohi;
+DROP TABLE IF EXISTS patient_kohi;
 DROP TABLE IF EXISTS prescription_fees;
 DROP TABLE IF EXISTS inquiries;
 DROP TABLE IF EXISTS prescription_items;
@@ -249,10 +252,12 @@ CREATE TABLE patients (
   kana       TEXT NOT NULL,             -- 全角カタカナ
   birth_date TEXT NOT NULL,
   sex        TEXT NOT NULL CHECK (sex IN ('M', 'F')),
-  burden_percent INTEGER NOT NULL CHECK (burden_percent IN (0, 10, 20, 30)), -- 一部負担金の割合（保険証の負担割合）。0＝生活保護（医療扶助で自己負担なし）。ありうる割合は年齢で決まる（burden.js）
+  burden_percent INTEGER NOT NULL CHECK (burden_percent IN (0, 10, 20, 30)), -- 一部負担金の割合（保険証の負担割合）。0＝生活保護・一部負担金の免除。年齢で標準が決まる（burden.js）
   created_at TEXT NOT NULL,
   created_by INTEGER NOT NULL REFERENCES users(id),
   burden_checked_on TEXT,               -- 負担割合を資格確認で最後に確かめた日。この日より後に年齢で割合が変わる日が来たら、確認の窓を出す
+  burden_reason TEXT CHECK (burden_reason IN ('disability', 'exempt', 'welfare')), -- 年齢の標準から外れる理由（burden.js）。NULL＝年齢の標準
+  burden_until  TEXT,                  -- 一部負担金の免除の期限（burden_reason = 'exempt' のとき）
   UNIQUE (pharmacy_id, patient_no)
 );
 
@@ -278,6 +283,7 @@ CREATE TABLE prescriptions (
   drug_points   INTEGER NOT NULL,       -- 薬剤料（選定療養の品目は保険給付の分）
   total_points  INTEGER NOT NULL,       -- 調剤技術料・薬学管理料・薬剤料・その他の合計
   burden_percent INTEGER NOT NULL,      -- 保存した時点の負担割合
+  burden_reason  TEXT,                  -- 保存した時点の負担割合の理由（patients.burden_reason）
   copay_yen     INTEGER NOT NULL,       -- 一部負担金（円）。合計点数 × 10円 × 負担割合 を10円未満四捨五入
   special_fee_yen INTEGER,              -- 選定療養の特別の料金（消費税込み、円）。対象の薬が無ければ NULL
   special_fee_method TEXT CHECK (special_fee_method IN ('points', 'amount')), -- 計算方法（調剤日で決まる）
@@ -347,6 +353,49 @@ CREATE TABLE prescription_fees (
 );
 
 CREATE INDEX idx_prescription_fees_code ON prescription_fees(code);
+
+-- 来局ごとの引き継ぎの確認（薬剤師が付ける項目）。付ける・外すたびに行を足し、項目ごとに最後の行が今の状態
+--   plan：前回の申し送り（P）に今日応えた／cautions：アレルギー・副作用歴・併用薬を今日の処方と照らした／change：処方が変わった理由を聞いた
+CREATE TABLE handover_checks (
+  id              INTEGER PRIMARY KEY,
+  prescription_id TEXT NOT NULL REFERENCES prescriptions(id),
+  item            TEXT NOT NULL CHECK (item IN ('plan', 'cautions', 'change')),
+  checked         INTEGER NOT NULL CHECK (checked IN (0, 1)),
+  at              TEXT NOT NULL,
+  user_id         INTEGER NOT NULL REFERENCES users(id)
+);
+
+CREATE INDEX idx_handover_checks_rx ON handover_checks(prescription_id, id);
+
+-- 公費（受給者証）。1枚の受給者証が1行。更新されたら新しい行を足す。計算の規則は kohi.js
+CREATE TABLE patient_kohi (
+  id            INTEGER PRIMARY KEY,
+  patient_id    INTEGER NOT NULL REFERENCES patients(id),
+  kind          TEXT NOT NULL CHECK (kind IN ('mental', 'childchronic', 'nanbyo', 'local')), -- 精神通院 21・小児慢性 52・難病 54・自治体の助成
+  payer_no      TEXT NOT NULL,          -- 公費負担者番号（8桁。先頭2桁が法別番号）
+  recipient_no  TEXT NOT NULL,          -- 受給者番号
+  local_name    TEXT,                   -- 自治体の助成の名前（例：子ども医療費助成（上田市））
+  local_form    TEXT CHECK (local_form IN ('free', 'perVisit', 'cap')), -- 自治体の助成の、薬局での負担の形
+  per_visit_yen INTEGER,                -- 1回いくら（local_form = 'perVisit'）
+  cap_yen       INTEGER,                -- 自己負担の上限月額。NULL＝上限なし
+  valid_from    TEXT NOT NULL,
+  valid_until   TEXT NOT NULL,
+  created_at    TEXT NOT NULL,
+  created_by    INTEGER NOT NULL REFERENCES users(id)
+);
+
+CREATE INDEX idx_patient_kohi_patient ON patient_kohi(patient_id);
+
+-- 処方に使った公費と、その公費をかけた後の患者の負担。順は国の公費 → 自治体の助成。
+-- 最後の行の pay_yen が窓口で受け取る保険の分（無ければ prescriptions.copay_yen）。管理票に書く累計は prior_month_yen + pay_yen
+CREATE TABLE prescription_kohi (
+  prescription_id TEXT NOT NULL REFERENCES prescriptions(id),
+  order_no        INTEGER NOT NULL,
+  kohi_id         INTEGER NOT NULL REFERENCES patient_kohi(id),
+  prior_month_yen INTEGER,              -- 管理票のこの来局より前の今月の累計（月の上限のある公費だけ）
+  pay_yen         INTEGER NOT NULL,
+  PRIMARY KEY (prescription_id, order_no)
+);
 
 -- 患者ごとのメモ（来局をまたいで引き継ぐ情報）。分類は服薬管理指導料の通知が薬歴への記載を求める項目に合わせる。
 -- 1行が1件（アレルギー1つ、併用薬1つ）。直すときは行を書き換えず、直した内容を新しい行として足し、revises で直す前の行を指す。

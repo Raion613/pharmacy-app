@@ -40,6 +40,7 @@
         <span class="error-text" id="date-error"></span>
         <span class="spacer"></span>
         <span class="hint" id="do-note" hidden></span>
+        <button type="button" class="btn btn-small" id="do-last">前回の処方を写す <kbd>Alt+D</kbd></button>
       </div>
       <div class="rps" id="rps"></div>
       <div class="add-rp-row">
@@ -70,6 +71,7 @@
             <div><dt>その他</dt><dd class="num" id="bill-other">—</dd></div>
             <div class="sum"><dt>合計</dt><dd class="num" id="bill-total">—</dd></div>
             <div><dt id="bill-burden-label">一部負担金</dt><dd class="num" id="bill-copay">—</dd></div>
+            <div class="kohi-rows" id="bill-kohi"></div>
             <div><dt>保険外（選定療養）</dt><dd class="num" id="bill-special">—</dd></div>
             <div class="charge"><dt>窓口で受け取る額</dt><dd class="num" id="bill-charge">—</dd></div>
           </dl>

@@ -14,6 +14,8 @@ import { ageOn } from "./guidance-suggest.js";
 import { setupMemoPad } from "./memo-pad.js";
 import { burdenText } from "./burden.js";
 import { burdenCheck, openBurdenDialog } from "./burden-ui.js";
+import { applyKohi, kohiName, kohiValidOn, hasMonthlyCap, kohiBurdenText } from "./kohi.js";
+import { openKohiDialog } from "./kohi-ui.js";
 
 const params = new URLSearchParams(location.search);
 const patientId = params.get("patient");
@@ -56,6 +58,7 @@ const state = {
   compare: false,
   compareOn: null,
   compareAuto: true,          // 比べる日付を自動で決めているか（手で変えたら false）
+  kohiUse: new Map(),         // 公費ID → { use：この処方に使うか, prior：管理票のこの来局より前の今月の累計（文字のまま） }
   comparePrices: new Map(),   // 薬コード → 比べる日付の薬価
   dirty: false,
   saving: false,
@@ -404,10 +407,16 @@ function updateBill(infos, done, pending) {
   set("bill-drug", pointsText(drug));
   set("bill-other", pointsText(fees.other));
   set("bill-total", pointsText(total));
-  set("bill-burden-label", `一部負担金（${burdenText(ctx.burdenPercent)}）`);
+  set("bill-burden-label", `一部負担金（${burdenText(ctx.burdenPercent, ctx.burdenReason)}）`);
   set("bill-copay", `${copay.toLocaleString()}円`);
   set("bill-special", special ? `${special.yen.toLocaleString()}円` : "—");
-  const charge = copay + (special?.yen ?? 0);
+  // 公費：国の公費 → 自治体の助成の順にかけ、公費ごとの後の負担を行に出す
+  const applied = applyKohi({ totalPoints: total, burdenPercent: ctx.burdenPercent, copayYen: copay, kohi: usedKohi(ctx).map((k) => ({ ...k, priorMonthYen: priorOf(k) })) });
+  for (const el of $("#bill-kohi").querySelectorAll("[data-kohi-pay]")) el.textContent = "—";
+  for (const s of applied.steps) {
+    $("#bill-kohi").querySelector(`[data-kohi-pay="${s.id}"]`).textContent = `${s.payYen.toLocaleString()}円${s.monthTotalYen === null ? "" : `（今月の累計 ${s.monthTotalYen.toLocaleString()}円）`}`;
+  }
+  const charge = applied.patientPayYen + (special?.yen ?? 0);
   const chargeEl = $("#bill-charge");
   if (chargeEl.textContent !== `${charge.toLocaleString()}円` && chargeEl.textContent !== "—") flash(chargeEl);
   chargeEl.textContent = `${charge.toLocaleString()}円`;
@@ -422,8 +431,46 @@ async function loadFeeContext() {
     if (!(e instanceof ApiError) || e.status !== 400) throw e;
     state.feeContext = { date: state.dispensedOn, error: e.message };
   }
+  renderKohi();
   updateSummary();
 }
+
+// ---------- 公費 ----------
+// 調剤日に有効な受給者証を並べ、使うものに印を付ける（初めは全部使う）。月の上限のある公費は、自己負担上限額管理票に書かれた
+// 今月の累計（この来局より前）を入れる。初めの値は、この薬局でこの月に払った額（他の医療機関の分は入っていないので、管理票を見て直す）
+const validKohi = (ctx) => (ctx?.kohi ?? []).filter((k) => kohiValidOn(k, state.dispensedOn));
+const usedKohi = (ctx) => validKohi(ctx).filter((k) => state.kohiUse.get(k.id).use);
+const priorOf = (k) => (hasMonthlyCap(k) ? Number(state.kohiUse.get(k.id).prior) || 0 : null);
+
+function renderKohi() {
+  const ctx = state.feeContext;
+  const list = ctx?.error ? [] : validKohi(ctx);
+  for (const k of list) {
+    if (!state.kohiUse.has(k.id)) state.kohiUse.set(k.id, { use: true, prior: String(ctx.kohiMonthPaid[k.id] ?? 0) });
+  }
+  $("#bill-kohi").innerHTML = list.map((k) => {
+    const u = state.kohiUse.get(k.id);
+    return `<div class="kohi-row">
+      <label class="kohi-use"><input type="checkbox" data-kohi-use="${k.id}" ${u.use ? "checked" : ""}><span>${escapeHtml(kohiName(k))}<small>${kohiBurdenText(k)}</small></span></label>
+      ${hasMonthlyCap(k) ? `<label class="kohi-prior">管理票の今月の累計<input class="input num" data-kohi-prior="${k.id}" value="${escapeHtml(u.prior)}" inputmode="numeric" autocomplete="off">円</label>` : ""}
+      <dd class="num" data-kohi-pay="${k.id}">—</dd>
+    </div>`;
+  }).join("");
+}
+$("#bill-kohi").addEventListener("change", (e) => {
+  const id = e.target.dataset.kohiUse;
+  if (id === undefined) return;
+  state.kohiUse.get(Number(id)).use = e.target.checked;
+  markDirty();
+  updateSummary();
+});
+$("#bill-kohi").addEventListener("input", (e) => {
+  const id = e.target.dataset.kohiPrior;
+  if (id === undefined) return;
+  state.kohiUse.get(Number(id)).prior = e.target.value;
+  markDirty();
+  updateSummary();
+});
 
 // ---------- 疑義照会 ----------
 
@@ -898,8 +945,15 @@ async function save() {
   const body = {
     patientId: patient.id, prescribedOn: state.prescribedOn, dispensedOn: state.dispensedOn, handbook: state.handbook, rps: [], receptionId,
     inquiries: state.inquiries.map((q) => ({ kind: q.kind, content: q.content, answer: q.answer, changed: q.changed, shortReason: q.shortReason })),
+    kohi: usedKohi(state.feeContext).map((k) => ({
+      kohiId: k.id, priorMonthYen: hasMonthlyCap(k) ? (/^\d+$/.test(state.kohiUse.get(k.id).prior.trim()) ? Number(state.kohiUse.get(k.id).prior.trim()) : null) : null,
+    })),
   };
   const elementOf = new Map([["prescribedOn", prescribedInput], ["dispensedOn", dispensedInput], ["handbook", $("#handbook")]]);
+  body.kohi.forEach((x, i) => {
+    elementOf.set(`kohi.${i}`, $("#bill-kohi").querySelector(`[data-kohi-use="${x.kohiId}"]`));
+    elementOf.set(`kohi.${i}.priorMonthYen`, $("#bill-kohi").querySelector(`[data-kohi-prior="${x.kohiId}"]`));
+  });
   state.inquiries.forEach((_, n) => {
     for (const f of ["kind", "content", "answer", "changed", "shortReason"]) {
       elementOf.set(`inquiries.${n}.${f}`, inquiriesEl.querySelector(`[data-q="${n}"][data-qf="${f}"]`));
@@ -941,7 +995,7 @@ async function save() {
   try {
     const saved = await api("/api/prescriptions", { method: "POST", body });
     state.dirty = false;
-    toastNext(`処方を保存しました（合計 ${pointsText(saved.totalPoints)}・窓口で ${(saved.copayYen + (saved.specialFeeYen ?? 0)).toLocaleString()}円）`);
+    toastNext(`処方を保存しました（合計 ${pointsText(saved.totalPoints)}・窓口で ${(saved.patientPayYen + (saved.specialFeeYen ?? 0)).toLocaleString()}円）`);
     leave(receptionId === null ? `/patient?id=${patient.id}&saved=${saved.id}` : "/board", { refresh: true });
   } catch (err) {
     state.saving = false;
@@ -1036,10 +1090,17 @@ async function changeBurden() {
   Object.assign(patient, updated);
   renderPatientBand(document.querySelector("#band"), patient, notes);
   await loadFeeContext();
-  toast(`負担割合を ${burdenText(patient.burdenPercent)} で確定しました`);
+  toast(`負担割合を ${burdenText(patient.burdenPercent, patient.burdenReason)} で確定しました`);
 }
-document.querySelector("#band").addEventListener("click", (e) => {
+document.querySelector("#band").addEventListener("click", async (e) => {
   if (e.target.closest("[data-burden]")) changeBurden();
+  if (e.target.closest("[data-kohi]")) {
+    const list = await openKohiDialog(patient);
+    if (list === null) return;
+    patient.kohi = list;
+    renderPatientBand(document.querySelector("#band"), patient, notes);
+    await loadFeeContext();
+  }
 });
 
 // ---------- 開始 ----------
@@ -1132,3 +1193,22 @@ autoStartTour();
 
 // 開いたときの負担割合の確認（チュートリアルが流れているときは、その後に開き直したときに出る）
 if (!tourActive() && burdenCheck(patient, burdenDate()).needed) changeBurden();
+
+// 前回の処方を写す（前回Do）。いちばん新しい来局の処方を、今の調剤日の薬価で写した処方入力に入れ直す
+function copyLast() {
+  if (prescriptions.length === 0) {
+    toast("この患者の前回の処方はありません", "error");
+    return;
+  }
+  const params = new URLSearchParams(location.search);
+  params.set("from", prescriptions[0].id);
+  location.replace(`/rx?${params}`);
+}
+document.querySelector("#do-last").addEventListener("click", copyLast);
+document.querySelector("#do-last").hidden = prescriptions.length === 0;
+document.addEventListener("keydown", (e) => {
+  if (e.altKey && e.code === "KeyD" && !tourActive() && !document.querySelector("dialog[open]")) {
+    e.preventDefault();
+    copyLast();
+  }
+});

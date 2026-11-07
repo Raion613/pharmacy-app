@@ -2,6 +2,7 @@
 import { json, HttpError, isDate } from "../../src/server/http.js";
 import { feeContext } from "../../src/server/fees.js";
 import { assertPatient } from "../../src/server/tenant.js";
+import { kohiOf, kohiMonthPaid } from "../../src/server/kohi.js";
 
 export async function onRequestGet({ request, env, data }) {
   const params = new URL(request.url).searchParams;
@@ -11,7 +12,9 @@ export async function onRequestGet({ request, env, data }) {
   if (!Number.isInteger(patientId)) throw new HttpError(400, "患者が不正です");
   await assertPatient(env.DB, data.user, patientId);
   try {
-    return json(await feeContext(env.DB, patientId, date));
+    const ctx = await feeContext(env.DB, patientId, date);
+    // 公費の受給者証と、この薬局でその月に公費ごとに払った額（管理票の累計の初期値）
+    return json({ ...ctx, kohi: await kohiOf(env.DB, patientId), kohiMonthPaid: await kohiMonthPaid(env.DB, patientId, date) });
   } catch (e) {
     if (!(e instanceof RangeError)) throw e;
     throw new HttpError(400, e.message);

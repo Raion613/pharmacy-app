@@ -18,6 +18,8 @@ import { setTour, autoStartTour, tourActive } from "./tour.js";
 import { icon } from "./icons.js";
 import { burdenText } from "./burden.js";
 import { openBurdenDialog } from "./burden-ui.js";
+import { kohiBandText } from "./kohi.js";
+import { openKohiDialog } from "./kohi-ui.js";
 import { LAB_ITEMS, LAB, labText, latestByItem, formatLabValue } from "./lab-items.js";
 import { suggestGuidance } from "./guidance-suggest.js";
 import { buildDraft, extractNotes } from "./soap-draft.js";
@@ -78,7 +80,7 @@ const layout = setupLayout({
 const timeline = document.querySelector("#timeline");
 const matrixView = document.querySelector("#matrix-view");
 // 操作の帯のうち、選んでいる来局に対して働くボタン
-const visitButtons = ["#do-rx", "#write-record", "#open-receipt", "#open-handbook", "#open-inspect"].map((s) => document.querySelector(s));
+const visitButtons = ["#write-record", "#to-tracing"].map((s) => document.querySelector(s));
 const visitLabel = document.querySelector("#visit-label");
 let selectedIndex = -1;
 
@@ -124,6 +126,43 @@ function changesOf(index) {
 
 const CHANGE_LABEL = { add: "＋追加", stop: "−中止", mod: "変更", same: "", first: "" };
 
+// ---------- この来局の引き継ぎ（チェックリスト） ----------
+// 全ての患者に、毎回同じことを確かめる。前回の P・処方の変化がある来局だけ、その項目を出す。
+// S・O・A と次回の P は、指導記録を書くと付く。それ以外は薬剤師が押して付ける（押すたびに記録が残る）
+const handoverEl = document.querySelector("#handover");
+function handoverItems(i) {
+  const rx = prescriptions[i];
+  const record = rx.records[0];
+  const items = [];
+  if (latestRecordFrom(i + 1)?.record.plan) items.push({ key: "plan", label: "前回の P に応えた" });
+  items.push({ key: "cautions", label: "アレルギー・併用薬を照らした" });
+  if (changesOf(i).some((c) => ["add", "stop", "mod"].includes(c.kind))) items.push({ key: "change", label: "処方が変わった理由を聞いた" });
+  items.push({ key: "soa", label: "S・O・A を書いた", auto: true, done: Boolean(record && (record.subjective || record.objective || record.assessment)) });
+  items.push({ key: "nextp", label: "次回の P を書いた", auto: true, done: Boolean(record?.plan) });
+  for (const it of items) if (!it.auto) it.done = rx.checks[it.key]?.checked ?? false;
+  return items;
+}
+function renderHandover() {
+  if (selectedIndex < 0) {
+    handoverEl.innerHTML = "";
+    return;
+  }
+  const items = handoverItems(selectedIndex);
+  const done = items.filter((it) => it.done).length;
+  handoverEl.innerHTML = `<span class="hc-count ${done === items.length ? "all" : ""}">引き継ぎ ${done}/${items.length}</span>${items.map((it) => it.auto
+    ? `<span class="hc auto ${it.done ? "done" : ""}" title="指導記録を書くと付きます">${it.done ? "✓" : "・"} ${it.label}</span>`
+    : `<button type="button" class="hc ${it.done ? "done" : ""}" data-check="${it.key}" aria-pressed="${it.done}">${it.done ? "✓" : "・"} ${it.label}</button>`).join("")}`;
+}
+handoverEl.addEventListener("click", async (e) => {
+  const b = e.target.closest("[data-check]");
+  if (!b) return;
+  const rx = prescriptions[selectedIndex];
+  const checked = b.getAttribute("aria-pressed") !== "true";
+  rx.checks[b.dataset.check] = await api(`/api/prescriptions/${rx.id}/checks`, { method: "POST", body: { item: b.dataset.check, checked } });
+  renderHandover();
+  handoverEl.querySelector(`[data-check="${b.dataset.check}"]`).focus();
+});
+
 function changesHtml(changes) {
   return changes.map((c) => `<span class="change ${c.kind}">${CHANGE_LABEL[c.kind] ? `<b>${CHANGE_LABEL[c.kind]}</b>` : ""}${
     c.name ? escapeHtml(c.name) : ""}${c.text ? ` ${escapeHtml(c.text)}` : ""}</span>`).join("");
@@ -147,12 +186,19 @@ const noteItems = (key, newNoteId) => notesOf(key).map((n) => `<li class="note-i
 
 // 患者：氏名と、来局時に確かめる基本の事実。「負担」を押すと負担割合を変える窓
 band.addEventListener("click", async (e) => {
+  if (e.target.closest("[data-kohi]")) {
+    const list = await openKohiDialog(patient);
+    if (list === null) return;
+    patient.kohi = list;
+    renderBand();
+    return;
+  }
   if (!e.target.closest("[data-burden]")) return;
   const updated = await openBurdenDialog(patient, today());
   if (updated === null) return;
   Object.assign(patient, updated);
   renderBand();
-  toast(`負担割合を ${burdenText(patient.burdenPercent)} で確定しました`);
+  toast(`負担割合を ${burdenText(patient.burdenPercent, patient.burdenReason)} で確定しました`);
 });
 function renderBand() {
   band.innerHTML = `
@@ -161,7 +207,8 @@ function renderBand() {
     <dl class="facts">
       <div><dt>生年月日</dt><dd>${birthText(patient.birthDate)}</dd></div>
       <div><dt>性別</dt><dd class="sex-${patient.sex}">${SEX[patient.sex]}</dd></div>
-      <div><dt>負担</dt><dd><button type="button" class="burden-btn" data-burden title="負担割合を変える">${burdenText(patient.burdenPercent)}</button></dd></div>
+      <div><dt>負担</dt><dd><button type="button" class="burden-btn" data-burden title="負担割合を変える">${burdenText(patient.burdenPercent, patient.burdenReason)}</button></dd></div>
+      <div><dt>公費</dt><dd><button type="button" class="burden-btn" data-kohi title="公費（受給者証）を見る・足す">${escapeHtml(kohiBandText(patient.kohi, today()))}</button></dd></div>
       <div><dt>患者番号</dt><dd class="num">${escapeHtml(patient.patientNo)}</dd></div>
       <div><dt>最終来局</dt><dd>${patient.lastDispensedOn ? formatDate(patient.lastDispensedOn) : "—"}</dd></div>
     </dl>`;
@@ -288,7 +335,7 @@ function cardHtml(rx, i) {
     <header class="vc-head">
       <span class="vc-date">${formatDate(rx.dispensedOn)}</span>
       <span class="vc-points num" title="薬剤料（1点＝10円）">薬剤料 ${pointsText(rx.drugPoints)}</span>
-      <span class="vc-total num" title="調剤技術料・薬学管理料・薬剤料・その他の合計と、窓口で受け取った額">合計 ${pointsText(rx.totalPoints)}・窓口 ${(rx.copayYen + (rx.specialFeeYen ?? 0)).toLocaleString()}円</span>
+      <span class="vc-total num" title="調剤技術料・薬学管理料・薬剤料・その他の合計と、窓口で受け取った額">合計 ${pointsText(rx.totalPoints)}・窓口 ${(rx.patientPayYen + (rx.specialFeeYen ?? 0)).toLocaleString()}円</span>
       ${rx.specialFeeYen === null ? "" : `<span class="tag tag-warn" title="長期収載品の選定療養。保険とは別に患者から受け取った額（消費税込み）">特別の料金 ${rx.specialFeeYen.toLocaleString()}円</span>`}
       <span class="spacer"></span>
       <span class="meta">入力 ${escapeHtml(rx.createdBy)}</span>
@@ -306,7 +353,7 @@ function cardHtml(rx, i) {
         <td class="num">${f.points}点${f.count > 1 ? ` × ${f.count}` : ""}</td><td class="num">${pointsText(f.points * f.count)}</td></tr>`).join("")}
         <tr><td>薬剤料</td><td>剤ごとの合計（上の表）</td><td></td><td class="num">${pointsText(rx.drugPoints)}</td></tr></table>
       <div class="rp-foot">処方日 ${formatDate(rx.prescribedOn)} ／ 入力 ${formatDateTime(rx.createdAt)} ／ 合計 <strong>${pointsText(rx.totalPoints)}</strong> ／
-        一部負担金（${burdenText(rx.burdenPercent)}）<strong>${rx.copayYen.toLocaleString()}円</strong> ／ お薬手帳 ${HANDBOOK[rx.handbook]}</div>
+        一部負担金（${burdenText(rx.burdenPercent, rx.burdenReason)}）<strong>${rx.copayYen.toLocaleString()}円</strong>${rx.kohi.map((k) => ` → ${escapeHtml(k.name)}の後 <strong>${k.payYen.toLocaleString()}円</strong>`).join("")} ／ お薬手帳 ${HANDBOOK[rx.handbook]}</div>
       ${rx.specialFeeYen === null ? "" : `<div class="rp-foot">特別の料金（選定療養）：${rx.specialFeeMethod === "points"
         ? `価格差を剤ごとに点数にして × 10円 ＋ 消費税`
         : `価格差 × 投薬全量を10円単位にして ＋ 消費税`} = <strong>${rx.specialFeeYen.toLocaleString()}円</strong></div>`}
@@ -348,6 +395,7 @@ function select(i, scroll = true) {
   selectedIndex = i;
   visitLabel.textContent = `選んだ来局 ${formatDate(prescriptions[i].dispensedOn)}`;
   for (const b of visitButtons) b.disabled = false;
+  renderHandover();
   for (const card of timeline.querySelectorAll(".visit-card")) {
     const on = Number(card.dataset.index) === i;
     card.setAttribute("aria-selected", String(on));
@@ -940,17 +988,10 @@ renderMemo(memo);
 // ---------- 操作の帯 ----------
 // 別の作業は薬歴の上に重なる窓で開く（overlay.js）。Esc・×・ブラウザの「戻る」で閉じ、薬歴の同じ場所に戻る
 const selected = () => prescriptions[selectedIndex];
-function openDo(i = selectedIndex) {
-  if (i >= 0) openOverlay(`/rx?patient=${patient.id}&from=${prescriptions[i].id}`);
-}
 const openNewRx = () => openOverlay(`/rx?patient=${patient.id}`);
 const openTracing = () => openOverlay(tracingHref(selected()));
 document.querySelector("#new-rx").addEventListener("click", openNewRx);
-document.querySelector("#do-rx").addEventListener("click", () => openDo());
 document.querySelector("#write-record").addEventListener("click", () => openRecordDialog());
-document.querySelector("#open-receipt").addEventListener("click", () => openOverlay(`/receipt?id=${selected().id}`));
-document.querySelector("#open-handbook").addEventListener("click", () => openOverlay(`/handbook?id=${selected().id}`));
-document.querySelector("#open-inspect").addEventListener("click", () => openOverlay(`/inspect?id=${selected().id}`));
 document.querySelector("#to-tracing").addEventListener("click", openTracing);
 document.querySelector("#to-logs").addEventListener("click", () => openOverlay(`/logs?patient=${patient.id}`));
 for (const b of visitButtons) b.disabled = prescriptions.length === 0;
@@ -967,7 +1008,6 @@ document.addEventListener("keydown", (e) => {
   if (!e.altKey || tourActive() || document.querySelector("dialog[open]")) return;
   const actions = {
     KeyN: openNewRx,
-    KeyD: () => openDo(),
     KeyK: () => openRecordDialog(),
     KeyM: () => openNoteDialog(),
     KeyL: openLabDialog,
@@ -1002,7 +1042,7 @@ setTour("patient", [
         <div><b>いちばん上</b>戻る（患者一覧へ）・画面の名前・患者の氏名</div>
         <div><b>青い帯</b>右端に新規処方。左に閲覧記録と配置を変える</div>
         <div><b>箱</b>患者・注意点・次に確認すること・今の処方・メモ帳・検査値、処方の推移、経過。書き足すときは箱の見出しの「＋」</div>
-        <div><b>経過の帯</b>選んだ来局への操作（Do・指導記録・領収証など）</div>
+        <div><b>経過の帯</b>選んだ来局の引き継ぎのチェックリストと、指導記録・トレーシングレポート</div>
       </div>`,
   },
   {
@@ -1077,12 +1117,13 @@ setTour("patient", [
   },
   {
     target: "#visit-bar",
-    title: "選んだ来局への操作",
-    body: `<p>経過で選んでいる来局に対して働きます。</p>
+    title: "この来局の引き継ぎ",
+    body: `<p>経過で選んでいる来局について、毎回同じことを確かめる<strong>チェックリスト</strong>です。</p>
       <ul>
-        <li><b>この処方でDo</b> <kbd>Alt</kbd>+<kbd>D</kbd>：その処方を写して新しい処方を入力する（薬価は今日の日付で引き直す）</li>
-        <li><b>指導記録を書く</b> <kbd>Alt</kbd>+<kbd>K</kbd>・<b>領収証・明細書</b>・<b>お薬手帳</b>・<b>調剤監査</b>・<b>トレーシングレポート</b> <kbd>Alt</kbd>+<kbd>T</kbd></li>
-      </ul>`,
+        <li>押して付ける：前回の P に応えた（前回の P があるとき）・アレルギー・併用薬を照らした・処方が変わった理由を聞いた（変わったとき）</li>
+        <li>指導記録を書くと付く：S・O・A を書いた・次回の P を書いた</li>
+      </ul>
+      <p>右に<b>指導記録を書く</b> <kbd>Alt</kbd>+<kbd>K</kbd> と<b>トレーシングレポート</b> <kbd>Alt</kbd>+<kbd>T</kbd>。領収証・お薬手帳・調剤監査は受付状況（事務）の画面から、前回の処方を写すのは処方入力の画面（<kbd>Alt</kbd>+<kbd>D</kbd>）からです。</p>`,
   },
 
 

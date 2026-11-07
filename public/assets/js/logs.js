@@ -14,6 +14,8 @@ const ACTIONS = {
   "prescription.create": ["処方を保存", "act-create"],
   "note.create": ["患者メモを追加", "act-create"],
   "note.update": ["患者メモを修正", "act-create"],
+  "handover.check": ["引き継ぎを確認", "act-create"],
+  "kohi.create": ["公費を登録", "act-create"],
   "memo.update": ["メモ帳を書き換え", "act-create"],
   "record.create": ["指導記録を記載", "act-create"],
   "master.import": ["医薬品マスターを取り込み", "act-create"],

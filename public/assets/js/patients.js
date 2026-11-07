@@ -1,4 +1,4 @@
-import { allowedBurdens, ageParts } from "./burden.js";
+import { standardBurdens, ageParts } from "./burden.js";
 import { renderShell, api, ApiError, escapeHtml, formatDate, birthText, SEX, debounce, listNavigator, toastNext, today } from "./app.js";
 import { icon } from "./icons.js";
 import { NOTE_LABEL } from "./record-kinds.js";
@@ -95,7 +95,7 @@ function openDialog() {
 function limitBurdens() {
   const birth = form.elements.birthDate.value;
   const ok = birth !== "" && birth <= today();
-  const allowed = ok ? allowedBurdens(birth, today()) : [30, 20, 10, 0];
+  const allowed = ok ? [...standardBurdens(birth, today()), 0] : [30, 20, 10, 0];
   for (const r of form.querySelectorAll('input[name="burdenPercent"]')) {
     r.disabled = !allowed.includes(Number(r.value));
     r.closest("label").classList.toggle("disabled", r.disabled);
@@ -107,7 +107,7 @@ function limitBurdens() {
   }
   const age = ok ? ageParts(birth, today()) : null;
   document.querySelector("#p-burden-hint").textContent = ok
-    ? `${age.years}歳${age.months}か月。${insured.length === 1 ? `年齢で${insured[0] / 10}割に決まります（生活保護なら生活保護）` : "所得で決まります。高齢受給者証・後期高齢者医療の資格確認の割合を選んでください"}`
+    ? `${age.years}歳${age.months}か月。${insured.length === 1 ? `年齢の標準は${insured[0] / 10}割です` : "所得で決まります。高齢受給者証・後期高齢者医療の資格確認の割合を選んでください"}。障害認定・一部負担金の免除は、登録の後に薬歴の帯の「負担」から`
     : "生年月日を入れると、その年齢でありうる割合だけ選べます";
 }
 form.elements.birthDate.addEventListener("input", limitBurdens);
@@ -138,6 +138,7 @@ form.addEventListener("submit", async (e) => {
         birthDate: form.elements.birthDate.value,
         sex: form.elements.sex.value,
         burdenPercent: form.elements.burdenPercent.value === "" ? null : Number(form.elements.burdenPercent.value),
+        burdenReason: form.elements.burdenPercent.value === "0" ? "welfare" : null, // 登録で選べる 0 は生活保護だけ（免除・障害認定は薬歴の帯から）
       },
     });
     toastNext(`患者を登録しました（患者番号 ${created.patientNo}）`);

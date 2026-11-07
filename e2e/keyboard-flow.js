@@ -38,6 +38,13 @@ async function viaOverlay(action, pattern) {
   await page.goto(src.href);
 }
 
+// 前回の処方を写す：薬歴から処方入力を開き（Alt+N）、処方入力で Alt+D（いちばん新しい来局の処方を写す）
+async function doFromPatient(id) {
+  await viaOverlay("Alt+N", new RegExp(`^/rx\\?patient=${id}$`));
+  await page.waitForFunction(() => document.activeElement?.dataset.field === "drug");
+  await Promise.all([page.waitForURL(/from=/), page.keyboard.press("Alt+D")]);
+}
+
 const focused = () => page.evaluate(() => {
   const el = document.activeElement;
   return { id: el.id, field: el.dataset.field ?? null, r: el.dataset.r ?? null, i: el.dataset.i ?? null, tag: el.tagName };
@@ -237,8 +244,8 @@ assert.match(await text(selectedCard), /2026\/03\/31[\s\S]*薬剤料 84点/);
 assert.match(await text(".toasts"), /処方を保存しました（合計 281点・窓口で 840円）/);
 
 // 8. 前回Do：選んだ処方を複写。薬価は今日の日付で引き直す
-step("Alt+D で前回Do");
-await viaOverlay("Alt+D", /^\/rx\?patient=1&from=/);
+step("処方入力で Alt+D：前回の処方を写す");
+await doFromPatient(1);
 await page.waitForSelector("#do-note:not([hidden])");
 assert.equal((await focused()).field, "qty");
 assert.equal(await text("#total"), "56点");
@@ -288,7 +295,7 @@ await page.waitForSelector(selectedCard);
 // ロキソニン（選）10.65円 × 3 + ムコスタ 10.80円 × 3 = 64.35円 → 6点 × 14日 = 84点。
 // 特別の料金：価格差 0.15円 × 3 = 0.45円 → 1点 × 14日 = 14点 → 140円 + 消費税 = 154円
 assert.match(await text(selectedCard), /2026\/10\/22[\s\S]*薬剤料 84点[\s\S]*特別の料金 154円[\s\S]*ロキソニン錠６０ｍｇ（選）/);
-await viaOverlay("Alt+D", /^\/rx\?patient=7&from=/);
+await doFromPatient(7);
 await page.waitForFunction(() => document.querySelector("#bill-special").textContent === "154円");
 assert.equal(await text("#total"), "84点");
 assert.match(await text('tr.item[data-r="0"][data-i="0"] .drug-meta'), /選定療養（患者希望）[\s\S]*価格差 0\.15円\/錠/);
@@ -415,7 +422,7 @@ assert.match(await text(".tracing-sheet"), /○○内科クリニック（架空
 step("処方入力：小児の分量（体重当たり）");
 await page.goto(`${BASE}/patient?id=4`);
 await page.waitForSelector(selectedCard);
-await viaOverlay("Alt+D", /^\/rx\?patient=4&from=/);
+await doFromPatient(4);
 await page.waitForSelector("#peds:not([hidden]) #peds-list li");
 assert.match(await text("#peds-weight"), /5歳・体重 18\.0kg/);
 assert.equal(await page.locator("#peds-list li.peds-ok").count(), 3);
@@ -467,12 +474,59 @@ await page.waitForFunction(() => document.querySelector("#scan-error").textConte
 await Promise.all([page.waitForURL(/\/board$/), page.keyboard.press("Control+Enter")]);
 await page.waitForSelector(".col-audited .board-card");
 assert.match(await text(".toasts"), /調剤監査を保存しました（合わない読み取り 2件も記録）/);
-await page.click(".col-audited .board-card .btn");
+// 投薬待ちの札には、お薬手帳（事務が出して薬剤師が渡す）と「投薬した」。会計待ちには領収証・明細書と「会計した」
+assert.match(await text(".col-audited .board-card .bc-actions"), /お薬手帳[\s\S]*投薬した/);
+await page.click(".col-audited .board-card .btn-primary");
 await page.waitForSelector(".col-handed .board-card");
+assert.match(await text(".col-handed .board-card .bc-actions"), /領収証・明細書[\s\S]*会計した/);
 assert.equal(await page.evaluate(() => document.activeElement.textContent), "会計した");
 await page.keyboard.press("Enter");
 await page.waitForSelector(".col-paid .board-card");
 assert.match(await text(".col-paid .board-card"), /入力 \d\d:\d\d → 監査 \d\d:\d\d → 投薬 \d\d:\d\d → 会計 \d\d:\d\d/);
+
+// 18-2. 公費：帯の「公費」から受給者証を足す → 処方入力の会計に公費の行が出て、管理票の累計で月の上限まで止まる → 領収証と管理票
+step("公費：受給者証を足す → 会計で月の上限まで → 領収証・管理票。薬歴の引き継ぎのチェックリスト");
+await page.goto(`${BASE}/patient?id=2`);
+await page.waitForSelector("#band [data-kohi]");
+assert.equal(await text("#band [data-kohi]"), "なし");
+await page.click("#band [data-kohi]");
+await page.waitForSelector("#kohi-dialog[open]");
+await page.selectOption("#k-kind", "nanbyo");
+await page.fill("#k-payer", "54200012");
+await page.fill("#k-recipient", "7654321");
+await page.fill("#k-from", "2026-04-01");
+await page.fill("#k-until", "2027-03-31");
+await page.fill("#k-cap", "10000");
+await page.keyboard.press("Control+Enter");
+await page.waitForFunction(() => document.querySelectorAll(".kohi-list tbody tr").length === 1);
+assert.match(await text(".kohi-list tbody"), /指定難病[\s\S]*54200012[\s\S]*2割・月 10,000円 まで/);
+await page.keyboard.press("Escape");
+await page.waitForFunction(() => document.querySelector("#band [data-kohi]").textContent === "難病");
+await page.goto(`${BASE}/rx?patient=2`);
+await page.waitForSelector("#bill-kohi .kohi-row");
+await page.waitForFunction(() => document.activeElement?.dataset.field === "drug");
+await page.keyboard.press("Alt+D");
+await page.waitForURL(/from=/);
+await page.waitForFunction(() => document.querySelector("#bill-charge").textContent !== "—");
+const copay = Number((await text("#bill-copay")).replace(/[^\d]/g, ""));
+const kohiPay = Number((await text('#bill-kohi [data-kohi-pay]')).replace(/（.*$/, "").replace(/[^\d]/g, ""));
+assert.ok(kohiPay < copay, `難病の2割（${kohiPay}円）が3割の一部負担金（${copay}円）より少ない`);
+await page.fill("#bill-kohi [data-kohi-prior]", "9950");
+await page.waitForFunction(() => document.querySelector("#bill-kohi [data-kohi-pay]").textContent.startsWith("50円（今月の累計 10,000円）"));
+assert.match(await text("#bill-charge"), /^50円$/);
+await Promise.all([page.waitForURL(/\/patient\?id=2/), page.keyboard.press("Control+Enter")]);
+await page.waitForSelector(selectedCard);
+assert.match(await text(selectedCard), /窓口 50円/);
+// 引き継ぎのチェックリスト：押して付ける項目と、指導記録を書くと付く項目
+assert.match(await text("#handover"), /引き継ぎ 0\/\d/);
+await page.click('#handover [data-check="cautions"]');
+await page.waitForSelector('#handover [data-check="cautions"][aria-pressed="true"]');
+assert.match(await text("#handover"), /引き継ぎ 1\/\d/);
+const rxId2 = await page.evaluate(async () => (await (await fetch("/api/patients/2")).json()).prescriptions[0].id);
+await page.goto(`${BASE}/receipt?id=${rxId2}`);
+await page.waitForSelector(".kanrihyo");
+assert.match(await text(".r-money"), /指定難病の後の負担額[\s\S]*50円[\s\S]*領収額 合計[\s\S]*50円/);
+assert.match(await text(".kanrihyo"), /指定難病[\s\S]*7654321[\s\S]*50円[\s\S]*10,000円[\s\S]*10,000円/);
 
 // 19. 在宅：予定（回数の上限）→ 記録（薬歴から報告書の形）→ 報告書の印刷
 step("在宅：訪問の予定（週1回まで）・記録・報告書");
@@ -727,16 +781,20 @@ assert.equal(await inFrame.locator(".sidebar").isHidden(), true); // 窓の中�
 await page.keyboard.press("Escape");                               // 窓の中にフォーカスがあっても Esc で閉じる
 await page.waitForSelector("dialog.overlay:not([open])", { state: "attached" });
 assert.match(page.url(), /\/patient\?id=1$/);
-await page.click("#open-handbook");
-await page.waitForFunction(() => document.querySelector("#overlay-title").textContent === "お薬手帳");
+await page.click("#to-tracing");
+await page.waitForFunction(() => document.querySelector("#overlay-title").textContent === "トレーシングレポート");
 await page.click(".overlay-close");
 await page.waitForSelector("dialog.overlay:not([open])", { state: "attached" });
 await page.goForward();                                             // 進むで、閉じた窓がまた開く
 await page.waitForSelector("dialog.overlay[open]");
 await page.goBack();                                                // 戻るで閉じる
 await page.waitForSelector("dialog.overlay:not([open])", { state: "attached" });
-await page.keyboard.press("Alt+D");
+await page.keyboard.press("Alt+N");
 await page.waitForSelector("dialog.overlay[open]");
+await inFrame.locator('[data-field="drug"]').first().waitFor();
+await page.waitForFunction(() => document.querySelector("dialog.overlay iframe").contentDocument.activeElement?.dataset.field === "drug");
+await page.keyboard.press("Alt+D");
+await page.waitForFunction(() => document.querySelector("dialog.overlay iframe").contentWindow.location.search.includes("from="));
 await inFrame.locator('[data-field="drug"]').first().waitFor();
 await page.waitForFunction(() => document.querySelector("dialog.overlay iframe").contentDocument.querySelector("#total").textContent !== "—");
 await Promise.all([page.waitForURL(/\/patient\?id=1&saved=/), page.keyboard.press("Control+Enter")]);

@@ -9,7 +9,7 @@ export async function feeContext(db, patientId, date, { excludePrescriptionId = 
   eraOf(date); // 規則の無い日付ならここで止める
   const placeholders = ALL_CODES.map((_, i) => `?${i + 2}`).join(", ");
   const [patient, facility, fees, recent, done] = await db.batch([
-    db.prepare("SELECT birth_date, burden_percent FROM patients WHERE id = ?1").bind(patientId),
+    db.prepare("SELECT birth_date, burden_percent, burden_reason, burden_until FROM patients WHERE id = ?1").bind(patientId),
     db.prepare(`SELECT * FROM pharmacy_facility WHERE pharmacy_id = (SELECT pharmacy_id FROM patients WHERE id = ?2)
                   AND valid_from <= ?1 ORDER BY valid_from DESC LIMIT 1`).bind(date, patientId),
     db.prepare(`
@@ -39,6 +39,8 @@ export async function feeContext(db, patientId, date, { excludePrescriptionId = 
     date,
     facility: f,
     burdenPercent: p.burden_percent,
+    burdenReason: p.burden_reason,
+    burdenUntil: p.burden_until,
     birthDate: p.birth_date,
     ageYears: ageOn(p.birth_date, date),
     history: { within3Months: recent.results[0].n > 0, done: done.results.map((r) => r.code) },

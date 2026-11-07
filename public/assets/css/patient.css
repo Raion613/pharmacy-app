@@ -240,5 +240,15 @@ dialog.wide { width: 780px; }
 .visit-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px 10px; background: var(--accent-soft); border-bottom: 1px solid var(--accent-line); }
 .visit-bar .visit-label { font-weight: 700; color: var(--accent-strong); margin-right: 4px; white-space: nowrap; }
 .visit-bar .btn { height: 30px; padding: 0 10px; font-size: 13px; }
+/* この来局の引き継ぎ：付いた項目は塗り、まだの項目は白。指導記録で付く項目は押せない */
+.handover { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.hc-count { font-size: 12px; font-weight: 700; color: var(--sub); margin-right: 2px; white-space: nowrap; }
+.hc-count.all { color: var(--accent-strong); }
+.hc { height: 26px; padding: 0 8px; border: 1px solid var(--border-strong); border-radius: 13px; background: #fff; color: var(--text); font: inherit; font-size: 12px; white-space: nowrap; display: inline-flex; align-items: center; }
+button.hc { cursor: pointer; }
+button.hc:hover, button.hc:focus-visible { border-color: var(--accent); }
+.hc.done { background: var(--accent); border-color: var(--accent); color: #fff; }
+.hc.auto { border-style: dashed; color: var(--sub); }
+.hc.auto.done { border-style: solid; background: var(--accent-soft); color: var(--accent-strong); border-color: var(--accent-line); }
 .visit-bar .btn[disabled] { opacity: .45; cursor: default; }
 .pt-grid.editing .visit-bar { pointer-events: none; }

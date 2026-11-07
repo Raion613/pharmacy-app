@@ -297,3 +297,15 @@ dialog.overlay iframe { flex: 1; width: 100%; border: 0; }
 
 /* 重なる窓の中に読み込まれた画面：左のメニュー・上の帯・パンくずは出さない（窓の見出しと Esc で足りる） */
 .embed .sidebar, .embed .topbar, .embed .crumbs { display: none; }
+
+/* 負担割合の窓：年齢の標準から外れる事情の見出しと、免除の期限 */
+.burden-group { margin: 6px 0 0; font-size: 12px; color: var(--sub); font-weight: 700; }
+.burden-until { display: flex; align-items: center; gap: 8px; margin-top: 6px; }
+
+/* 公費の窓 */
+#kohi-dialog { width: min(820px, calc(100vw - 32px)); }
+.kohi-list tr.expired td { color: var(--sub); text-decoration: line-through; }
+.kohi-add-head { margin: 4px 0 0; font-size: 13px; }
+.kohi-add { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 14px; }
+.kohi-add [hidden] { display: none; }
+.kohi-dates { display: flex; align-items: center; gap: 6px; }
