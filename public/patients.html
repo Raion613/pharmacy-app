@@ -71,11 +71,13 @@
       </div>
       <div class="field">
         <span class="label" id="p-burden-label">負担割合（保険証の割合）</span>
-        <div class="radio-row" role="radiogroup" aria-labelledby="p-burden-label">
-          <label><input type="radio" name="burdenPercent" value="10">1割</label>
-          <label><input type="radio" name="burdenPercent" value="20">2割</label>
+        <div class="radio-row wrap" role="radiogroup" aria-labelledby="p-burden-label" id="p-burdens">
           <label><input type="radio" name="burdenPercent" value="30">3割</label>
+          <label><input type="radio" name="burdenPercent" value="20">2割</label>
+          <label><input type="radio" name="burdenPercent" value="10">1割</label>
+          <label><input type="radio" name="burdenPercent" value="0">生活保護</label>
         </div>
+        <span class="hint" id="p-burden-hint">生年月日を入れると、その年齢でありうる割合だけ選べます</span>
         <span class="error-text" data-error="burdenPercent"></span>
       </div>
     </div>

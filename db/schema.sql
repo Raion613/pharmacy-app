@@ -249,9 +249,10 @@ CREATE TABLE patients (
   kana       TEXT NOT NULL,             -- 全角カタカナ
   birth_date TEXT NOT NULL,
   sex        TEXT NOT NULL CHECK (sex IN ('M', 'F')),
-  burden_percent INTEGER NOT NULL CHECK (burden_percent IN (10, 20, 30)), -- 一部負担金の割合（保険証の負担割合）
+  burden_percent INTEGER NOT NULL CHECK (burden_percent IN (0, 10, 20, 30)), -- 一部負担金の割合（保険証の負担割合）。0＝生活保護（医療扶助で自己負担なし）。ありうる割合は年齢で決まる（burden.js）
   created_at TEXT NOT NULL,
   created_by INTEGER NOT NULL REFERENCES users(id),
+  burden_checked_on TEXT,               -- 負担割合を資格確認で最後に確かめた日。この日より後に年齢で割合が変わる日が来たら、確認の窓を出す
   UNIQUE (pharmacy_id, patient_no)
 );
 
@@ -348,7 +349,8 @@ CREATE TABLE prescription_fees (
 CREATE INDEX idx_prescription_fees_code ON prescription_fees(code);
 
 -- 患者ごとのメモ（来局をまたいで引き継ぐ情報）。分類は服薬管理指導料の通知が薬歴への記載を求める項目に合わせる。
--- 追記だけにする（消さない）。
+-- 1行が1件（アレルギー1つ、併用薬1つ）。直すときは行を書き換えず、直した内容を新しい行として足し、revises で直す前の行を指す。
+-- 今の内容は「どの行からも revises で指されていない行」。直す前の内容は消えずに残る（誰が・いつ・何を直したかが追える）。
 CREATE TABLE patient_notes (
   id         INTEGER PRIMARY KEY,
   patient_id INTEGER NOT NULL REFERENCES patients(id),
@@ -356,10 +358,13 @@ CREATE TABLE patient_notes (
   body       TEXT NOT NULL,
   source     TEXT NOT NULL CHECK (source IN ('manual', 'conversation')), -- 手で書いた／服薬指導の会話から拾って薬剤師が確かめた
   created_at TEXT NOT NULL,
-  created_by INTEGER NOT NULL REFERENCES users(id)
+  created_by INTEGER NOT NULL REFERENCES users(id),
+  revises    INTEGER REFERENCES patient_notes(id) -- 直す前の行。NULL＝最初に書いた行
 );
 
 CREATE INDEX idx_patient_notes_patient ON patient_notes(patient_id, created_at);
+-- 同じ行を2人が同時に直したら、後の方を失敗させる（片方の修正が黙って消えない）
+CREATE UNIQUE INDEX idx_patient_notes_revises ON patient_notes(revises);
 
 -- 検査値・体重。処方箋に印字された検査値、検査結果の用紙、薬局での聞き取りなどから入れる。
 -- 値は小数を持ち込まないよう 1000倍の整数にする（eGFR 48 → 48000、PT-INR 1.25 → 1250）。項目は lab-items.js

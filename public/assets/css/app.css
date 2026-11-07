@@ -220,6 +220,26 @@ dialog .dialog-foot { display: flex; justify-content: flex-end; gap: 8px; paddin
 }
 .radio-row label:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); font-weight: 700; }
 .radio-row label:has(input:focus-visible) { box-shadow: 0 0 0 3px rgba(10, 127, 179, .22); }
+.radio-row.wrap { flex-wrap: wrap; }
+.radio-row label.disabled { opacity: .4; cursor: not-allowed; }
+
+/* 患者の帯の負担割合：押すと変える窓が開く */
+.burden-btn { padding: 0 8px; height: 24px; border: 1px solid var(--border-strong); border-radius: 4px; background: #fff; color: var(--accent-strong); font: inherit; font-weight: 700; cursor: pointer; }
+.burden-btn:hover, .burden-btn:focus-visible { border-color: var(--accent); background: var(--accent-soft); }
+
+/* 負担割合の窓 */
+#burden-dialog { width: min(560px, calc(100vw - 32px)); }
+.burden-who { margin: 0; line-height: 1.7; }
+.burden-events { margin: 0; padding: 10px 12px; list-style: none; display: grid; gap: 6px; background: #fff8e6; border: 1px solid #f0d9a0; border-radius: var(--radius); }
+.burden-events:empty { display: none; }
+.burden-events .on { display: inline-block; min-width: 92px; font-weight: 700; }
+.burden-mismatch { margin: 0; padding: 8px 12px; color: var(--danger); background: var(--danger-soft); border-radius: var(--radius); font-weight: 700; }
+.burden-choices { display: grid; gap: 6px; }
+.burden-choices label { display: grid; grid-template-columns: auto 11em 1fr; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid var(--border-strong); border-radius: var(--radius); cursor: pointer; }
+.burden-choices label:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
+.burden-choices label:has(input:focus-visible) { box-shadow: 0 0 0 3px rgba(10, 127, 179, .22); }
+.burden-choices label.disabled { opacity: .4; cursor: not-allowed; }
+.burden-choices .why { color: var(--sub); font-size: 12px; }
 
 /* タブレット幅：左のアイコン列を細くし、2列の画面は縦に積む */
 @media (max-width: 900px) {

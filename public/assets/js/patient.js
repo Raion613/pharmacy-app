@@ -7,7 +7,7 @@
 //   つながる薬局で届いたメッセージ。左の S・O・A・P には、下書き（会話と処方から組み立てた文）とテンプレートを写せる
 import {
   renderShell, api, ApiError, escapeHtml, formatDate, formatDateTime, birthText, SEX, priceText, pointsText,
-  unitText, toast,
+  unitText, toast, today,
 } from "./app.js";
 import { setupLayout } from "./layout-grid.js";
 import { setupMemoPad, memoText, memoMeta } from "./memo-pad.js";
@@ -16,6 +16,8 @@ import { dailyCost, formatYen, formatSen, formatQuantity } from "./yakuzairyo.js
 import { NOTE_CATEGORIES, NOTE_LABEL, SOAP, LEFTOVER, NOTEBOOK, NOTE_MAX } from "./record-kinds.js";
 import { setTour, autoStartTour, tourActive } from "./tour.js";
 import { icon } from "./icons.js";
+import { burdenText } from "./burden.js";
+import { openBurdenDialog } from "./burden-ui.js";
 import { LAB_ITEMS, LAB, labText, latestByItem, formatLabValue } from "./lab-items.js";
 import { suggestGuidance } from "./guidance-suggest.js";
 import { buildDraft, extractNotes } from "./soap-draft.js";
@@ -140,9 +142,17 @@ function latestRecordFrom(index) {
 
 const notesOf = (key) => notes.filter((n) => n.category === key);
 const noteItems = (key, newNoteId) => notesOf(key).map((n) => `<li class="${n.id === newNoteId ? "new" : ""}">${escapeHtml(n.body)}<span class="meta">${
-  formatDate(n.createdAt.slice(0, 10))} ${escapeHtml(n.createdBy)}</span></li>`).join("");
+  formatDate(n.createdAt.slice(0, 10))} ${escapeHtml(n.createdBy)}${n.history.length ? "（修正）" : ""}</span><button type="button" class="note-edit" data-edit-note="${n.id}" title="このメモを直す">直す</button></li>`).join("");
 
-// 患者：氏名と、来局時に確かめる基本の事実
+// 患者：氏名と、来局時に確かめる基本の事実。「負担」を押すと負担割合を変える窓
+band.addEventListener("click", async (e) => {
+  if (!e.target.closest("[data-burden]")) return;
+  const updated = await openBurdenDialog(patient, today());
+  if (updated === null) return;
+  Object.assign(patient, updated);
+  renderBand();
+  toast(`負担割合を ${burdenText(patient.burdenPercent)} で確定しました`);
+});
 function renderBand() {
   band.innerHTML = `
     <div class="kana">${escapeHtml(patient.kana)}</div>
@@ -150,7 +160,7 @@ function renderBand() {
     <dl class="facts">
       <div><dt>生年月日</dt><dd>${birthText(patient.birthDate)}</dd></div>
       <div><dt>性別</dt><dd class="sex-${patient.sex}">${SEX[patient.sex]}</dd></div>
-      <div><dt>負担</dt><dd>${patient.burdenPercent / 10}割</dd></div>
+      <div><dt>負担</dt><dd><button type="button" class="burden-btn" data-burden title="負担割合を変える">${burdenText(patient.burdenPercent)}</button></dd></div>
       <div><dt>患者番号</dt><dd class="num">${escapeHtml(patient.patientNo)}</dd></div>
       <div><dt>最終来局</dt><dd>${patient.lastDispensedOn ? formatDate(patient.lastDispensedOn) : "—"}</dd></div>
     </dl>`;
@@ -295,7 +305,7 @@ function cardHtml(rx, i) {
         <td class="num">${f.points}点${f.count > 1 ? ` × ${f.count}` : ""}</td><td class="num">${pointsText(f.points * f.count)}</td></tr>`).join("")}
         <tr><td>薬剤料</td><td>剤ごとの合計（上の表）</td><td></td><td class="num">${pointsText(rx.drugPoints)}</td></tr></table>
       <div class="rp-foot">処方日 ${formatDate(rx.prescribedOn)} ／ 入力 ${formatDateTime(rx.createdAt)} ／ 合計 <strong>${pointsText(rx.totalPoints)}</strong> ／
-        一部負担金（${rx.burdenPercent / 10}割）<strong>${rx.copayYen.toLocaleString()}円</strong> ／ お薬手帳 ${HANDBOOK[rx.handbook]}</div>
+        一部負担金（${burdenText(rx.burdenPercent)}）<strong>${rx.copayYen.toLocaleString()}円</strong> ／ お薬手帳 ${HANDBOOK[rx.handbook]}</div>
       ${rx.specialFeeYen === null ? "" : `<div class="rp-foot">特別の料金（選定療養）：${rx.specialFeeMethod === "points"
         ? `価格差を剤ごとに点数にして × 10円 ＋ 消費税`
         : `価格差 × 投薬全量を10円単位にして ＋ 消費税`} = <strong>${rx.specialFeeYen.toLocaleString()}円</strong></div>`}
@@ -424,46 +434,91 @@ function applyShape(rows) {
 }
 for (const b of shapeButtons) b.addEventListener("click", () => layout.setOption("historyRows", Number(b.dataset.rows)));
 
-// ---------- 患者メモの追加 ----------
+// ---------- 患者メモの追加・修正 ----------
+// 追加：1行に1件（アレルギー1つ、併用薬1つ）。何行でもまとめて登録し、1行ずつ別のメモになる。
+// 修正：各メモの「直す」から。直す前の内容は消えずに残り、この窓の下に並ぶ。
 
 const noteDialog = document.querySelector("#note-dialog");
 const noteForm = document.querySelector("#note-form");
-const noteBody = noteForm.elements.body;
+const noteRows = document.querySelector("#note-rows");
+const noteHistory = document.querySelector("#note-history");
+let editingNote = null; // 直しているメモ（追加のときは null）
 document.querySelector("#note-categories").innerHTML = NOTE_CATEGORIES.map((c) =>
   `<label><input type="radio" name="category" value="${c.key}">${escapeHtml(c.label)}</label>`).join("");
 
-// category を渡すと、その分類を選んだ状態で開く（箱の見出しの「＋」から）
-function openNoteDialog(category = null) {
+function addNoteRow(value = "") {
+  noteRows.insertAdjacentHTML("beforeend", `<li><input class="input" name="body" maxlength="${NOTE_MAX}" autocomplete="off"
+    placeholder="例：セフカペン（フロモックス）で発疹（3歳、他院）" value="${escapeHtml(value)}"></li>`);
+  return noteRows.lastElementChild.querySelector("input");
+}
+
+function openNoteForm({ category, note }) {
+  editingNote = note;
   noteForm.reset();
   clearFormErrors(noteForm);
-  updateCounter();
+  noteRows.innerHTML = "";
+  addNoteRow(note?.body ?? "");
+  const adding = note === null;
+  document.querySelector("#note-dialog-title").textContent = adding ? "患者メモを追加" : "患者メモを直す";
+  document.querySelector("#note-rows-hint").hidden = !adding;
+  document.querySelector("#note-add-row").hidden = !adding;
+  document.querySelector("#note-submit").innerHTML = `${adding ? "追加" : "直す"} <kbd>Ctrl+Enter</kbd>`;
+  noteHistory.hidden = adding || note.history.length === 0;
+  noteHistory.querySelector("ul").innerHTML = adding ? "" : note.history.map((h) =>
+    `<li><span class="cat">${escapeHtml(NOTE_LABEL[h.category])}</span>${escapeHtml(h.body)}<span class="meta">${formatDate(h.createdAt.slice(0, 10))} ${escapeHtml(h.createdBy)}</span></li>`).join("");
   noteDialog.showModal();
   if (category === null) {
     noteForm.querySelector('input[name="category"]').focus();
   } else {
     noteForm.querySelector(`input[name="category"][value="${category}"]`).checked = true;
-    noteBody.focus();
+    noteRows.querySelector("input").focus();
   }
 }
+// category を渡すと、その分類を選んだ状態で開く（箱の見出しの「＋」から）
+const openNoteDialog = (category = null) => openNoteForm({ category, note: null });
 for (const b of document.querySelectorAll("[data-note]")) b.addEventListener("click", () => openNoteDialog(b.dataset.note));
+document.addEventListener("click", (e) => {
+  const b = e.target.closest("[data-edit-note]");
+  if (!b) return;
+  const note = notes.find((n) => n.id === Number(b.dataset.editNote));
+  openNoteForm({ category: note.category, note });
+});
 
-function updateCounter() {
-  noteForm.querySelector('[data-counter="note-body"]').textContent = `${noteBody.value.length} / ${NOTE_MAX}文字`;
-}
-noteBody.addEventListener("input", updateCounter);
+document.querySelector("#note-add-row").addEventListener("click", () => addNoteRow().focus());
+// 行で Enter：次の行へ（最後の行に書いてあれば行を足す）
+noteRows.addEventListener("keydown", (e) => {
+  if (e.key !== "Enter" || e.ctrlKey || e.isComposing || editingNote !== null) return;
+  e.preventDefault();
+  const li = e.target.closest("li");
+  const next = li.nextElementSibling?.querySelector("input");
+  if (next) next.focus();
+  else if (e.target.value.trim() !== "") addNoteRow().focus();
+});
 
 noteForm.addEventListener("submit", async (e) => {
   e.preventDefault();
+  const category = noteForm.elements.category.value;
+  const bodies = [...noteRows.querySelectorAll("input")].map((i) => i.value.trim()).filter((v) => v !== "");
   await submit(noteForm, async () => {
-    const note = await api(`/api/patients/${patient.id}/notes`, {
-      method: "POST",
-      body: { category: noteForm.elements.category.value, body: noteBody.value },
-    });
-    notes.unshift(note);
-    noteDialog.close();
-    renderBand();
-    renderSummary(note.id);
-    toast(`${NOTE_LABEL[note.category]}のメモを追加しました`);
+    if (editingNote === null) {
+      const added = await api(`/api/patients/${patient.id}/notes`, {
+        method: "POST",
+        body: { notes: (bodies.length ? bodies : [""]).map((body) => ({ category, body, source: "manual" })) },
+      });
+      notes.unshift(...added);
+      noteDialog.close();
+      renderBand();
+      renderSummary(added[0].id);
+      toast(`${NOTE_LABEL[category]}のメモを${added.length}件追加しました`);
+    } else {
+      const fixed = await api(`/api/patients/${patient.id}/notes/${editingNote.id}`, { method: "PUT", body: { category, body: bodies[0] ?? "" } });
+      notes.splice(notes.indexOf(editingNote), 1);
+      notes.unshift(fixed);
+      noteDialog.close();
+      renderBand();
+      renderSummary(fixed.id);
+      toast(`${NOTE_LABEL[fixed.category]}のメモを直しました`);
+    }
   });
 });
 
@@ -726,8 +781,8 @@ recordForm.addEventListener("submit", async (e) => {
     const picked = [...recordForm.querySelectorAll("[data-extract]:checked")].map((c) => assist.extracted[Number(c.dataset.extract)]);
     let added = [];
     if (picked.length) {
-      added = await api(`/api/patients/${patient.id}/notes-batch`, { method: "POST", body: { notes: picked.map((n) => ({ ...n, source: "conversation" })) } });
-      notes.unshift(...added.reverse());
+      added = await api(`/api/patients/${patient.id}/notes`, { method: "POST", body: { notes: picked.map((n) => ({ ...n, source: "conversation" })) } });
+      notes.unshift(...added);
       renderBand();
     }
     recordDialog.close();
@@ -926,13 +981,14 @@ setTour("patient", [
   {
     target: "#band",
     title: "患者",
-    body: "<p>氏名・カナ・生年月日・性別・負担割合・患者番号・最終来局日です。</p>",
+    body: "<p>氏名・カナ・生年月日・性別・負担割合・患者番号・最終来局日です。<strong>負担割合</strong>を押すと、保険証で確かめた割合に変えられます（年齢でありうる割合だけ選べます）。</p>",
   },
   {
     target: "#cautions",
     title: "注意点",
     body: `<p>アレルギー歴・副作用歴・疾患・併用薬を1つの表にまとめています。<strong>赤い行</strong>はアレルギー歴と副作用歴です。</p>
-      <p><kbd>Alt</kbd>+<kbd>M</kbd> でメモを追加します。分類は、厚労省の通知が薬歴に記載を求める項目に合わせています。</p>`,
+      <p><kbd>Alt</kbd>+<kbd>M</kbd> でメモを追加します。<strong>1行に1件</strong>（アレルギー1つ、併用薬1つ）で、<kbd>Enter</kbd> で次の行に進み、何件でもまとめて登録できます。分類は、厚労省の通知が薬歴に記載を求める項目に合わせています。</p>
+      <p>各メモの「直す」で書き直せます。直す前の内容は消えずに残り、直す窓の下に並びます。</p>`,
   },
   {
     target: "#next",

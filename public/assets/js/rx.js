@@ -7,11 +7,13 @@ import {
 import { calcRp, parseQuantity, formatQuantity, dailyCost, formatYen, formatSen, specialFee } from "./yakuzairyo.js";
 import { calcFees, copayYen } from "./chozai-fee.js";
 import { icon } from "./icons.js";
-import { setTour, autoStartTour } from "./tour.js";
+import { setTour, autoStartTour, tourActive } from "./tour.js";
 import { checkPediatricDose, CHILD_AGE_LIMIT } from "./pediatric-dose.js";
 import { latestByItem, labText } from "./lab-items.js";
 import { ageOn } from "./guidance-suggest.js";
 import { setupMemoPad } from "./memo-pad.js";
+import { burdenText } from "./burden.js";
+import { burdenCheck, openBurdenDialog } from "./burden-ui.js";
 
 const params = new URLSearchParams(location.search);
 const patientId = params.get("patient");
@@ -402,7 +404,7 @@ function updateBill(infos, done, pending) {
   set("bill-drug", pointsText(drug));
   set("bill-other", pointsText(fees.other));
   set("bill-total", pointsText(total));
-  set("bill-burden-label", `一部負担金（${ctx.burdenPercent / 10}割）`);
+  set("bill-burden-label", `一部負担金（${burdenText(ctx.burdenPercent)}）`);
   set("bill-copay", `${copay.toLocaleString()}円`);
   set("bill-special", special ? `${special.yen.toLocaleString()}円` : "—");
   const charge = copay + (special?.yen ?? 0);
@@ -802,6 +804,7 @@ dispensedInput.addEventListener("change", async () => {
   markDirty();
   checkDates();
   await Promise.all([reprice(), loadFeeContext()]);
+  if (burdenCheck(patient, burdenDate()).mismatch) await changeBurden();
   if (state.compare && state.compareAuto) setDefaultCompareDate();
   if (state.compare) await refreshCompare();
 });
@@ -1024,6 +1027,21 @@ $("#handbook").addEventListener("change", (e) => {
   updateSummary();
 });
 
+// ---------- 負担割合 ----------
+// 帯の「負担割合」から変える。前回の来局（か前回確かめた日）より後に年齢で割合が変わりうる日を過ぎていたら、開いたときに確認の窓を出す
+const burdenDate = () => (state.dispensedOn < today() ? state.dispensedOn : today());
+async function changeBurden() {
+  const updated = await openBurdenDialog(patient, burdenDate());
+  if (updated === null) return;
+  Object.assign(patient, updated);
+  renderPatientBand(document.querySelector("#band"), patient, notes);
+  await loadFeeContext();
+  toast(`負担割合を ${burdenText(patient.burdenPercent)} で確定しました`);
+}
+document.querySelector("#band").addEventListener("click", (e) => {
+  if (e.target.closest("[data-burden]")) changeBurden();
+});
+
 // ---------- 開始 ----------
 checkDates();
 loadFeeContext();
@@ -1111,3 +1129,6 @@ setTour("rx", [
   },
 ]);
 autoStartTour();
+
+// 開いたときの負担割合の確認（チュートリアルが流れているときは、その後に開き直したときに出る）
+if (!tourActive() && burdenCheck(patient, burdenDate()).needed) changeBurden();

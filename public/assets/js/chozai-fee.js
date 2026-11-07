@@ -143,9 +143,9 @@ export function calcFees({ date, facility, ageYears, handbook, history, rps, inq
   return { era, lines, tech: sum("tech"), mgmt: sum("mgmt"), other: sum("other") };
 }
 
-// 一部負担金：合計点数 × 10円 × 負担割合。10円未満は四捨五入（健康保険法第75条）
+// 一部負担金：合計点数 × 10円 × 負担割合。10円未満は四捨五入（健康保険法第75条）。生活保護（0）は0円
 export function copayYen(totalPoints, burdenPercent) {
-  if (![10, 20, 30].includes(burdenPercent)) throw new RangeError(`負担割合が不正です: ${burdenPercent}`);
+  if (![0, 10, 20, 30].includes(burdenPercent)) throw new RangeError(`負担割合が不正です: ${burdenPercent}`);
   const yen = (totalPoints * burdenPercent) / 10; // 点数 × 10円 × (割合/100)。割合が10%単位なので必ず整数
   return Math.floor((yen + 5) / 10) * 10;
 }

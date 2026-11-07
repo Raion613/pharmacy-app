@@ -5,6 +5,7 @@ import { pricesAt, STATUS_MESSAGE } from "./prices.js";
 import { feeContext, feeLookup } from "./fees.js";
 import { auditStatement } from "./audit.js";
 import { recordsByPrescription, conversationsByPrescription } from "./records.js";
+import { burdenError } from "./patients.js";
 
 const MAX_RPS = 20;
 const MAX_ITEMS_PER_RP = 15;
@@ -229,6 +230,8 @@ async function billPrescription(db, rx) {
     if (!(e instanceof RangeError)) throw e;
     throw new HttpError(422, "調剤日の算定の規則がありません", [{ path: "dispensedOn", message: e.message }]);
   }
+  const burdenMessage = burdenError(context.birthDate, rx.dispensedOn, context.burdenPercent);
+  if (burdenMessage) throw new HttpError(422, "負担割合を確かめてください", [{ path: "burden", message: `負担割合：${burdenMessage}` }]);
 
   const special = specialFee(rps, rx.dispensedOn);
   let k = 0;

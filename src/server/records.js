@@ -20,27 +20,17 @@ export function validateNote(body) {
   return { category: body.category, body: text, source };
 }
 
-const insertNote = (db, user, patientId, note, now) => db.prepare(
-  "INSERT INTO patient_notes (patient_id, category, body, source, created_at, created_by) VALUES (?1, ?2, ?3, ?4, ?5, ?6) RETURNING id",
-).bind(patientId, note.category, note.body, note.source, now, user.id);
+const insertNote = (db, user, patientId, note, now, revises = null) => db.prepare(
+  "INSERT INTO patient_notes (patient_id, category, body, source, created_at, created_by, revises) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7) RETURNING id",
+).bind(patientId, note.category, note.body, note.source, now, user.id, revises);
 
 async function requirePatient(db, patientId) {
   const patient = await db.prepare("SELECT id FROM patients WHERE id = ?1").bind(patientId).first();
   if (!patient) throw new HttpError(404, "患者が見つかりません");
 }
 
-export async function createNote(db, user, patientId, body) {
-  const note = validateNote(body);
-  await requirePatient(db, patientId);
-  const now = nowIso();
-  const [inserted] = await db.batch([
-    insertNote(db, user, patientId, note, now),
-    auditStatement(db, user.id, "note.create", patientId, NOTE_LABEL[note.category]),
-  ]);
-  return { id: inserted.results[0].id, ...note, createdAt: now, createdBy: user.display_name };
-}
-
-// 会話から拾ったメモ候補のうち、薬剤師が選んだものをまとめて入れる（全部入るか、1つも入らないか）
+// メモを1件ずつ（アレルギー1つ、併用薬1つ）まとめて入れる。手で書いたものも、会話から拾って薬剤師が選んだものも。
+// 全部入るか、1つも入らないか
 export async function createNotes(db, user, patientId, body) {
   if (!Array.isArray(body.notes) || body.notes.length === 0 || body.notes.length > MAX_NOTES_AT_ONCE) {
     throw new HttpError(422, "入力に誤りがあります", [{ path: "notes", message: `メモを1〜${MAX_NOTES_AT_ONCE}件選んでください` }]);
@@ -52,7 +42,7 @@ export async function createNotes(db, user, patientId, body) {
     ...notes.map((n) => insertNote(db, user, patientId, n, now)),
     auditStatement(db, user.id, "note.create", patientId, notes.map((n) => NOTE_LABEL[n.category]).join("・")),
   ]);
-  return notes.map((n, i) => ({ id: results[i].results[0].id, ...n, createdAt: now, createdBy: user.display_name }));
+  return notes.map((n, i) => ({ id: results[i].results[0].id, ...n, createdAt: now, createdBy: user.display_name, history: [] }));
 }
 
 export function validateRecord(body) {
@@ -129,13 +119,39 @@ export async function createConversation(db, user, prescriptionId, body) {
   };
 }
 
+// メモを直す。直した内容を新しい行として足し、直す前の行は残す。直せるのは今の内容（まだ誰も直していない行）だけ
+export async function updateNote(db, user, patientId, noteId, body) {
+  const old = await db.prepare(
+    `SELECT n.id, n.source, EXISTS (SELECT 1 FROM patient_notes x WHERE x.revises = n.id) AS revised
+       FROM patient_notes n WHERE n.id = ?1 AND n.patient_id = ?2`,
+  ).bind(noteId, patientId).first();
+  if (!old) throw new HttpError(404, "メモが見つかりません");
+  if (old.revised) throw new HttpError(422, "入力に誤りがあります", [{ path: "body", message: "ほかの人が先にこのメモを直しました。画面を読み直してください" }]);
+  const note = validateNote({ ...body, source: old.source });
+  const now = nowIso();
+  const [inserted] = await db.batch([
+    insertNote(db, user, patientId, note, now, noteId),
+    auditStatement(db, user.id, "note.update", patientId, NOTE_LABEL[note.category]),
+  ]);
+  return (await notesOf(db, patientId)).find((n) => n.id === inserted.results[0].id);
+}
+
+// 今の内容のメモを新しい順に（まとめて登録したものは書いた順）。直したメモは history に直す前の内容（新しい順）を持つ
 export async function notesOf(db, patientId) {
   const { results } = await db.prepare(
-    `SELECT n.id, n.category, n.body, n.source, n.created_at, u.display_name AS created_by
+    `SELECT n.id, n.category, n.body, n.source, n.created_at, n.revises, u.display_name AS created_by
        FROM patient_notes n JOIN users u ON u.id = n.created_by
-      WHERE n.patient_id = ?1 ORDER BY n.created_at DESC, n.id DESC`,
+      WHERE n.patient_id = ?1 ORDER BY n.created_at DESC, n.id -- 同時に登録した行は、書いた順
+`,
   ).bind(patientId).all();
-  return results.map((n) => ({ id: n.id, category: n.category, body: n.body, source: n.source, createdAt: n.created_at, createdBy: n.created_by }));
+  const byId = new Map(results.map((n) => [n.id, n]));
+  const revised = new Set(results.map((n) => n.revises).filter((id) => id !== null));
+  const json = (n) => ({ id: n.id, category: n.category, body: n.body, source: n.source, createdAt: n.created_at, createdBy: n.created_by });
+  return results.filter((n) => !revised.has(n.id)).map((n) => {
+    const history = [];
+    for (let p = n.revises; p !== null; p = byId.get(p).revises) history.push(json(byId.get(p)));
+    return { ...json(n), history };
+  });
 }
 
 // 患者の指導記録を、処方ID → 記録の配列（新しい順）にして返す

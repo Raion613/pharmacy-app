@@ -21,6 +21,16 @@
 .pbox h3 .sub { font-weight: 400; }
 #cautions .meta, #next .meta, #other .meta { font-size: 11px; color: var(--sub); margin-left: 6px; white-space: nowrap; }
 .pbox li.new { animation: flash 1.6s ease-out; }
+/* メモを直す：目立たせず、行に触れたときとフォーカスのときだけ濃くする */
+.note-edit { margin-left: 6px; padding: 0 6px; height: 20px; border: 1px solid var(--border); border-radius: 4px; background: #fff; color: var(--sub); font-size: 11px; font-weight: 400; cursor: pointer; opacity: .55; }
+.pbox li:hover .note-edit, .note-edit:focus-visible { opacity: 1; color: var(--accent); border-color: var(--accent); }
+.note-rows { margin: 0 0 6px; padding: 0; list-style: none; display: grid; gap: 6px; }
+.note-rows .input { width: 100%; }
+.note-history { margin-top: 12px; border-top: 1px solid var(--border); padding-top: 8px; }
+.note-history h3 { margin: 0 0 4px; font-size: 12px; color: var(--sub); font-weight: 700; }
+.note-history ul { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; font-size: 13px; color: var(--sub); }
+.note-history .cat { margin-right: 6px; font-size: 11px; }
+.note-history .meta { margin-left: 6px; font-size: 11px; }
 
 /* 患者 */
 #band .kana { font-size: 12px; color: var(--sub); }

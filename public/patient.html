@@ -98,15 +98,19 @@
         <span class="error-text" data-error="category"></span>
       </div>
       <div class="field">
-        <label for="note-body">内容</label>
-        <textarea class="input textarea" id="note-body" name="body" rows="4" maxlength="300" placeholder="例：セフェム系抗菌薬で発疹（2019年、他院）"></textarea>
-        <span class="hint counter" data-counter="note-body"></span>
+        <span class="label" id="note-rows-label">内容<span class="hint" id="note-rows-hint">（1行に1件。<kbd>Enter</kbd>で次の行）</span></span>
+        <ol class="note-rows" id="note-rows" aria-labelledby="note-rows-label"></ol>
+        <button type="button" class="btn btn-small" id="note-add-row">＋ 行を足す</button>
         <span class="error-text" data-error="body"></span>
       </div>
+      <section class="note-history" id="note-history" hidden>
+        <h3>直す前の内容</h3>
+        <ul></ul>
+      </section>
     </div>
     <div class="dialog-foot">
       <button type="button" class="btn" data-close>キャンセル <kbd>Esc</kbd></button>
-      <button type="submit" class="btn btn-primary">追加 <kbd>Ctrl+Enter</kbd></button>
+      <button type="submit" class="btn btn-primary" id="note-submit">追加 <kbd>Ctrl+Enter</kbd></button>
     </div>
   </form>
 </dialog>

@@ -39,6 +39,7 @@ export async function feeContext(db, patientId, date, { excludePrescriptionId = 
     date,
     facility: f,
     burdenPercent: p.burden_percent,
+    birthDate: p.birth_date,
     ageYears: ageOn(p.birth_date, date),
     history: { within3Months: recent.results[0].n > 0, done: done.results.map((r) => r.code) },
     fees: Object.fromEntries(fees.results.map((r) => [r.code, { name: r.name, points: pointsOf(r) }])),

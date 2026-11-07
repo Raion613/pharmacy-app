@@ -1,3 +1,4 @@
+import { allowedBurdens, ageParts } from "./burden.js";
 import { renderShell, api, ApiError, escapeHtml, formatDate, birthText, SEX, debounce, listNavigator, toastNext, today } from "./app.js";
 import { icon } from "./icons.js";
 import { NOTE_LABEL } from "./record-kinds.js";
@@ -85,9 +86,31 @@ function openDialog() {
   showErrors([]);
   // 上限を今日にすると、ブラウザは年を4桁まで打った所で月へ進む（上限が無いと6桁まで打てる）
   form.elements.birthDate.max = today();
+  limitBurdens();
   dialog.showModal();
   form.elements.name.focus();
 }
+
+// 負担割合：生年月日から、今日の年齢でありうる割合だけを選べるようにする。年齢で1つに決まるなら選んでおく
+function limitBurdens() {
+  const birth = form.elements.birthDate.value;
+  const ok = birth !== "" && birth <= today();
+  const allowed = ok ? allowedBurdens(birth, today()) : [30, 20, 10, 0];
+  for (const r of form.querySelectorAll('input[name="burdenPercent"]')) {
+    r.disabled = !allowed.includes(Number(r.value));
+    r.closest("label").classList.toggle("disabled", r.disabled);
+    if (r.disabled) r.checked = false;
+  }
+  const insured = allowed.filter((p) => p !== 0);
+  if (ok && insured.length === 1 && !form.querySelector('input[name="burdenPercent"][value="0"]').checked) {
+    form.querySelector(`input[name="burdenPercent"][value="${insured[0]}"]`).checked = true;
+  }
+  const age = ok ? ageParts(birth, today()) : null;
+  document.querySelector("#p-burden-hint").textContent = ok
+    ? `${age.years}歳${age.months}か月。${insured.length === 1 ? `年齢で${insured[0] / 10}割に決まります（生活保護なら生活保護）` : "所得で決まります。高齢受給者証・後期高齢者医療の資格確認の割合を選んでください"}`
+    : "生年月日を入れると、その年齢でありうる割合だけ選べます";
+}
+form.elements.birthDate.addEventListener("input", limitBurdens);
 
 function showErrors(details) {
   for (const el of form.querySelectorAll("[data-error]")) el.textContent = "";

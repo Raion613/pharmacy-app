@@ -3,6 +3,7 @@ import { icon } from "./icons.js";
 import { formatSen } from "./yakuzairyo.js";
 import { startTour, tourActive } from "./tour.js";
 import { NOTE_LABEL } from "./record-kinds.js";
+import { burdenText } from "./burden.js";
 
 // ---------- 重なる窓の中で開かれたとき ----------
 // 薬歴から開く処方入力・領収証などは、薬歴の上に重なる窓（overlay.js）の中に読み込む。そのとき URL に embed=1 が付く。
@@ -199,7 +200,7 @@ export function renderPatientBand(el, p, notes) {
       <div><dt>患者番号</dt><dd class="num">${escapeHtml(p.patientNo)}</dd></div>
       <div><dt>生年月日</dt><dd>${birthText(p.birthDate)}</dd></div>
       <div><dt>性別</dt><dd class="sex-${p.sex}">${SEX[p.sex]}</dd></div>
-      <div><dt>負担割合</dt><dd>${p.burdenPercent / 10}割</dd></div>
+      <div><dt>負担割合</dt><dd><button type="button" class="burden-btn" data-burden title="負担割合を変える">${burdenText(p.burdenPercent)}</button></dd></div>
       <div><dt>最終来局日</dt><dd>${p.lastDispensedOn ? formatDate(p.lastDispensedOn) : "—"}</dd></div>
     </dl>
     <div class="alerts" id="band-alerts">${alertHtml}</div>`;

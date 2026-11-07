@@ -125,12 +125,31 @@ await page.keyboard.press("Control+Enter");
 await page.waitForFunction(() => document.querySelector('#note-form [data-error="category"]').textContent !== "");
 assert.equal(await text('#note-form [data-error="body"]'), "内容を入力してください");
 await page.locator('#note-form input[name="category"][value="allergy"]').check();
-await page.fill("#note-body", "ペニシリン系で発疹（本人申告）");
-await page.locator("#note-body").focus();
+// 1行に1件。Enter で次の行が増え、2件が別々のメモになる
+await page.locator("#note-rows input").first().focus();
+await page.keyboard.type("ペニシリン系で発疹（本人申告）");
+await page.keyboard.press("Enter");
+await page.waitForFunction(() => document.querySelectorAll("#note-rows input").length === 2 && document.activeElement === document.querySelectorAll("#note-rows input")[1]);
+await page.keyboard.type("卵");
 await page.keyboard.press("Control+Enter");
 await page.waitForSelector("#note-dialog:not([open])", { state: "attached" });
-assert.match(await text("#cautions"), /アレルギー[\s\S]*ペニシリン系で発疹（本人申告）[\s\S]*副作用/);
+assert.match(await text("#cautions"), /アレルギー[\s\S]*ペニシリン系で発疹（本人申告）[\s\S]*卵[\s\S]*副作用/);
 assert.match(await text('[data-category="allergy"]'), /ペニシリン系で発疹（本人申告）[\s\S]*デモ 薬剤師/);
+assert.equal(await page.locator('[data-category="allergy"] li').count() >= 2, true);
+
+step("患者メモを直す（直す前の内容は窓の下に残る）");
+await page.locator('[data-category="allergy"] li', { hasText: "卵" }).locator("[data-edit-note]").click();
+await page.waitForSelector("#note-dialog[open]");
+assert.equal(await text("#note-dialog-title"), "患者メモを直す");
+await page.fill("#note-rows input", "卵（加熱したものは食べられる）");
+await page.keyboard.press("Control+Enter");
+await page.waitForSelector("#note-dialog:not([open])", { state: "attached" });
+assert.match(await text('[data-category="allergy"]'), /卵（加熱したものは食べられる）[\s\S]*（修正）/);
+await page.locator('[data-category="allergy"] li', { hasText: "加熱" }).locator("[data-edit-note]").click();
+await page.waitForSelector("#note-dialog[open]");
+assert.match(await text("#note-history"), /直す前の内容[\s\S]*卵/);
+await page.keyboard.press("Escape");
+await page.waitForSelector("#note-dialog:not([open])", { state: "attached" });
 await page.locator("#timeline").focus();
 
 // 4. Alt+N で処方入力。薬名 → Enter → 1日量 → Enter → 次の薬 …

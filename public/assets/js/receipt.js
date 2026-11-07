@@ -2,6 +2,7 @@
 // （令和8年3月5日 保発0305第18号）の別紙様式3（領収証・調剤報酬の例）に合わせる。明細書は算定した項目ごとの点数と回数
 import { api, escapeHtml, formatDate, today } from "./app.js";
 import { formatQuantity } from "./yakuzairyo.js";
+import { burdenText, burdenLongText, WELFARE } from "./burden.js";
 
 const id = new URLSearchParams(location.search).get("id");
 const { patient, prescription: rx, pharmacy } = await api(`/api/prescriptions/${id}?purpose=receipt`);
@@ -22,7 +23,7 @@ document.querySelector("#sheet").innerHTML = `
       <tr><th>患者番号</th><td>${escapeHtml(patient.patientNo)}</td><th>氏名</th><td class="name">${escapeHtml(patient.name)} 様</td>
           <th>調剤日</th><td>${formatDate(rx.dispensedOn)}</td></tr>
       <tr><th>領収証No.</th><td>${rx.id.slice(0, 8).toUpperCase()}</td><th>発行日</th><td>${formatDate(today())}</td>
-          <th>負担割合</th><td>${rx.burdenPercent / 10}割</td></tr>
+          <th>負担割合</th><td>${burdenLongText(rx.burdenPercent)}</td></tr>
     </table>
     <table class="r-sections">
       <caption>保険（点）</caption>
@@ -43,7 +44,7 @@ document.querySelector("#sheet").innerHTML = `
 
   <section class="statement">
     <h1>調剤明細書</h1>
-    <p class="meta">${escapeHtml(patient.name)} 様 ・ 患者番号 ${escapeHtml(patient.patientNo)} ・ 調剤日 ${formatDate(rx.dispensedOn)} ・ 保険（${rx.burdenPercent / 10}割）</p>
+    <p class="meta">${escapeHtml(patient.name)} 様 ・ 患者番号 ${escapeHtml(patient.patientNo)} ・ 調剤日 ${formatDate(rx.dispensedOn)} ・ ${rx.burdenPercent === WELFARE ? "生活保護（医療扶助）" : `保険（${burdenText(rx.burdenPercent)}）`}</p>
     <table class="s-lines">
       <thead><tr><th>部</th><th>項目名</th><th class="num">点数</th><th class="num">回数</th></tr></thead>
       <tbody>

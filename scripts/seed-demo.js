@@ -6,7 +6,7 @@ import { openD1 } from "../src/dev/sqlite-d1.js";
 import { hashPassword, randomHex, ITERATIONS } from "../src/server/password.js";
 import { createPatient } from "../src/server/patients.js";
 import { createPrescription } from "../src/server/prescriptions.js";
-import { createNote, createRecord, createTemplate } from "../src/server/records.js";
+import { createNotes, createRecord, createTemplate } from "../src/server/records.js";
 import { createMeasurements } from "../src/server/measurements.js";
 import { createTracing } from "../src/server/tracing.js";
 import { registerHomePatient, createPlan, createSchedule, createVisitRecord } from "../src/server/homecare.js";
@@ -266,7 +266,7 @@ for (const p of PATIENTS) {
   patientIds.set(p.name, id);
   await db.prepare("UPDATE patients SET created_at = ?1 WHERE id = ?2").bind(at(p.registeredOn, "01:00"), id).run();
   for (const n of p.notes) {
-    const note = await createNote(db, SATO, id, n);
+    const [note] = await createNotes(db, SATO, id, { notes: [n] });
     await db.prepare("UPDATE patient_notes SET created_at = ?1 WHERE id = ?2").bind(at(n.on, "01:10"), note.id).run();
   }
   for (const v of p.visits) {
