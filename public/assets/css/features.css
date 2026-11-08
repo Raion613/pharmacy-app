@@ -19,7 +19,7 @@
 .board-summary { display: flex; gap: 22px; margin: 0; }
 .board-summary dt { font-size: 11px; color: var(--sub); }
 .board-summary dd { margin: 0; font-size: 18px; font-weight: 700; text-align: left; }
-.board { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
+.board { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
 .board-col { background: #e9edf0; border-radius: var(--radius); display: flex; flex-direction: column; min-height: 0; }
 .board-col header { display: flex; align-items: baseline; gap: 6px; padding: 7px 10px; }
 .board-col header .count { font-weight: 700; color: var(--accent-strong); }
@@ -64,7 +64,9 @@
 /* ---------- トレーシングレポート ---------- */
 .tracing-form { max-width: 980px; margin: 0 auto; }
 .tracing-body { display: grid; gap: 12px; }
-.tracing-to { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 10px; }
+.tracing-to { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
+.tracing-to > :first-child { grid-column: span 2; } /* 医療機関の名前は長いので2つぶん */
+.tracing-to .input { width: 100%; min-width: 0; }
 .tracing-sections { display: grid; gap: 10px; }
 .tracing-sections .req { margin-left: 6px; font-size: 11px; color: var(--danger); }
 .tracing-sheet .to { display: flex; justify-content: space-between; font-size: 15px; }
@@ -158,7 +160,7 @@ dialog .dialog-foot .spacer { flex: 1; }
 .code-input { width: 120px; font-size: 20px; letter-spacing: .2em; text-align: center; font-family: Consolas, monospace; height: 40px; }
 
 /* ---------- 薬局の数字 ---------- */
-.stats-page { display: grid; gap: 14px; align-content: start; }
+.stats-page { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; align-content: start; }
 .stats-filter { display: flex; align-items: flex-end; gap: 16px; }
 .stats-filter .hint { margin: 0 0 6px; }
 .stat-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
@@ -180,9 +182,13 @@ dialog .dialog-foot .spacer { flex: 1; }
 .chart-tip { position: fixed; z-index: 30; pointer-events: none; background: #2f3a42; color: #fff; padding: 4px 9px; border-radius: var(--radius); font-size: 12px; white-space: nowrap; }
 .stats-table .scroll { max-height: 360px; overflow: auto; }
 .stats-table .grid tbody tr { cursor: default; }
+.stats-table .grid th { white-space: normal; } /* 見出しは長いので、狭いときは折り返して表を画面に収める */
 .stats-note { padding: 8px 12px; margin: 0; border-top: 1px solid var(--border); line-height: 1.7; }
 
 @media (max-width: 1100px) {
   .charts, .stat-tiles { grid-template-columns: 1fr; }
-  .board { grid-template-columns: repeat(5, minmax(160px, 1fr)); overflow-x: auto; }
+  /* 5列が入らない幅では列を次の段へ送る。列の中は縮めず中身の高さのまま、画面全体を縦にスクロールする */
+  .board { flex: none; }
+  .board-col { min-height: 160px; }
+  .board-cards { overflow: visible; }
 }

@@ -4,6 +4,9 @@
 //   - 「配置を変える」で編集になる。箱の見出しを引っぱってほかの箱の上へ持っていくと、その位置に割り込み、後ろの箱が押し出される
 //   - 右下の角を引っぱると幅（列）と高さ（段）が変わり、まわりの箱が詰め直される
 //   - 箱の高さは中身で決まる。箱の中ではスクロールさせない（入りきらないときは並べた領域全体が1本のスクロールで動く）
+//   - 箱は CSS の --box-min に、中身が崩れない最小の幅を持つ。画面が狭くて決めた列数ではその幅に届かない箱があるときは、
+//     届くまで列を広げ、並び順のまま段ごとに詰めて置く（入らない箱は次の段へ。段の余った列は同じ段の箱に配って空きを作らない）。
+//     このときは段をまたぐ高さ（h）は使わない。横にはスクロールさせず、縦に積む
 //   - 「完了」で利用者ごとにサーバーへ保存する。「初期の配置」で画面が決めた配置に戻す
 //   - 画面ごとの表示の選び方（options）も一緒に保存する。setOption は押した時点で保存する
 import { api, toast } from "./app.js";
@@ -18,13 +21,34 @@ export function setupLayout({ grid, page, defaults, editButton, resetButton, onO
   let editing = false;
 
   const apply = () => {
-    state.boxes.forEach((b, i) => {
+    const style = getComputedStyle(grid);
+    const gap = parseFloat(style.columnGap);
+    const colWidth = (grid.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight) - gap * (COLS - 1)) / COLS;
+    const placed = state.boxes.map((b) => {
       const el = els.get(b.id);
+      const min = parseFloat(getComputedStyle(el).getPropertyValue("--box-min"));
+      return { b, el, span: Math.min(COLS, Math.max(b.w, Math.ceil((min + gap) / (colWidth + gap)))) };
+    });
+    const narrow = placed.some((p) => p.span > p.b.w);
+    if (narrow) {
+      // 並び順のまま段に詰め、段の余った列を左の箱から1列ずつ配る
+      const rows = [[]];
+      for (const p of placed) {
+        const row = rows[rows.length - 1];
+        if (row.reduce((s, q) => s + q.span, 0) + p.span > COLS) rows.push([p]);
+        else row.push(p);
+      }
+      for (const row of rows) {
+        for (let left = COLS - row.reduce((s, q) => s + q.span, 0), k = 0; left > 0; left--, k++) row[k % row.length].span += 1;
+      }
+    }
+    placed.forEach(({ b, el, span }, i) => {
       el.style.order = String(i);
-      el.style.gridColumn = `span ${b.w}`;
-      el.style.gridRow = `span ${b.h}`;
+      el.style.gridColumn = `span ${span}`;
+      el.style.gridRow = `span ${narrow ? 1 : b.h}`;
     });
   };
+  new ResizeObserver(apply).observe(grid);
   const save = () => api(`/api/layouts/${page}`, { method: "PUT", body: { layout: state } });
 
   // 段の境目（画面上の y 座標）。段の高さはまちまちなので、計算済みの段の高さから求める

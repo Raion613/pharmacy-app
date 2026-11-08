@@ -7,6 +7,11 @@
   flex: 1; min-height: 0; overflow: auto; display: grid; gap: 10px; padding: 10px 16px; align-content: start;
   grid-template-columns: repeat(12, minmax(0, 1fr)); grid-auto-rows: auto;
 }
+/* 箱ごとの、中身が崩れない最小の幅（layout-grid.js が、画面が狭いときに列を広げて並べるのに使う） */
+[data-box="patient"], [data-box="labs"], [data-box="memo"] { --box-min: 200px; }
+[data-box="next"], [data-box="meds"], [data-box="other"] { --box-min: 260px; }
+[data-box="cautions"] { --box-min: 340px; }
+[data-box="matrix"], [data-box="history"] { --box-min: 480px; }
 .pbox { position: relative; display: flex; flex-direction: column; min-width: 0; background: #fff; border: 1px solid var(--border); border-radius: var(--radius); }
 .pbox-head {
   flex-shrink: 0; display: flex; align-items: center; gap: 8px; min-height: 34px; padding: 4px 10px;
@@ -220,6 +225,9 @@ dialog.wide { width: 780px; }
 .fee-lines td:first-child { color: var(--sub); white-space: nowrap; }
 /* 選んだ来局は処方と指導記録を横に並べるので、2枚ぶんの幅にする（縦に長くならないように） */
 .timeline:not(.band) .visit-card[aria-selected="true"] { grid-column: span 2; }
+/* 1枚ぶんの幅しかないときは、選んだ来局も1枚ぶん（はみ出さない） */
+.history-body { container-type: inline-size; }
+@container (max-width: 700px) { .timeline:not(.band) .visit-card[aria-selected="true"] { grid-column: auto; } }
 
 /* メモ帳：書いたままの改行で出す。押すと書ける */
 .memo-body { white-space: pre-wrap; cursor: pointer; }

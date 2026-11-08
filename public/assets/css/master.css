@@ -1,5 +1,7 @@
 .history { flex: 1.15; min-width: 0; display: flex; flex-direction: column; }
 .history-scroll { flex: 1; min-height: 0; overflow: auto; }
+.history td.sub { overflow-wrap: anywhere; }
+.history td:first-child { white-space: normal; } /* 公表日の（曜日）は狭いときに次の行へ（折り目は <wbr>） */ /* ファイル名・取り込んだ人は長いので、狭いときは折り返して表を横に広げない */
 .history .grid tbody tr { cursor: default; }
 .history .grid tr.latest td { background: var(--accent-soft); font-weight: 700; }
 .history .grid tr.latest td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
@@ -58,3 +60,6 @@
 .examples td { padding: 4px 6px; border-bottom: 1px solid var(--border); }
 .examples .sub { color: var(--sub); font-size: 12px; }
 .examples .arrow { width: 1em; color: var(--sub); text-align: center; }
+
+/* 取り込みの履歴の表は6列あるので、左右に並べると表が入らない幅（1100px 以下）では縦に積む */
+@media (max-width: 1100px) { .master-page { flex-direction: column; overflow: auto; } }

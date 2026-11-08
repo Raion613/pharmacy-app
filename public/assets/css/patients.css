@@ -5,4 +5,6 @@
 .results-scroll { flex: 1; min-height: 0; overflow: auto; outline: none; }
 .grid .kana { display: block; font-size: 11px; color: var(--sub); }
 .grid .name { font-weight: 700; font-size: 15px; }
+.grid .kana, .grid .name { white-space: nowrap; }
+#patients td:nth-child(3), #patients td:nth-child(6) { white-space: normal; } /* 日付の後ろの（年齢）（曜日）は狭いときに次の行へ（折り目は <wbr>） */ /* 名前は途中で折り返さない（狭いときはほかの列が折り返す） */
 @media (max-width: 900px) { .filter { width: auto; align-self: stretch; } }

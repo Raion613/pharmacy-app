@@ -70,7 +70,7 @@ const layout = setupLayout({
       { id: "matrix", w: 12, h: 1 },
       { id: "history", w: 12, h: 1 },
     ],
-    options: { historyRows: 0, matrixFold: 0 },
+    options: { historyRows: 0, matrixFold: 1 }, // 処方の推移は、入りきらない来局を下の表へ回す（横に送らない）
   },
   onOptions: (options) => {
     applyShape(options.historyRows);
@@ -441,19 +441,30 @@ function renderMatrix() {
       }).join("")}</tbody></table>`;
   };
   const all = visits.map((_, k) => k);
-  let tables;
-  if (matrixFold === 1) {
-    // 薬の名前の列（約240px）を除いた幅に入る来局の数ずつに分け、新しい来局の表を上にする
-    const per = Math.max(1, Math.floor((matrixView.clientWidth - 240) / 92));
-    tables = [];
-    for (let end = all.length; end > 0; end -= per) tables.push(table(all.slice(Math.max(0, end - per), end)));
-  } else {
-    tables = [table(all)];
-  }
-  matrixView.innerHTML = `
+  const draw = (tables) => {
+    matrixView.innerHTML = `
     <div class="legend"><span class="l-start">開始・再開</span><span class="l-change">1日量・用法・日数の変更</span><span class="l-stop">中止</span><span class="l-on">前回と同じ</span></div>
     ${tables.map((h) => `<div class="matrix-part">${h}</div>`).join("")}`;
-  if (matrixFold === 0) matrixView.scrollLeft = matrixView.scrollWidth; // 入りきらないときは新しい側を見せる
+  };
+  if (matrixFold === 1) {
+    // 来局をいくつかずつに分け、新しい来局の表を上にする。1つの表に入れる来局の数は、全部を1つの表にしてみて、
+    // 箱の幅に収まるまで減らす（列の幅は薬の名前・量の長さで変わるので、実際に並べて測る）
+    const room = matrixView.clientWidth - parseFloat(getComputedStyle(matrixView).paddingLeft) - parseFloat(getComputedStyle(matrixView).paddingRight);
+    const split = (per) => {
+      const tables = [];
+      for (let end = all.length; end > 0; end -= per) tables.push(table(all.slice(Math.max(0, end - per), end)));
+      return tables;
+    };
+    let per = all.length;
+    draw(split(per));
+    while (per > 1 && [...matrixView.querySelectorAll(".matrix")].some((t) => t.offsetWidth > room)) {
+      per -= 1;
+      draw(split(per));
+    }
+  } else {
+    draw([table(all)]);
+    matrixView.scrollLeft = matrixView.scrollWidth; // 入りきらないときは新しい側を見せる
+  }
 }
 
 const matrixButtons = [...document.querySelectorAll("#matrix-shape [data-fold]")];

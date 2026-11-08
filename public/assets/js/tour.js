@@ -37,7 +37,6 @@ export function startTour() {
   document.body.append(root);
   window.addEventListener("keydown", onKey, true); // 画面側のショートカット（Alt+N など）より先に受け取る
   window.addEventListener("resize", reposition);
-  window.addEventListener("scroll", reposition, true); // 狭い画面で横に送ったとき・中身を縦に送ったときも、囲いを部品に付いていかせる
   requestAnimationFrame(() => {
     root.classList.add("open");
     go(0, 1);
@@ -233,7 +232,6 @@ function finish() {
   run = null;
   window.removeEventListener("keydown", onKey, true);
   window.removeEventListener("resize", reposition);
-  window.removeEventListener("scroll", reposition, true);
   root.classList.remove("open");
   root.addEventListener("transitionend", () => root.remove(), { once: true });
   if (returnFocus instanceof HTMLElement) returnFocus.focus({ preventScroll: true });

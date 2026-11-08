@@ -33,10 +33,10 @@ async function search() {
     tr.innerHTML = `
       <td class="num">${escapeHtml(p.patientNo)}</td>
       <td><span class="kana">${escapeHtml(p.kana)}</span><span class="name">${escapeHtml(p.name)}</span></td>
-      <td>${birthText(p.birthDate)}</td>
+      <td>${birthText(p.birthDate).replace("（", "<wbr>（")}</td>
       <td class="sex-${p.sex}">${SEX[p.sex]}</td>
       <td>${p.alertCategories.map((c) => `<span class="tag tag-ng">${NOTE_LABEL[c]}</span>`).join(" ")}</td>
-      <td class="num">${p.lastDispensedOn ? formatDate(p.lastDispensedOn) : '<span class="sub">来局なし</span>'}</td>`;
+      <td class="num">${p.lastDispensedOn ? formatDate(p.lastDispensedOn).replace("（", "<wbr>（") : '<span class="sub">来局なし</span>'}</td>`;
     tr.addEventListener("click", () => openPatient(p.id));
     frag.append(tr);
   }

@@ -55,7 +55,7 @@ async function loadHistory(flashFile) {
   $("#import-count").textContent = `${imports.length}件`;
   $("#import-rows").innerHTML = imports.map((m, i) => `
     <tr class="${i === 0 ? "latest" : ""}${m.fileName === flashFile && i === 0 ? " flash" : ""}">
-      <td class="num">${formatDate(m.publishedOn)}</td>
+      <td class="num">${formatDate(m.publishedOn).replace("（", "<wbr>（")}</td>
       <td>${MASTER[m.master]} <span class="tag ${m.kind === "full" ? "tag-original" : ""}">${KIND[m.kind]}</span></td>
       <td class="sub">${escapeHtml(m.fileName)}</td>
       <td class="num">${m.rowCount.toLocaleString()}</td>

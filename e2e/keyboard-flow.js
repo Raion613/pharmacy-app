@@ -745,21 +745,22 @@ await page.waitForFunction(() => document.querySelector(".toasts")?.textContent.
 await page.click('#history-shape [data-rows="2"]');
 const visits = await page.locator("#timeline .visit-card").count();
 assert.equal(await page.locator("#timeline").evaluate((el) => el.classList.contains("band") && el.style.gridTemplateColumns), `repeat(${Math.ceil(visits / 2)}, 340px)`);
-// 処方の推移の並べ方：折り返し（表を分けても、開始・中止の印は1つ前の来局と比べたまま）
-await page.click('#matrix-shape [data-fold="1"]');
+// 処方の推移の並べ方：初めは折り返し（表を分けても横にはみ出さない）。「横に送る」に切り替えられる
 await page.waitForSelector("#matrix-view.folded .matrix-part");
 assert.equal(await page.locator("#matrix-view").evaluate((el) => el.scrollWidth <= el.clientWidth + 1), true);
+await page.click('#matrix-shape [data-fold="0"]');
+await page.waitForFunction(() => !document.querySelector("#matrix-view").classList.contains("folded"));
 await page.reload();
 await page.waitForSelector(selectedCard);
 await page.waitForFunction(() => document.querySelector('[data-box="meds"]').style.order === "0");
 assert.equal(await page.locator('[data-box="patient"]').evaluate((el) => el.style.gridColumn), "span 3");
 assert.equal(await page.getAttribute('#history-shape [data-rows="2"]', "aria-checked"), "true");
-assert.equal(await page.getAttribute('#matrix-shape [data-fold="1"]', "aria-checked"), "true");
+assert.equal(await page.getAttribute('#matrix-shape [data-fold="0"]', "aria-checked"), "true");
 await page.click("#layout-edit");
 await page.click("#layout-reset");
 await page.waitForFunction(() => document.querySelector('[data-box="patient"]').style.order === "0");
 assert.equal(await page.getAttribute('#history-shape [data-rows="0"]', "aria-checked"), "true");
-assert.equal(await page.getAttribute('#matrix-shape [data-fold="0"]', "aria-checked"), "true");
+assert.equal(await page.getAttribute('#matrix-shape [data-fold="1"]', "aria-checked"), "true");
 
 step("メモ帳：薬歴で Alt+E で書く → 開き直しても残る → 処方入力の画面でも同じものが開く");
 await page.locator("#timeline").focus();

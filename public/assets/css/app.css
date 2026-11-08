@@ -42,12 +42,6 @@ h1, h2, h3 { margin: 0; font-size: inherit; }
 /* ---------- 画面の骨組み ----------
    高さは固定ピクセルで引き算しない。縦の flex で、中身の領域だけを伸ばしてスクロールさせる。 */
 body.app { display: flex; }
-/* 狭い画面（1280px 未満）では、部品を縮めて崩さず 1280px の並びのまま置き、画面全体を横にスクロールさせる。
-   縦のスクロールはこれまでどおり中身の領域で動く。左のアイコン列は横に送っても左端に残す */
-@media screen {
-  body.app { min-width: 1280px; overflow-x: auto; overflow-y: hidden; }
-  .sidebar { position: sticky; left: 0; z-index: 20; }
-}
 .sidebar {
   width: 64px; flex-shrink: 0; background: var(--sidebar); color: var(--sidebar-text);
   display: flex; flex-direction: column; align-items: stretch;
@@ -69,9 +63,11 @@ body.app { display: flex; }
 
 .main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .topbar {
-  height: 48px; flex-shrink: 0; display: flex; align-items: center; gap: 12px; padding: 0 16px;
+  min-height: 48px; flex-shrink: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 6px 16px;
   background: var(--panel); border-bottom: 1px solid var(--border);
 }
+/* 幅が足りないときは部品の途中で折り返さず、部品ごと次の行へ送る */
+.topbar > * { white-space: nowrap; }
 .topbar h1 { font-size: 16px; font-weight: 700; }
 .topbar .spacer { flex: 1; }
 .topbar .user { color: var(--sub); font-size: 13px; text-decoration: none; }
@@ -105,7 +101,7 @@ kbd {
 .panel { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius); }
 .panel-head {
   display: flex; align-items: center; gap: 8px; padding: 7px 12px; min-height: 38px;
-  background: var(--head); border-bottom: 1px solid var(--border); font-weight: 700;
+  background: var(--head); border-bottom: 1px solid var(--border); font-weight: 700; flex-wrap: wrap;
 }
 .panel-head .count { font-weight: 400; color: var(--sub); font-size: 12px; }
 .panel-head .spacer { flex: 1; }
@@ -176,10 +172,10 @@ kbd {
 .empty { padding: 28px 12px; text-align: center; color: var(--sub); }
 
 /* 患者の帯 */
-.patient-band { display: flex; align-items: center; gap: 18px; padding: 10px 14px; }
-.patient-band .name { font-size: 19px; font-weight: 700; letter-spacing: .02em; }
-.patient-band .kana { font-size: 12px; color: var(--sub); }
-.patient-band dl { display: flex; gap: 18px; margin: 0; }
+.patient-band { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px; padding: 10px 14px; }
+.patient-band .name { font-size: 19px; font-weight: 700; letter-spacing: .02em; white-space: nowrap; }
+.patient-band .kana { font-size: 12px; color: var(--sub); white-space: nowrap; }
+.patient-band dl { display: flex; flex-wrap: wrap; gap: 4px 18px; margin: 0; }
 .patient-band dt { font-size: 11px; color: var(--sub); }
 .patient-band dd { margin: 0; font-weight: 700; }
 /* 注意は途中で切らない（アレルギーの内容が「…」で隠れると危ない）。長ければ折り返す */
@@ -253,6 +249,7 @@ dialog .dialog-foot { display: flex; justify-content: flex-end; gap: 8px; paddin
   .sidebar a { font-size: 10px; }
   .content.split { flex-direction: column; overflow: auto; }
   .actionbar .keys { display: none; }
+  .grid th, .grid td { padding-left: 6px; padding-right: 6px; } /* 一覧表の列の左右の余白を詰めて、表を画面に収める */
 }
 
 /* 操作の帯：パンくずの下に、その画面でできる操作をすべて並べる */
@@ -265,7 +262,7 @@ dialog .dialog-foot { display: flex; justify-content: flex-end; gap: 8px; paddin
 .toolbar .spacer { flex: 1; }
 
 /* 戻るボタンのある画面（薬歴）：左上に「← 戻る」、画面の名前と、誰の画面かを大きく出す */
-.topbar.with-back { height: 60px; gap: 14px; }
+.topbar.with-back { min-height: 60px; gap: 6px 14px; }
 .back-button {
   display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 12px 0 8px; border: 1px solid var(--border-strong);
   border-radius: var(--radius); color: var(--text); text-decoration: none; font-weight: 700; background: #fff;
@@ -273,7 +270,7 @@ dialog .dialog-foot { display: flex; justify-content: flex-end; gap: 8px; paddin
 .back-button:hover { background: #f3f6f8; }
 .back-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .topbar.with-back h1 { font-size: 20px; padding: 2px 12px; border-radius: var(--radius); background: var(--accent-soft); color: var(--accent-strong); }
-.subject { display: flex; align-items: baseline; gap: 12px; min-width: 0; }
+.subject { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 12px; min-width: 0; }
 .subject-name { font-size: 22px; font-weight: 700; white-space: nowrap; }
 .subject-kana { font-size: 13px; color: var(--sub); white-space: nowrap; }
 .subject-facts { font-size: 14px; font-weight: 700; white-space: nowrap; }
