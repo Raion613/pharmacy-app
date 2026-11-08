@@ -42,6 +42,12 @@ h1, h2, h3 { margin: 0; font-size: inherit; }
 /* ---------- 画面の骨組み ----------
    高さは固定ピクセルで引き算しない。縦の flex で、中身の領域だけを伸ばしてスクロールさせる。 */
 body.app { display: flex; }
+/* 狭い画面（1280px 未満）では、部品を縮めて崩さず 1280px の並びのまま置き、画面全体を横にスクロールさせる。
+   縦のスクロールはこれまでどおり中身の領域で動く。左のアイコン列は横に送っても左端に残す */
+@media screen {
+  body.app { min-width: 1280px; overflow-x: auto; overflow-y: hidden; }
+  .sidebar { position: sticky; left: 0; z-index: 20; }
+}
 .sidebar {
   width: 64px; flex-shrink: 0; background: var(--sidebar); color: var(--sidebar-text);
   display: flex; flex-direction: column; align-items: stretch;
