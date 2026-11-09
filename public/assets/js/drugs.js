@@ -1,5 +1,5 @@
 import { renderShell, api, escapeHtml, formatDate, today, priceText, drugTags, debounce, listNavigator } from "./app.js";
-import { formatSen } from "./yakuzairyo.js";
+import { formatSen } from "./format.js";
 import { icon } from "./icons.js";
 import { setTour, autoStartTour, tourActive } from "./tour.js";
 

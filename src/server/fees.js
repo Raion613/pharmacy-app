@@ -1,8 +1,8 @@
-// 調剤報酬の算定に要る「その日の事実」を DB から集める。算定の規則そのものは public/assets/js/chozai-fee.js。
+// 調剤報酬の算定に要る「その日の事実」を DB から集める。算定の規則そのものは src/rules/chozai-fee.js。
 //   - その日に効いている算定項目の点数（調剤行為マスターの履歴）
 //   - その日に効いている、患者の薬局の届出（施設基準）
 //   - この患者の履歴（3月以内の再来局か、月1回などの項目をもう算定したか）
-import { ALL_CODES, LIMITED, eraOf, pointsOf } from "../../public/assets/js/chozai-fee.js";
+import { ALL_CODES, LIMITED, eraOf, pointsOf } from "../rules/chozai-fee.js";
 import { HttpError } from "./http.js";
 
 export async function feeContext(db, patientId, date, { excludePrescriptionId = null } = {}) {

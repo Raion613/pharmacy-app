@@ -1,7 +1,7 @@
 // 負担割合：年齢の標準、標準から外れる事情（障害認定・免除・生活保護）、割合が変わりうる日、変更と確認の記録
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { standardBurdens, burdenChoices, burdenProblem, burdenBoundaries, burdenEvents, ageParts } from "../public/assets/js/burden.js";
+import { standardBurdens, burdenChoices, burdenProblem, burdenBoundaries, burdenEvents, ageParts } from "../src/rules/burden.js";
 import { openD1 } from "../src/dev/sqlite-d1.js";
 import { updateBurden, validatePatient, getPatient } from "../src/server/patients.js";
 import { HttpError } from "../src/server/http.js";

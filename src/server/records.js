@@ -3,6 +3,7 @@ import { HttpError, nowIso } from "./http.js";
 import { NOTE_LABEL, SOAP, LEFTOVER, NOTEBOOK, NOTE_MAX, SOAP_MAX } from "../../public/assets/js/record-kinds.js";
 import { auditStatement } from "./audit.js";
 import { transcribe } from "./ai-stub.js";
+import { extractNotes } from "../rules/soap-draft.js";
 
 const NOTE_SOURCES = ["manual", "conversation"];
 const MAX_NOTES_AT_ONCE = 10;
@@ -114,7 +115,7 @@ export async function createConversation(db, user, prescriptionId, body) {
     auditStatement(db, user.id, "conversation.create", rx.patient_id, `調剤日 ${rx.dispensed_on} の服薬指導（${body.durationSec}秒）`),
   ]);
   return {
-    id: inserted.results[0].id, prescriptionId: rx.id, source: body.source, fileName, durationSec: body.durationSec, transcript,
+    id: inserted.results[0].id, prescriptionId: rx.id, source: body.source, fileName, durationSec: body.durationSec, transcript, extracted: extractNotes(transcript),
     createdAt: now, createdBy: user.display_name,
   };
 }
@@ -185,7 +186,7 @@ export async function conversationsByPrescription(db, patientId) {
   ).bind(patientId).all();
   return Map.groupBy(results.map((c) => ({
     id: c.id, prescriptionId: c.prescription_id, source: c.source, fileName: c.file_name, durationSec: c.duration_sec,
-    transcript: c.transcript, createdAt: c.created_at, createdBy: c.author,
+    transcript: c.transcript, extracted: extractNotes(c.transcript), createdAt: c.created_at, createdBy: c.author,
   })), (c) => c.prescriptionId);
 }
 

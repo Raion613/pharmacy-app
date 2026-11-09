@@ -1,6 +1,6 @@
 import { HttpError, isDate, todayJst, nowIso } from "./http.js";
 import { normalizeKana, isKatakana, searchKey } from "../../public/assets/js/text.js";
-import { burdenChoices, burdenProblem, burdenText, BURDEN_REASONS } from "../../public/assets/js/burden.js";
+import { burdenChoices, burdenProblem, burdenText, BURDEN_REASONS } from "../rules/burden.js";
 import { auditStatement } from "./audit.js";
 import { kohiOf } from "./kohi.js";
 

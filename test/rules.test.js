@@ -1,12 +1,12 @@
 // 画面とサーバーで共通に使う規則（小児の分量・バーコード・多要素認証・在宅の回数・指導の提案・SOAP の下書き・検査値）
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { checkPediatricDose, mgPerGram, timesPerDay } from "../public/assets/js/pediatric-dose.js";
-import { parseGs1, gtinCheckDigitOk, Gs1Error } from "../public/assets/js/gs1.js";
+import { checkPediatricDose, mgPerGram, timesPerDay } from "../src/rules/pediatric-dose.js";
+import { parseGs1, gtinCheckDigitOk, Gs1Error } from "../src/rules/gs1.js";
 import { hotp, verifyTotp, base32Encode, base32Decode, otpauthUri } from "../src/server/totp.js";
-import { checkVisit, weekStart, planReviewDue, composeReport } from "../public/assets/js/home-visit-rules.js";
-import { suggestGuidance, shortName } from "../public/assets/js/guidance-suggest.js";
-import { buildDraft, extractNotes, parseTranscript } from "../public/assets/js/soap-draft.js";
+import { checkVisit, weekStart, planReviewDue, composeReport } from "../src/rules/home-visit-rules.js";
+import { suggestGuidance, shortName } from "../src/rules/guidance-suggest.js";
+import { buildDraft, extractNotes, parseTranscript } from "../src/rules/soap-draft.js";
 import { parseLabValue, formatLabValue, latestByItem } from "../public/assets/js/lab-items.js";
 
 // ---------- 小児の分量 ----------

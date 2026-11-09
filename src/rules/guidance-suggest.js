@@ -1,3 +1,6 @@
+import { ageOn } from "../../public/assets/js/format.js";
+
+export { ageOn };
 // 指導内容の提案。処方の薬・患者の情報（メモ・検査値・年齢）・過去の薬歴から、今回の指導で触れることを挙げる。
 // kusudamaクラウド薬歴では AI が出す部分を、ここでは決まった規則で出す（同じ入力なら同じ結果。根拠も一緒に返す）。
 //
@@ -55,13 +58,6 @@ function drugsOf(rx) {
 
 function daysBetween(a, b) {
   return (Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86400000;
-}
-
-// 満年齢（on の日付時点）
-export function ageOn(birthDate, on) {
-  const [by, bm, bd] = birthDate.split("-").map(Number);
-  const [y, m, d] = on.split("-").map(Number);
-  return y - by - (m < bm || (m === bm && d < bd) ? 1 : 0);
 }
 
 // rx：今回の処方、prevRx：前回（無ければ null）、notes：患者メモ、latest：検査値の最新（item → { valueMilli, measuredOn }）、

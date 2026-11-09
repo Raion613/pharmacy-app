@@ -1,5 +1,5 @@
 // 薬剤料の計算（内服薬のみ）。DB にも画面にも依存しない純粋関数だけを置く。
-// ブラウザ（入力中のプレビュー）とサーバー（保存時の確定計算）が同じこのファイルを使う。
+// サーバーだけが持つ（画面には配らない）。入力中のプレビューも保存時の確定計算も、サーバーがこのファイルで計算する。
 //
 // 根拠：調剤報酬点数表 区分20 薬剤料
 //   使用薬剤の薬価が所定単位につき15円以下の場合は1点。
@@ -11,27 +11,10 @@
 //   1日量      … 1/1000単位の整数（0.5錠 → 500）
 // で受け取り、合計は BigInt の分数（分子 / 分母）のまま持って比較する。
 
-export const QTY_SCALE = 1000; // 1日量は小数第3位まで
+import { QTY_SCALE, parseQuantity, formatQuantity, formatYen, formatSen } from "../../public/assets/js/format.js";
+
+export { QTY_SCALE, parseQuantity, formatQuantity, formatYen, formatSen };
 const SEN_PER_YEN = 100n;
-
-// "1.5" → 1500。小数第3位までの正の数だけを受け付ける。
-export function parseQuantity(text) {
-  const s = String(text).trim();
-  if (!/^\d{1,4}(\.\d{1,3})?$/.test(s)) {
-    throw new RangeError(`1日量は小数第3位までの数で入力してください: "${text}"`);
-  }
-  const [int, frac = ""] = s.split(".");
-  const milli = Number(int) * QTY_SCALE + Number(frac.padEnd(3, "0"));
-  if (milli === 0) throw new RangeError("1日量は0より大きい数で入力してください");
-  return milli;
-}
-
-// 1500 → "1.5"
-export function formatQuantity(milli) {
-  const int = Math.floor(milli / QTY_SCALE);
-  const frac = String(milli % QTY_SCALE).padStart(3, "0").replace(/0+$/, "");
-  return frac ? `${int}.${frac}` : String(int);
-}
 
 // 1剤1日分の薬価合計を分数で返す（単位：円）。
 // items: [{ priceSen, dailyQtyMilli }]
@@ -115,18 +98,6 @@ function withTax(yen) {
   const total = BigInt(yen) * (100n + CONSUMPTION_TAX_PERCENT);
   if (total % 100n !== 0n) throw new RangeError(`消費税込みの額に1円未満の端数が出ます: ${yen}`);
   return Number(total / 100n);
-}
-
-// 分数の円を表示用に小数第2位まで（第3位を四捨五入）。点数の判定には使わない。
-export function formatYen({ num, den }) {
-  const hundredths = (num * 100n * 2n + den) / (den * 2n);
-  const s = hundredths.toString().padStart(3, "0");
-  return `${s.slice(0, -2)}.${s.slice(-2)}`;
-}
-
-// 銭 → "36.90"
-export function formatSen(sen) {
-  return formatYen({ num: BigInt(sen), den: SEN_PER_YEN });
 }
 
 function ceilDiv(a, b) {

@@ -5,7 +5,7 @@
 // HOT コードマスターの包装は普通のコードにひも付いているので、「（選）」のコードの処方は、対になる普通のコード（drugs.pair_code）の箱で合っているとする。
 import { HttpError, nowIso, todayJst } from "./http.js";
 import { auditStatement } from "./audit.js";
-import { parseGs1, Gs1Error } from "../../public/assets/js/gs1.js";
+import { parseGs1, Gs1Error } from "../rules/gs1.js";
 
 const MAX_SCANS = 200;
 

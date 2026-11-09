@@ -1,10 +1,10 @@
 // 全画面共通：画面の骨組み、API 呼び出し、表示用の整形、通知。
 import { icon } from "./icons.js";
-import { formatSen } from "./yakuzairyo.js";
+import { formatSen } from "./format.js";
 import { startTour, tourActive } from "./tour.js";
 import { NOTE_LABEL } from "./record-kinds.js";
-import { burdenText } from "./burden.js";
-import { kohiBandText } from "./kohi.js";
+import { burdenText } from "./burden-text.js";
+import { kohiBandText } from "./kohi-text.js";
 
 // ---------- 重なる窓の中で開かれたとき ----------
 // 薬歴から開く処方入力・領収証などは、薬歴の上に重なる窓（overlay.js）の中に読み込む。そのとき URL に embed=1 が付く。

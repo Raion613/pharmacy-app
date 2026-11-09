@@ -5,6 +5,7 @@ import { openD1 } from "../src/dev/sqlite-d1.js";
 import { pricesAt } from "../src/server/prices.js";
 import { createPrescription, validatePrescription } from "../src/server/prescriptions.js";
 import { HttpError } from "../src/server/http.js";
+import { previewPrescription } from "../src/server/rx-preview.js";
 import { loadMasterFile, MASTER_FILES } from "../src/dev/load-master.js";
 
 const FIXTURE = `
@@ -188,4 +189,26 @@ test("選定療養の薬を保存すると、保険の点数は（選）の価�
   assert.deepEqual(rx, { drug_points: 450, special_fee_yen: 1650, special_fee_method: "points" });
   assert.equal((await db.prepare("SELECT special_points FROM prescription_rps").first()).special_points, 150);
   assert.equal((await db.prepare("SELECT special_diff_sen FROM prescription_items").first()).special_diff_sen, 2535);
+});
+
+// 処方入力の途中の計算（画面に配らずサーバーで出す）と、保存時の計算が同じになること
+test("途中の計算と保存時の計算が一致する（改定前と比べた点数・選定療養の特別の料金も出る）", async () => {
+  const body = rxBody({
+    prescribedOn: "2026-06-01", dispensedOn: "2026-06-01",
+    rps: [rp("1日1回朝食後", 14, [["610000001", "1"], ["670000006", "2"]])],
+  });
+  const preview = await previewPrescription(db, {
+    patientId: 1, dispensedOn: body.dispensedOn, compareOn: "2026-03-31", handbook: body.handbook, pending: false, inquiries: [], kohi: [],
+    rps: [{ r: 0, usage: "1日1回朝食後", complete: true, days: 14, rxDays: 14, daysChange: null,
+      items: [{ i: 0, drugCode: "610000001", dailyQtyMilli: 1000 }, { i: 1, drugCode: "670000006", dailyQtyMilli: 2000 }] }],
+  });
+  const saved = await createPrescription(db, user, body);
+  assert.equal(preview.drugPoints, saved.drugPoints);
+  assert.equal(preview.bill.total, saved.totalPoints);
+  assert.equal(preview.bill.copayYen, saved.copayYen);
+  assert.equal(preview.bill.specialYen, saved.specialFeeYen);
+  assert.equal(preview.bill.chargeYen, saved.patientPayYen + saved.specialFeeYen);
+  assert.deepEqual(preview.items.map((x) => x.costYen), ["15.30", "149.30"]);
+  assert.equal(preview.compare.usable, false); // （選）のコードは 3/31 にはまだ無い
+  assert.equal(preview.pediatric, null);       // 66歳
 });

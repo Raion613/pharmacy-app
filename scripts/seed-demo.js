@@ -10,7 +10,7 @@ import { createNotes, createRecord, createTemplate } from "../src/server/records
 import { createMeasurements } from "../src/server/measurements.js";
 import { createTracing } from "../src/server/tracing.js";
 import { registerHomePatient, createPlan, createSchedule, createVisitRecord } from "../src/server/homecare.js";
-import { composeReport } from "../public/assets/js/home-visit-rules.js";
+import { composeReport } from "../src/rules/home-visit-rules.js";
 
 export const DEMO_LOGIN = { loginId: "demo", password: "pharmacy-demo" };
 

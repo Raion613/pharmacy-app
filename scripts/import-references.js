@@ -7,7 +7,7 @@
 //      「同一剤形・規格の後発医薬品がある先発医薬品」欄に「○」がある品目
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { openZip } from "../public/assets/js/zip.js";
-import { gtinCheckDigitOk } from "../public/assets/js/gs1.js";
+import { gtinCheckDigitOk } from "../src/rules/gs1.js";
 
 const HOT_ZIP = "data/raw/hot/h20260930_h.zip";
 const HOT_FILE = "h20260930_h/MEDIS20260930_h.txt";

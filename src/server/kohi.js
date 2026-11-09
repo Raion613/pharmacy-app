@@ -1,7 +1,7 @@
-// 公費（受給者証）の登録と、処方に使う公費の検証。計算の規則は public/assets/js/kohi.js
+// 公費（受給者証）の登録と、処方に使う公費の検証。計算の規則は src/rules/kohi.js
 import { HttpError, isDate, nowIso } from "./http.js";
 import { auditStatement } from "./audit.js";
-import { KOHI_KINDS, LOCAL_FORMS, isNational, kohiName, kohiValidOn, hasMonthlyCap } from "../../public/assets/js/kohi.js";
+import { KOHI_KINDS, LOCAL_FORMS, isNational, kohiName, kohiValidOn, hasMonthlyCap } from "../rules/kohi.js";
 
 const MAX_YEN = 1_000_000;
 const yenOrNull = (v) => (v === null || v === undefined || v === "" ? null : v);

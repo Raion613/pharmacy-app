@@ -1,8 +1,8 @@
 // 領収証と明細書（調剤）。様式は「医療費の内容の分かる領収証及び個別の診療報酬の算定項目の分かる明細書の交付について」
 // （令和8年3月5日 保発0305第18号）の別紙様式3（領収証・調剤報酬の例）に合わせる。明細書は算定した項目ごとの点数と回数
 import { api, escapeHtml, formatDate, today } from "./app.js";
-import { formatQuantity } from "./yakuzairyo.js";
-import { burdenText, burdenLongText } from "./burden.js";
+import { formatQuantity } from "./format.js";
+import { burdenText, burdenLongText } from "./burden-text.js";
 
 const id = new URLSearchParams(location.search).get("id");
 const { patient, prescription: rx, pharmacy } = await api(`/api/prescriptions/${id}?purpose=receipt`);

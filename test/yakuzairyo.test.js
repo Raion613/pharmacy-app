@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   parseQuantity, formatQuantity, dailyCost, pointsPerDay, calcRp, calcPrescription, formatYen, formatSen, specialFee,
-} from "../public/assets/js/yakuzairyo.js";
+} from "../src/rules/yakuzairyo.js";
 
 // 1錠・1日1錠で、1日分の薬価がちょうど yen 円になる剤
 const rpOf = (priceSen) => [{ priceSen, dailyQtyMilli: 1000 }];

@@ -1,9 +1,8 @@
 // 在宅：通院が難しい患者の家や施設を訪問して、薬の管理・服薬の支援をする業務の画面。
 //   左：在宅の患者（施設ごと）。計画書の見直しの目安と、その月の訪問回数／上限
 //   右：その月の予定表。予定を選ぶと訪問の記録（＝処方医への報告書の元）を書ける
-// 訪問回数の上限（月4回・週1回など）は、予定を入れるときにサーバーが確かめる（home-visit-rules.js）。
+// 訪問回数の上限（月4回・週1回など）はサーバーが持ち（src/rules/home-visit-rules.js）、患者ごとに limits で返す。予定を入れるときもサーバーが確かめる。
 import { renderShell, api, ApiError, escapeHtml, formatDate, today, toast } from "./app.js";
-import { limitsFor, weekStart, composeReport } from "./home-visit-rules.js";
 import { setTour, autoStartTour, tourActive } from "./tour.js";
 import "./overlay.js"; // data-overlay のリンクは重なる窓で開く
 
@@ -51,7 +50,7 @@ function renderPatients() {
     return `<section class="home-group"><h3>${escapeHtml(g.name)}${g.address ? `<span class="sub">${escapeHtml(g.address)}</span>` : ""}</h3>
       ${list.length ? `<ul>${list.map((p) => {
         const visits = data.schedules.filter((s) => s.patientId === p.patientId).length;
-        const { perMonth } = limitsFor(p.intensive);
+        const { perMonth } = p.limits;
         const plan = p.plan;
         const due = plan && plan.reviewDue < now;
         return `<li>
@@ -64,6 +63,13 @@ function renderPatients() {
         </li>`;
       }).join("")}</ul>` : '<p class="none">在宅の患者はいません</p>'}</section>`;
   }).join("") || '<p class="empty">在宅の患者はまだいません。「患者を登録」から登録します。</p>';
+}
+
+// 暦の週の始め（日曜日）
+function weekStart(date) {
+  const d = new Date(`${date}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - d.getUTCDay());
+  return d.toISOString().slice(0, 10);
 }
 
 function renderCalendar() {
@@ -200,7 +206,7 @@ async function openPlan(patientId) {
     : "<b>計画書はまだありません</b>";
   // 見直しは前の計画書を元に直す
   planForm.elements.madeOn.value = today();
-  planForm.elements.visitsPerMonth.value = last ? String(last.visitsPerMonth) : String(limitsFor(d.intensive).perMonth);
+  planForm.elements.visitsPerMonth.value = last ? String(last.visitsPerMonth) : String(d.limits.perMonth);
   for (const [name, key] of [["intervalText", "intervalText"], ["management", "management"], ["drugNotes", "drugNotes"], ["guidance", "guidance"]]) {
     planForm.elements[name].value = last ? last[key] : "";
   }
@@ -245,7 +251,7 @@ function openVisit(date = today()) {
 }
 function updateLimitHint() {
   const p = data.patients.find((x) => String(x.patientId) === $("#v-patient").value);
-  const { perMonth, perWeek } = limitsFor(p.intensive);
+  const { perMonth, perWeek } = p.limits;
   $("#v-limit").textContent = `${p.name}さんは月${perMonth}回・週${perWeek}回までです（薬剤師1人につき週40回まで）。${p.plan ? `計画書では月${p.plan.visitsPerMonth}回・${p.plan.intervalText}。` : "計画書がまだありません。"}`;
 }
 $("#v-patient").addEventListener("change", updateLimitHint);
@@ -301,7 +307,7 @@ async function makeReport() {
   const { prescriptions } = await api(`/api/patients/${s.patientId}`);
   const record = prescriptions.filter((rx) => rx.dispensedOn <= s.visitOn).flatMap((rx) => rx.records)[0] ?? null;
   const visit = Object.fromEntries(["storage", "adherence", "leftover", "guidance"].map((n) => [n, recordForm.elements[n].value.trim() || "（未記入）"]));
-  recordForm.elements.report.value = composeReport({ visit, record });
+  recordForm.elements.report.value = (await api("/api/calc/report", { method: "POST", body: { visit, record } })).text;
   recordForm.elements.report.focus();
   toast(record ? "訪問の記録と、最新の指導記録から報告書の形にまとめました。内容を確かめて直してください" : "訪問の記録から報告書の形にまとめました（指導記録はまだありません）");
 }

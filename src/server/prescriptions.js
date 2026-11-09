@@ -1,12 +1,12 @@
-import { calcRp, parseQuantity, specialFee } from "../../public/assets/js/yakuzairyo.js";
-import { calcFees, copayYen } from "../../public/assets/js/chozai-fee.js";
+import { calcRp, parseQuantity, specialFee, dailyCost, formatYen } from "../rules/yakuzairyo.js";
+import { calcFees, copayYen } from "../rules/chozai-fee.js";
 import { HttpError, isDate, todayJst, daysBetween, nowIso } from "./http.js";
 import { pricesAt, STATUS_MESSAGE } from "./prices.js";
 import { feeContext, feeLookup } from "./fees.js";
 import { auditStatement } from "./audit.js";
 import { recordsByPrescription, conversationsByPrescription } from "./records.js";
-import { burdenProblem } from "../../public/assets/js/burden.js";
-import { applyKohi, kohiName } from "../../public/assets/js/kohi.js";
+import { burdenProblem } from "../rules/burden.js";
+import { applyKohi, kohiName } from "../rules/kohi.js";
 import { kohiForPrescription } from "./kohi.js";
 
 const MAX_RPS = 20;
@@ -375,6 +375,7 @@ export async function prescriptionsOf(db, patientId) {
         sentei: it.sentei,
         dailyQtyMilli: it.daily_qty_milli,
         priceSen: it.price_sen,
+        dailyYen: formatYen(dailyCost([{ priceSen: it.price_sen, dailyQtyMilli: it.daily_qty_milli }])), // 1剤1日分のうちこの薬の額
         diffSen: it.special_diff_sen,
         rx: it.rx_name === null ? null : { name: it.rx_name, dailyQtyMilli: it.rx_daily_qty_milli, reason: it.change_reason },
       })),

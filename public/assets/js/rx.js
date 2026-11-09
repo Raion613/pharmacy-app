@@ -1,20 +1,17 @@
 // 処方入力。入力中の値は state に持ち、画面はそこから描く。
-// 点数はサーバーと同じ yakuzairyo.js で入力のたびに計算する（保存時はサーバーが改めて計算し直す）。
+// 点数・会計・小児の分量は、入力のたびにサーバーへ送って計算させ、結果だけを表示する（計算の規則は画面に配らない）。
 import {
   renderShell, setCrumbs, leave, api, ApiError, escapeHtml, formatDate, today, addDays, renderPatientBand, priceText, unitText,
   pointsText, drugTags, toast, toastNext,
 } from "./app.js";
-import { calcRp, parseQuantity, formatQuantity, dailyCost, formatYen, formatSen, specialFee } from "./yakuzairyo.js";
-import { calcFees, copayYen } from "./chozai-fee.js";
+import { parseQuantity, formatQuantity, formatSen } from "./format.js";
 import { icon } from "./icons.js";
 import { setTour, autoStartTour, tourActive } from "./tour.js";
-import { checkPediatricDose, CHILD_AGE_LIMIT } from "./pediatric-dose.js";
-import { latestByItem, labText } from "./lab-items.js";
-import { ageOn } from "./guidance-suggest.js";
+import { labText } from "./lab-items.js";
 import { setupMemoPad } from "./memo-pad.js";
-import { burdenText } from "./burden.js";
+import { burdenText } from "./burden-text.js";
 import { burdenCheck, openBurdenDialog } from "./burden-ui.js";
-import { applyKohi, kohiName, kohiValidOn, hasMonthlyCap, kohiBurdenText } from "./kohi.js";
+import { kohiName, kohiValidOn, hasMonthlyCap, kohiBurdenText } from "./kohi-text.js";
 import { openKohiDialog } from "./kohi-ui.js";
 
 const params = new URLSearchParams(location.search);
@@ -24,7 +21,7 @@ const receptionId = params.get("reception") === null ? null : Number(params.get(
 
 renderShell({ page: "patients", title: "処方入力", crumbs: [{ label: "患者一覧", href: "/patients" }, { label: "処方入力" }] });
 
-const { patient, notes, prescriptions, measurements, memo } = await api(`/api/patients/${patientId}?purpose=rx`);
+const { patient, notes, prescriptions, memo } = await api(`/api/patients/${patientId}?purpose=rx`);
 setCrumbs([
   { label: "患者一覧", href: "/patients" },
   { label: `${patient.name}（${patient.patientNo}）`, href: `/patient?id=${patient.id}` },
@@ -54,7 +51,8 @@ const state = {
   rps: [newRp()],
   handbook: "paper",
   inquiries: [],
-  feeContext: null,           // 調剤日の点数・届出・この患者の履歴（会計の計算に使う）
+  feeContext: null,           // 調剤日の負担割合・公費（会計の表示に使う）
+  calc: null,                 // サーバーが計算した結果（/api/calc/rx）
   compare: false,
   compareOn: null,
   compareAuto: true,          // 比べる日付を自動で決めているか（手で変えたら false）
@@ -98,7 +96,7 @@ function itemInfo(it, priceOf = (d) => d) {
     if (!(e instanceof RangeError)) throw e;
     return { state: it.qty.trim() === "" ? "noqty" : "badqty", message: e.message };
   }
-  return { state: "ok", calc: { priceSen: drug.priceSen, dailyQtyMilli: milli, diffSen: drug.diffSen } };
+  return { state: "ok", calc: { drugCode: drug.code, dailyQtyMilli: milli } };
 }
 
 const isBlankItem = (it) => !it.drug && it.query.trim() === "" && it.qty.trim() === "";
@@ -117,14 +115,47 @@ function rpInfo(rp, priceOf) {
   if (!/^\d{1,3}$/.test(days) || Number(days) < 1) return { state: "pending", reason: "日数を入力してください" };
   const disp = dispensedDays(rp).trim();
   if (!/^\d{1,3}$/.test(disp) || Number(disp) < 1 || Number(disp) > Number(days)) return { state: "pending", reason: "調剤した日数は処方箋の日数以下で入力してください" };
-  const calcs = infos.map((x) => x.calc);
-  return {
-    state: "ok", days: Number(disp), rxDays: Number(days), daysChange: Number(disp) < Number(days) ? rp.daysChange : null,
-    narcotics: items.map((it) => it.drug.narcotic), calcs, result: calcRp({ items: calcs, days: Number(disp) }),
-  };
+  return { state: "ok", days: Number(disp), rxDays: Number(days), daysChange: Number(disp) < Number(days) ? rp.daysChange : null };
 }
 
 const comparePriceOf = (drug) => state.comparePrices.get(drug.code);
+
+// サーバーに送る入力。剤ごとに、1日量まで入った薬と、剤が揃っているか（点数を出すか）
+function calcBody() {
+  const ctx = state.feeContext?.date === state.dispensedOn ? state.feeContext : null;
+  const infos = state.rps.map((rp) => rpInfo(rp));
+  return {
+    patientId: patient.id,
+    dispensedOn: state.dispensedOn,
+    compareOn: state.compare ? state.compareOn : null,
+    handbook: state.handbook,
+    // 入力途中の剤があるとき・調剤日の負担割合と公費が届く前は、会計を出さない
+    pending: infos.some((x) => x.state === "pending") || !ctx || Boolean(ctx.error),
+    inquiries: state.inquiries.map((q) => ({ kind: q.kind, changed: q.changed, shortReason: q.shortReason })),
+    kohi: ctx && !ctx.error ? usedKohi(ctx).map((k) => ({ kohiId: k.id, priorMonthYen: priorOf(k) })) : [],
+    rps: state.rps.map((rp, r) => ({
+      r,
+      usage: rp.usage,
+      complete: infos[r].state === "ok",
+      days: infos[r].days ?? null,
+      rxDays: infos[r].rxDays ?? null,
+      daysChange: infos[r].daysChange ?? null,
+      items: rp.items.map((it, i) => ({ i, info: itemInfo(it) })).filter((x) => x.info.state === "ok").map(({ i, info }) => ({ i, ...info.calc })),
+    })),
+  };
+}
+
+// 入力のたびに送る。後から送った分の結果だけを使う（前の結果が遅れて届いても描かない）
+let calcSeq = 0;
+async function requestCalc() {
+  const seq = ++calcSeq;
+  document.body.dataset.calc = "pending";
+  const res = await api("/api/calc/rx", { method: "POST", body: calcBody() });
+  if (seq !== calcSeq) return;
+  state.calc = res;
+  renderCalc();
+  document.body.dataset.calc = "done";
+}
 
 // ---------- 描画 ----------
 
@@ -243,7 +274,7 @@ function updateRow(r, i) {
   }
 
   const info = itemInfo(it);
-  tr.querySelector(".cost").textContent = info.state === "ok" ? `${formatYen(dailyCost([info.calc]))}円` : "";
+  if (info.state !== "ok") tr.querySelector(".cost").textContent = ""; // 1日分の額はサーバーの結果で入れる（renderCalc）
   tr.querySelector('[data-field="qty"]').classList.toggle("invalid", info.state === "badqty");
   tr.querySelector('[data-field="qty"]').title = info.state === "badqty" ? info.message : "";
 }
@@ -271,56 +302,59 @@ function updateRpCalc(r) {
     el.innerHTML = `<span class="pending">${info.reason}</span>`;
     return;
   }
-  const x = info.result;
-  let old = "";
-  if (state.compare) {
-    const c = rpInfo(state.rps[r], comparePriceOf);
-    old = c.state === "ok" && c.result.points !== x.points ? `<span class="old-points" title="比較日の点数">${pointsText(c.result.points)}</span>` : "";
-  }
-  el.innerHTML = `1日分 ${x.dailyYen}円 → ${x.pointsPerDay}点 × ${x.days}日 = ${old}<strong class="num">${pointsText(x.points)}</strong>`;
+  // 剤の点数はサーバーの結果で入れる（renderCalc）。届くまでは前の結果を残す
+  if (el.querySelector(".pending")) el.innerHTML = "";
 }
 
 function updateSummary() {
-  const infos = state.rps.map((rp) => rpInfo(rp));
-  const done = infos.filter((x) => x.state === "ok");
-  const pending = infos.some((x) => x.state === "pending");
-  const total = done.reduce((s, x) => s + x.result.points, 0);
-  $("#total").textContent = done.length ? pointsText(total) : "—";
-  $("#total-yen").textContent = done.length ? `${(total * 10).toLocaleString()}円` : "";
+  const pending = state.rps.some((rp) => rpInfo(rp).state === "pending");
   $("#total-note").textContent = pending ? "入力途中の剤を除く" : "";
-  updateBill(infos, done, pending);
-  updatePediatric();
+  requestCalc();
+}
+
+// サーバーが計算した結果を描く
+function renderCalc() {
+  const c = state.calc;
+  const cost = new Map(c.items.map((x) => [`${x.r}-${x.i}`, x.costYen]));
+  const rpOf = new Map(c.rps.map((x) => [x.r, x]));
+  state.rps.forEach((rp, r) => {
+    rp.items.forEach((_, i) => {
+      const yen = cost.get(`${r}-${i}`);
+      rpsEl.querySelector(`tr.item[data-r="${r}"][data-i="${i}"] .cost`).textContent = yen === undefined ? "" : `${yen}円`;
+    });
+    const x = rpOf.get(r);
+    if (!x) return;
+    const old = state.compare && x.comparePoints !== null && x.comparePoints !== x.points
+      ? `<span class="old-points" title="比較日の点数">${pointsText(x.comparePoints)}</span>` : "";
+    rpsEl.querySelector(`.rp-edit[data-r="${r}"] .rp-calc`).innerHTML =
+      `1日分 ${x.dailyYen}円 → ${x.pointsPerDay}点 × ${x.days}日 = ${old}<strong class="num">${pointsText(x.points)}</strong>`;
+  });
+  const done = c.rps.length > 0;
+  $("#total").textContent = done ? pointsText(c.drugPoints) : "—";
+  $("#total-yen").textContent = done ? `${(c.drugPoints * 10).toLocaleString()}円` : "";
   $("#rp-points").innerHTML = state.rps.map((rp, r) => {
-    const x = infos[r];
-    if (x.state === "empty") return "";
-    return `<li><span>Rp${r + 1}<span class="usage">${escapeHtml(rp.usage)}</span></span><span class="num">${x.state === "ok" ? pointsText(x.result.points) : "入力途中"}</span></li>`;
+    if (rpInfo(rp).state === "empty") return "";
+    const x = rpOf.get(r);
+    return `<li><span>Rp${r + 1}<span class="usage">${escapeHtml(rp.usage)}</span></span><span class="num">${x ? pointsText(x.points) : "入力途中"}</span></li>`;
   }).join("");
-  if (state.compare) updateCompareSummary(infos);
+  renderBill(c.bill);
+  renderPediatric(c.pediatric);
+  if (state.compare) renderCompare(c);
 }
 
 // ---------- 小児の分量 ----------
-// 調剤日の年齢が15歳未満なら、薬ごとに体重当たりの量を添付文書の小児の用量と比べる（pediatric-dose.js）
+// 調剤日の年齢が15歳未満なら、サーバーが薬ごとに体重当たりの量を添付文書の小児の用量と比べて返す
 const PEDS_LABEL = { ok: "範囲内", low: "少ない", high: "多い", over: "上限超え", check: "確認" };
 
-function updatePediatric() {
+function renderPediatric(p) {
   const box = $("#peds");
-  box.hidden = ageOn(patient.birthDate, state.dispensedOn) >= CHILD_AGE_LIMIT;
-  if (box.hidden) return;
-  const weight = latestByItem(measurements, state.dispensedOn).weight ?? null;
-  $("#peds-weight").textContent = weight
-    ? `${ageOn(patient.birthDate, state.dispensedOn)}歳・体重 ${labText("weight", weight.valueMilli)}（${formatDate(weight.measuredOn)}）`
-    : `${ageOn(patient.birthDate, state.dispensedOn)}歳・体重の記録なし`;
-  const rows = [];
-  for (const rp of state.rps) {
-    for (const it of rp.items) {
-      const info = itemInfo(it);
-      if (info.state !== "ok") continue;
-      const r = checkPediatricDose({ drug: it.drug, dailyQtyMilli: info.calc.dailyQtyMilli, usage: rp.usage, weightMilli: weight?.valueMilli ?? null });
-      if (r) rows.push({ name: it.drug.name, r });
-    }
-  }
-  $("#peds-list").innerHTML = rows.length
-    ? rows.map(({ name, r }) => `<li class="peds-${r.status}"><span class="tag">${PEDS_LABEL[r.status]}</span><b>${escapeHtml(name)}</b>
+  box.hidden = p === null;
+  if (p === null) return;
+  $("#peds-weight").textContent = p.weight
+    ? `${p.age}歳・体重 ${labText("weight", p.weight.valueMilli)}（${formatDate(p.weight.measuredOn)}）`
+    : `${p.age}歳・体重の記録なし`;
+  $("#peds-list").innerHTML = p.rows.length
+    ? p.rows.map((r) => `<li class="peds-${r.status}"><span class="tag">${PEDS_LABEL[r.status]}</span><b>${escapeHtml(r.name)}</b>
         <div>${escapeHtml(r.message)}</div>${r.rangeText ? `<div class="hint">${escapeHtml(r.ingredient)}：${escapeHtml(r.rangeText)}（${escapeHtml(r.source)}）</div>` : ""}</li>`).join("")
     : '<li class="none">確かめる対象の薬はまだありません</li>';
 }
@@ -328,12 +362,11 @@ function updatePediatric() {
 $("#peds-weight-save").addEventListener("click", async () => {
   const input = $("#peds-weight-input");
   try {
-    const list = await api(`/api/patients/${patient.id}/measurements`, {
+    await api(`/api/patients/${patient.id}/measurements`, {
       method: "POST", body: { measuredOn: today(), source: "manual", values: [{ item: "weight", value: input.value }] },
     });
-    measurements.splice(0, measurements.length, ...list);
     input.value = "";
-    updatePediatric();
+    requestCalc();
     toast("体重を保存しました");
   } catch (err) {
     if (!(err instanceof ApiError) || err.status !== 422) throw err;
@@ -342,85 +375,55 @@ $("#peds-weight-save").addEventListener("click", async () => {
   }
 });
 
-function updateCompareSummary(infos) {
-  const cmp = state.rps.map((rp) => rpInfo(rp, comparePriceOf));
-  const pairs = infos.map((x, r) => [x, cmp[r]]).filter(([x]) => x.state === "ok");
-  const usable = pairs.every(([, c]) => c.state === "ok");
-  const cur = pairs.reduce((s, [x]) => s + x.result.points, 0);
-  $("#compare-current").textContent = pairs.length ? pointsText(cur) : "—";
+function renderCompare(c) {
+  $("#compare-current").textContent = c.rps.length ? pointsText(c.drugPoints) : "—";
   const diffEl = $("#compare-diff");
   diffEl.classList.remove("up", "down");
-  if (pairs.length === 0) {
+  if (c.compare === null) {
     $("#compare-total").textContent = "—";
     diffEl.textContent = "—";
-  } else if (!usable) {
+  } else if (!c.compare.usable) {
     $("#compare-total").textContent = "使えない薬あり";
     diffEl.textContent = "—";
   } else {
-    const old = pairs.reduce((s, [, c]) => s + c.result.points, 0);
-    const diff = cur - old;
-    $("#compare-total").textContent = pointsText(old);
+    const diff = c.drugPoints - c.compare.oldPoints;
+    $("#compare-total").textContent = pointsText(c.compare.oldPoints);
     diffEl.textContent = diff === 0 ? "変わらない" : `${diff > 0 ? "+" : "−"}${pointsText(Math.abs(diff))}`;
     if (diff !== 0) diffEl.classList.add(diff > 0 ? "up" : "down");
   }
 }
 
-// 会計：調剤報酬（調剤技術料・薬学管理料・薬剤料・その他）、一部負担金、選定療養の特別の料金。保存時はサーバーが計算し直す
-function updateBill(infos, done, pending) {
+// 会計：調剤報酬（調剤技術料・薬学管理料・薬剤料・その他）、一部負担金、選定療養の特別の料金、公費。保存時はサーバーが計算し直す
+function renderBill(b) {
   const set = (id, text) => { $(`#${id}`).textContent = text; };
   const ids = ["bill-tech", "bill-mgmt", "bill-drug", "bill-other", "bill-total", "bill-copay", "bill-special", "bill-charge"];
-  // 調剤日を変えた直後は、新しい日付の点数表が届くまで計算しない（前の日付の点数表で計算すると、無い算定項目を引いてしまう）
   const ctx = state.feeContext?.date === state.dispensedOn ? state.feeContext : null;
-  if (ctx?.error) {
+  const note = ctx?.error ?? b?.error ?? "";
+  if (note || !b) {
     for (const id of ids) set(id, "—");
     $("#bill-lines").innerHTML = "";
-    set("bill-note", ctx.error);
-    return;
-  }
-  if (!ctx || done.length === 0 || pending) {
-    for (const id of ids) set(id, "—");
-    $("#bill-lines").innerHTML = "";
-    set("bill-note", "");
+    set("bill-note", note);
     return;
   }
   set("bill-note", "");
-  const fees = calcFees({
-    date: state.dispensedOn,
-    facility: ctx.facility,
-    ageYears: ctx.ageYears,
-    handbook: state.handbook,
-    history: { within3Months: ctx.history.within3Months, done: new Set(ctx.history.done) },
-    rps: done.map((x) => ({ days: x.days, rxDays: x.rxDays, daysChange: x.daysChange, narcotics: x.narcotics })),
-    inquiries: state.inquiries.map((q) => ({ kind: q.kind, changed: q.changed, shortReason: q.shortReason.trim() || null })),
-    fee: (code) => {
-      const f = ctx.fees[code];
-      if (!f) throw new Error(`調剤行為コード ${code} は ${state.dispensedOn} の調剤行為マスターにありません`);
-      return f;
-    },
-  });
-  const drug = done.reduce((s, x) => s + x.result.points, 0);
-  const total = fees.tech + fees.mgmt + drug + fees.other;
-  const copay = copayYen(total, ctx.burdenPercent);
-  const special = specialFee(done.map((x) => ({ days: x.days, items: x.calcs })), state.dispensedOn);
-  set("bill-tech", pointsText(fees.tech));
-  set("bill-mgmt", pointsText(fees.mgmt));
-  set("bill-drug", pointsText(drug));
-  set("bill-other", pointsText(fees.other));
-  set("bill-total", pointsText(total));
+  set("bill-tech", pointsText(b.tech));
+  set("bill-mgmt", pointsText(b.mgmt));
+  set("bill-drug", pointsText(b.drug));
+  set("bill-other", pointsText(b.other));
+  set("bill-total", pointsText(b.total));
   set("bill-burden-label", `一部負担金（${burdenText(ctx.burdenPercent, ctx.burdenReason)}）`);
-  set("bill-copay", `${copay.toLocaleString()}円`);
-  set("bill-special", special ? `${special.yen.toLocaleString()}円` : "—");
+  set("bill-copay", `${b.copayYen.toLocaleString()}円`);
+  set("bill-special", b.specialYen === null ? "—" : `${b.specialYen.toLocaleString()}円`);
   // 公費：国の公費 → 自治体の助成の順にかけ、公費ごとの後の負担を行に出す
-  const applied = applyKohi({ totalPoints: total, burdenPercent: ctx.burdenPercent, copayYen: copay, kohi: usedKohi(ctx).map((k) => ({ ...k, priorMonthYen: priorOf(k) })) });
   for (const el of $("#bill-kohi").querySelectorAll("[data-kohi-pay]")) el.textContent = "—";
-  for (const s of applied.steps) {
+  for (const s of b.kohiSteps) {
     $("#bill-kohi").querySelector(`[data-kohi-pay="${s.id}"]`).textContent = `${s.payYen.toLocaleString()}円${s.monthTotalYen === null ? "" : `（今月の累計 ${s.monthTotalYen.toLocaleString()}円）`}`;
   }
-  const charge = applied.patientPayYen + (special?.yen ?? 0);
   const chargeEl = $("#bill-charge");
-  if (chargeEl.textContent !== `${charge.toLocaleString()}円` && chargeEl.textContent !== "—") flash(chargeEl);
-  chargeEl.textContent = `${charge.toLocaleString()}円`;
-  $("#bill-lines").innerHTML = fees.lines.map((l) =>
+  const charge = `${b.chargeYen.toLocaleString()}円`;
+  if (chargeEl.textContent !== charge && chargeEl.textContent !== "—") flash(chargeEl);
+  chargeEl.textContent = charge;
+  $("#bill-lines").innerHTML = b.lines.map((l) =>
     `<li><span>${escapeHtml(l.name)}${l.count > 1 ? ` ×${l.count}` : ""}</span><span class="num">${pointsText(l.points * l.count)}</span></li>`).join("");
 }
 
@@ -440,7 +443,7 @@ async function loadFeeContext() {
 // 今月の累計（この来局より前）を入れる。初めの値は、この薬局でこの月に払った額（他の医療機関の分は入っていないので、管理票を見て直す）
 const validKohi = (ctx) => (ctx?.kohi ?? []).filter((k) => kohiValidOn(k, state.dispensedOn));
 const usedKohi = (ctx) => validKohi(ctx).filter((k) => state.kohiUse.get(k.id).use);
-const priorOf = (k) => (hasMonthlyCap(k) ? Number(state.kohiUse.get(k.id).prior) || 0 : null);
+const priorOf = (k) => (hasMonthlyCap(k) ? (/^\d+$/.test(state.kohiUse.get(k.id).prior.trim()) ? Number(state.kohiUse.get(k.id).prior.trim()) : 0) : null);
 
 function renderKohi() {
   const ctx = state.feeContext;
@@ -851,7 +854,7 @@ dispensedInput.addEventListener("change", async () => {
   markDirty();
   checkDates();
   await Promise.all([reprice(), loadFeeContext()]);
-  if (burdenCheck(patient, burdenDate()).mismatch) await changeBurden();
+  if ((await burdenCheck(patient, burdenDate())).mismatch) await changeBurden();
   if (state.compare && state.compareAuto) setDefaultCompareDate();
   if (state.compare) await refreshCompare();
 });
@@ -1191,9 +1194,6 @@ setTour("rx", [
 ]);
 autoStartTour();
 
-// 開いたときの負担割合の確認（チュートリアルが流れているときは、その後に開き直したときに出る）
-if (!tourActive() && burdenCheck(patient, burdenDate()).needed) changeBurden();
-
 // 前回の処方を写す（前回Do）。いちばん新しい来局の処方を、今の調剤日の薬価で写した処方入力に入れ直す
 function copyLast() {
   if (prescriptions.length === 0) {
@@ -1212,3 +1212,7 @@ document.addEventListener("keydown", (e) => {
     copyLast();
   }
 });
+
+// 開いたときの負担割合の確認（チュートリアルが流れているときは、その後に開き直したときに出る）。
+// 確認はサーバーに聞くので、待つ間もキー操作が効くよう、操作の登録を全部終えた後に聞く
+if (!tourActive() && (await burdenCheck(patient, burdenDate())).needed) changeBurden();

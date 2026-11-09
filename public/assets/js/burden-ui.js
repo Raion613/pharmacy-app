@@ -1,13 +1,14 @@
 // 負担割合の窓。患者の欄の「負担割合」から開いて変える／受付・処方入力のときに、割合が変わりうる日を過ぎていたら自動で開く。
 import { api, ApiError, escapeHtml, formatDate } from "./app.js";
-import { burdenChoices, burdenEvents, burdenProblem, ageParts, burdenLongText } from "./burden.js";
+import { ageParts, burdenLongText } from "./burden-text.js";
 
-// 確認が要るか：前回確かめた日（前回の来局か、窓で確かめた日の遅い方）より後に割合が変わりうる日が来た／今の割合がその日にありえない
+// 確認が要るか：前回確かめた日（前回の来局か、窓で確かめた日の遅い方）より後に割合が変わりうる日が来た／今の割合がその日にありえない。
+// 割合の規則はサーバーだけが持つ（/api/calc/burden）。choices（その日に選べる割合）も一緒に返る
 export function burdenCheck(patient, date) {
-  const since = [patient.lastDispensedOn, patient.burdenCheckedOn].filter((d) => d !== null).sort().at(-1) ?? null;
-  const events = since === null ? [] : burdenEvents(patient, since, date);
-  const problem = burdenProblem(patient, date);
-  return { events, problem, needed: events.length > 0 || problem !== null };
+  const { birthDate, burdenPercent, burdenReason, burdenUntil, lastDispensedOn, burdenCheckedOn } = patient;
+  return api("/api/calc/burden", {
+    method: "POST", body: { birthDate, date, patient: { burdenPercent, burdenReason, burdenUntil, lastDispensedOn, burdenCheckedOn } },
+  });
 }
 
 // 選択肢ごとの説明
@@ -51,11 +52,10 @@ function ensureDialog() {
 }
 
 // date：その割合を確かめる日（処方入力は調剤日、それ以外は今日）。確定すると新しい患者情報、閉じると null を返す
-export function openBurdenDialog(patient, date) {
+export async function openBurdenDialog(patient, date) {
   const d = ensureDialog();
   const form = d.querySelector("form");
-  const { events, problem } = burdenCheck(patient, date);
-  const choices = burdenChoices(patient.birthDate, date);
+  const { events, problem, choices } = await burdenCheck(patient, date);
   const age = ageParts(patient.birthDate, date);
   d.querySelector("#burden-title").textContent = events.length || problem ? "負担割合の確認" : "負担割合を変える";
   d.querySelector("#burden-who").innerHTML = `<b>${escapeHtml(patient.name)}</b>さん　${formatDate(date)}時点で <b>${age.years}歳${age.months}か月</b>

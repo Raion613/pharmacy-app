@@ -1,4 +1,4 @@
-import { standardBurdens, ageParts } from "./burden.js";
+import { ageParts } from "./burden-text.js";
 import { renderShell, api, ApiError, escapeHtml, formatDate, birthText, SEX, debounce, listNavigator, toastNext, today } from "./app.js";
 import { icon } from "./icons.js";
 import { NOTE_LABEL } from "./record-kinds.js";
@@ -92,10 +92,15 @@ function openDialog() {
 }
 
 // 負担割合：生年月日から、今日の年齢でありうる割合だけを選べるようにする。年齢で1つに決まるなら選んでおく
-function limitBurdens() {
+// その年齢でありうる割合はサーバーが規則で出す（/api/calc/burden）。後から打った生年月日の結果だけを使う
+let burdenSeq = 0;
+async function limitBurdens() {
   const birth = form.elements.birthDate.value;
   const ok = birth !== "" && birth <= today();
-  const allowed = ok ? [...standardBurdens(birth, today()), 0] : [30, 20, 10, 0];
+  const seq = ++burdenSeq;
+  const standard = ok ? (await api("/api/calc/burden", { method: "POST", body: { birthDate: birth, date: today() } })).standard : null;
+  if (seq !== burdenSeq) return;
+  const allowed = ok ? [...standard, 0] : [30, 20, 10, 0];
   for (const r of form.querySelectorAll('input[name="burdenPercent"]')) {
     r.disabled = !allowed.includes(Number(r.value));
     r.closest("label").classList.toggle("disabled", r.disabled);

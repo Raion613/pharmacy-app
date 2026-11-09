@@ -1,6 +1,6 @@
 // 公費（受給者証）の窓。患者の帯の「公費」から開き、登録されている受給者証を見て、新しい受給者証を足す。
 import { api, ApiError, escapeHtml, formatDate, today } from "./app.js";
-import { KOHI_KINDS, LOCAL_FORMS, kohiName, kohiValidOn, kohiBurdenText } from "./kohi.js";
+import { KOHI_KINDS, LOCAL_FORMS, kohiName, kohiValidOn, kohiBurdenText } from "./kohi-text.js";
 
 let dialog = null;
 function ensureDialog() {

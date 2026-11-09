@@ -1,7 +1,7 @@
 // 公費：窓口の額の計算（国の公費 → 自治体の助成、月の上限と管理票の累計）と、受給者証の登録
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { applyKohi } from "../public/assets/js/kohi.js";
+import { applyKohi } from "../src/rules/kohi.js";
 import { openD1 } from "../src/dev/sqlite-d1.js";
 import { createKohi, kohiForPrescription } from "../src/server/kohi.js";
 import { HttpError } from "../src/server/http.js";

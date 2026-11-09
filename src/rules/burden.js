@@ -1,4 +1,4 @@
-// 負担割合（一部負担金の割合）の規則。画面とサーバーで共通に使う。
+// 負担割合（一部負担金の割合）の規則。サーバーだけが持つ（表示は public/assets/js/burden-text.js）。
 // 割合は保険証（マイナ保険証の資格確認）に書かれたものを使う。年齢で標準が決まり、所得や事情でそれ以外になることがある。
 //   年齢の標準（理由なし）
 //     小学校に上がる前（6歳に達した日以後の最初の3月31日まで） 2割                          健康保険法 74条1項
@@ -12,22 +12,9 @@
 // 「〇歳に達した日」は誕生日の前日（年齢計算ニ関スル法律）。4月1日生まれが早生まれになるのはこのため。
 // 70歳以上の割合は、毎年8月1日に前の年の所得で見直される。
 
-export const BURDEN_REASONS = {
-  disability: "65〜74歳の障害認定（後期高齢者医療）",
-  exempt: "一部負担金の免除",
-  welfare: "生活保護",
-};
+import { BURDEN_REASONS, burdenText, burdenLongText, ageParts } from "../../public/assets/js/burden-text.js";
 
-export function burdenText(percent, reason = null) {
-  if (reason === "welfare") return "生活保護";
-  if (reason === "exempt") return "免除";
-  return `${percent / 10}割${reason === "disability" ? "（障害認定）" : ""}`;
-}
-export function burdenLongText(percent, reason = null) {
-  if (reason === "welfare") return "生活保護（医療扶助・自己負担なし）";
-  if (reason === "exempt") return "一部負担金の免除（自己負担なし）";
-  return `${percent / 10}割${reason === "disability" ? "（65〜74歳の障害認定・後期高齢者医療）" : ""}`;
-}
+export { BURDEN_REASONS, burdenText, burdenLongText, ageParts };
 
 const iso = (t) => new Date(t).toISOString().slice(0, 10);
 const parts = (date) => date.split("-").map(Number);
@@ -84,15 +71,6 @@ export function burdenProblem(p, date) {
   return p.burdenReason === "disability"
     ? `${date}時点で${age.years}歳です。障害認定（後期高齢者医療）は65〜74歳の人の区分です（75歳からは年齢の区分）`
     : `${date}時点で${age.years}歳${age.months}か月の人の標準は ${std} で、${burdenText(p.burdenPercent, p.burdenReason)}は標準から外れます。事情があれば理由を選んでください`;
-}
-
-// その日の年齢（満年齢と月）
-export function ageParts(birth, date) {
-  const [by, bm, bd] = parts(birth);
-  const [y, m, d] = parts(date);
-  let months = (y - by) * 12 + (m - bm) - (d < bd ? 1 : 0);
-  if (months < 0) months = 0;
-  return { years: Math.floor(months / 12), months: months % 12 };
 }
 
 // from（前回の来局か、前回確かめた日）より後、to（今回）までに、割合が変わりうる出来事。古い順

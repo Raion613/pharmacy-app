@@ -49,7 +49,12 @@ const focused = () => page.evaluate(() => {
   const el = document.activeElement;
   return { id: el.id, field: el.dataset.field ?? null, r: el.dataset.r ?? null, i: el.dataset.i ?? null, tag: el.tagName };
 });
-const text = (sel) => page.locator(sel).innerText();
+// 処方入力の点数・会計はサーバーが計算して返す（入力から結果が届くまで body[data-calc="pending"]）。読む前に届くのを待つ
+const settled = () => page.waitForFunction(() => document.body.dataset.calc !== "pending");
+const text = async (sel) => {
+  await settled();
+  return page.locator(sel).innerText();
+};
 const step = (name) => console.log(`- ${name}`);
 
 // 無音の WAV（録音ファイルの読み込みを試す。長さだけが使われる）
@@ -387,6 +392,7 @@ assert.match(await text("#transcript"), /3秒[\s\S]*薬剤師\s*今日はマグ�
 assert.match(await text("#extracted"), /併用薬（OTC・健康食品を含む）\s*ドラッグストアで買った胃腸薬[\s\S]*疾患（既往歴・合併症・他科）\s*去年から整形外科で腰痛/);
 await page.locator("#soap-subjective").focus();
 await page.keyboard.press("Alt+G");
+await page.waitForFunction(() => document.querySelector("#soap-subjective").value !== ""); // 下書きはサーバーが組み立てて返す
 assert.match(await page.inputValue("#soap-subjective"), /朝に少し胃がもたれます/);
 assert.match(await page.inputValue("#soap-objective"), /マグネシウム（Mg） 2\.4mg\/dL（08\/20）[\s\S]*残薬：「昼の分をたまに飲み忘れます。」「2回分くらい残っています。」/);
 assert.match(await page.inputValue("#soap-plan"), /高マグネシウム血症/);

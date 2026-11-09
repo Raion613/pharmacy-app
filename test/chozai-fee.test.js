@@ -1,9 +1,9 @@
-// 調剤報酬の算定（public/assets/js/chozai-fee.js）・処方箋と調剤内容の違い・疑義照会・お薬手帳のデータ
+// 調剤報酬の算定（src/rules/chozai-fee.js）・処方箋と調剤内容の違い・疑義照会・お薬手帳のデータ
 import { test, before, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { calcFees, copayYen, eraOf } from "../public/assets/js/chozai-fee.js";
-import { jahisText, toShiftJis } from "../public/assets/js/okusuri-techo.js";
+import { calcFees, copayYen, eraOf } from "../src/rules/chozai-fee.js";
+import { jahisText, toShiftJis } from "../src/rules/okusuri-techo.js";
 import { encodeQr } from "../public/assets/js/qr.js";
 import { openD1 } from "../src/dev/sqlite-d1.js";
 import { loadMasterFile, MASTER_FILES } from "../src/dev/load-master.js";

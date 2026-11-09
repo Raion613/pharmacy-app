@@ -3,7 +3,7 @@
 // 照合はサーバーで行う（バーコードの GTIN → HOT コードマスター → 医薬品コード → 処方の薬に入っているか、有効期限）。
 // 処方の薬がすべて「合っている」になったら保存できる。合わなかった読み取りも一緒に記録に残す。
 import { renderShell, setCrumbs, leave, api, ApiError, escapeHtml, formatDate, formatDateTime, renderPatientBand, unitText, toast, toastNext } from "./app.js";
-import { formatQuantity } from "./yakuzairyo.js";
+import { formatQuantity } from "./format.js";
 import { icon } from "./icons.js";
 import { setTour, autoStartTour } from "./tour.js";
 

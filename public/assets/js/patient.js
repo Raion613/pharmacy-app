@@ -12,17 +12,15 @@ import {
 import { setupLayout } from "./layout-grid.js";
 import { setupMemoPad, memoText, memoMeta } from "./memo-pad.js";
 import { openOverlay } from "./overlay.js";
-import { dailyCost, formatYen, formatSen, formatQuantity } from "./yakuzairyo.js";
+import { formatSen, formatQuantity } from "./format.js";
 import { NOTE_CATEGORIES, NOTE_LABEL, SOAP, LEFTOVER, NOTEBOOK, NOTE_MAX } from "./record-kinds.js";
 import { setTour, autoStartTour, tourActive } from "./tour.js";
 import { icon } from "./icons.js";
-import { burdenText } from "./burden.js";
+import { burdenText } from "./burden-text.js";
 import { openBurdenDialog } from "./burden-ui.js";
-import { kohiBandText } from "./kohi.js";
+import { kohiBandText } from "./kohi-text.js";
 import { openKohiDialog } from "./kohi-ui.js";
 import { LAB_ITEMS, LAB, labText, latestByItem, formatLabValue } from "./lab-items.js";
-import { suggestGuidance } from "./guidance-suggest.js";
-import { buildDraft, extractNotes } from "./soap-draft.js";
 
 const SECTION = { tech: "調剤技術料", mgmt: "薬学管理料", other: "その他" };
 const HANDBOOK = { paper: "提示あり（紙）", electronic: "提示あり（電子版）", none: "提示なし" };
@@ -374,7 +372,7 @@ function recordHtml(g) {
 
 function calcHtml(rp) {
   const rows = rp.items.map((it) => {
-    const cost = formatYen(dailyCost([{ priceSen: it.priceSen, dailyQtyMilli: it.dailyQtyMilli }]));
+    const cost = it.dailyYen;
     const diff = it.diffSen === null ? "" : `<span class="spec">価格差 ${formatSen(it.diffSen)}円</span>`;
     return `<tr><td>${escapeHtml(it.name)}${diff}</td>
       <td class="num">1日 ${formatQuantity(it.dailyQtyMilli)}${escapeHtml(unitText(it.unit))}</td>
@@ -657,12 +655,13 @@ async function openRecordDialog(i = selectedIndex) {
 
   assist.conversation = rx.conversations[0] ?? null; // その来局の会話がもうあれば使う
   assist.drafted = false;
-  assist.extracted = assist.conversation ? extractNotes(assist.conversation.transcript) : [];
-  assist.suggestions = suggestGuidance({
+  // 会話から拾ったメモの候補・指導内容の提案・下書きは、サーバーが規則で出す（規則は画面に配らない）
+  assist.extracted = assist.conversation ? assist.conversation.extracted : [];
+  assist.suggestions = await api("/api/calc/suggestions", { method: "POST", body: {
     rx, prevRx: prescriptions[i + 1] ?? null, patient, notes,
     latest: latestByItem(measurements, rx.dispensedOn),
     lastRecord: before ? { on: formatDate(before.rx.dispensedOn), plan: before.record.plan, leftover: before.record.leftover } : null,
-  });
+  } });
   document.querySelector("#drafted-tag").hidden = true;
   renderConversation();
   renderSuggestions();
@@ -750,7 +749,7 @@ async function transcribe(body) {
     const c = await api(`/api/prescriptions/${rx.id}/conversations`, { method: "POST", body });
     rx.conversations.unshift(c);
     assist.conversation = c;
-    assist.extracted = extractNotes(c.transcript);
+    assist.extracted = c.extracted;
     renderConversation();
     renderTimeline();
     select(recordIndex, false);
@@ -762,17 +761,17 @@ async function transcribe(body) {
 
 // ---------- 下書き・提案・テンプレート ----------
 
-function makeDraft() {
+async function makeDraft() {
   const rx = prescriptions[recordIndex];
   const latest = latestByItem(measurements, rx.dispensedOn);
-  const draft = buildDraft({
+  const draft = await api("/api/calc/draft", { method: "POST", body: {
     transcript: assist.conversation?.transcript ?? "",
     changes: changesOf(recordIndex).filter((c) => c.kind !== "same" && c.kind !== "first")
       .map((c) => `${CHANGE_LABEL[c.kind]} ${c.name}${c.text ? ` ${c.text}` : ""}`),
     labs: Object.entries(latest).map(([key, v]) => ({ label: LAB[key].label, text: labText(key, v.valueMilli), measuredOn: v.measuredOn })),
     suggestions: assist.suggestions,
     on: rx.dispensedOn,
-  });
+  } });
   for (const { key } of SOAP) recordForm.elements[key].value = draft[key];
   if (draft.leftover === "some") recordForm.elements.leftover.value = "some";
   assist.drafted = true;

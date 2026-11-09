@@ -2,7 +2,7 @@
 // ファイルはこの画面の中で読み（master-file.js）、内用薬の行だけを 2,000 行ずつサーバーへ送る。
 // 反映はサーバーが1つのトランザクションで行う。途中のどこで失敗しても、作業を消して最初の状態に戻す（薬価マスタは元のまま）。
 import { renderShell, api, ApiError, escapeHtml, formatDate, formatDateTime, toast } from "./app.js";
-import { formatSen } from "./yakuzairyo.js";
+import { formatSen } from "./format.js";
 import { icon } from "./icons.js";
 import { readMasterFile, FileFormatError } from "./master-file.js";
 import { setTour, autoStartTour, tourActive } from "./tour.js";

@@ -2,7 +2,7 @@
 // 訪問の点数（在宅患者訪問薬剤管理指導料）の算定はしない。回数の上限だけを予定を入れるときに確かめる。
 import { HttpError, isDate, nowIso } from "./http.js";
 import { auditStatement } from "./audit.js";
-import { checkVisit, planReviewDue } from "../../public/assets/js/home-visit-rules.js";
+import { checkVisit, planReviewDue, limitsFor } from "../rules/home-visit-rules.js";
 
 function texts(body, specs, errors) {
   const out = {};
@@ -191,7 +191,7 @@ export async function homeOverview(db, pharmacyId, month) {
     patients: patients.results.map((h) => ({
       patientId: h.patient_id, name: h.name, kana: h.kana, patientNo: h.patient_no, birthDate: h.birth_date,
       facilityId: h.facility_id, institution: h.institution, doctor: h.doctor, careManager: h.care_manager,
-      intensive: h.intensive === 1, startedOn: h.started_on,
+      intensive: h.intensive === 1, limits: limitsFor(h.intensive === 1), startedOn: h.started_on,
       plan: latestPlan.has(h.patient_id) ? planJson(latestPlan.get(h.patient_id)) : null,
     })),
     schedules: schedules.results.map(scheduleJson),
@@ -219,7 +219,7 @@ export async function homeDetail(db, patientId) {
     patientId, facilityId: h.facility_id, institution: h.institution, doctor: h.doctor, careManager: h.care_manager,
     patient: { name: info.results[0].name, kana: info.results[0].kana, patientNo: info.results[0].patient_no, birthDate: info.results[0].birth_date, sex: info.results[0].sex },
     facility: info.results[0].facility,
-    intensive: h.intensive === 1, startedOn: h.started_on,
+    intensive: h.intensive === 1, limits: limitsFor(h.intensive === 1), startedOn: h.started_on,
     plans: plans.results.map(planJson), schedules: schedules.results.map(scheduleJson),
   };
 }

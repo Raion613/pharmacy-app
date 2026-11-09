@@ -148,7 +148,7 @@ async function receive(p) {
   await load();
   toast(`${p.name}さんの処方箋を受け付けました`);
   // 受付で保険証を確かめるとき、前回より後に年齢で負担割合が変わりうる日を過ぎていたら、その場で確かめる
-  if (burdenCheck(p, today()).needed) await openBurdenDialog(p, today());
+  if ((await burdenCheck(p, today())).needed) await openBurdenDialog(p, today());
   const card = [...boardEl.querySelectorAll(".col-received .board-card")].at(-1);
   card.classList.add("flash");
   card.querySelector(".btn-primary").focus();

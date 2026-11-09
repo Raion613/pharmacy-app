@@ -1,16 +1,16 @@
 // お薬手帳：紙の手帳に貼る内容（シール）と、電子版お薬手帳に読み込ませる QR コード（JAHIS 形式）。
 // どちらも同じ処方（調剤した薬・量・用法・日数）から作る。処方箋の記載ではなく、実際に渡した内容を書く
 import { api, escapeHtml, formatDate } from "./app.js";
-import { formatQuantity } from "./yakuzairyo.js";
-import { jahisText, toShiftJis } from "./okusuri-techo.js";
+import { formatQuantity } from "./format.js";
 import { encodeQr, qrSvg } from "./qr.js";
 
 const id = new URLSearchParams(location.search).get("id");
-const { patient, prescription: rx, pharmacy } = await api(`/api/prescriptions/${id}?purpose=handbook`);
+const { patient, prescription: rx, pharmacy, handbook } = await api(`/api/prescriptions/${id}?purpose=handbook`);
 document.title = `お薬手帳 ${patient.name} ${rx.dispensedOn}`;
 
-const text = jahisText({ patient, pharmacy, prescription: rx });
-const bytes = toShiftJis(text);
+// 電子版お薬手帳のデータ（JAHIS 形式・Shift_JIS）はサーバーが作る
+const { text } = handbook;
+const bytes = Uint8Array.from(atob(handbook.sjisBase64), (c) => c.charCodeAt(0));
 const unit = (u) => (u === "" ? "規格単位" : u);
 
 document.querySelector("#sheet").innerHTML = `
