@@ -2,6 +2,10 @@
 
 改定をまたいでも、調剤日どおりの薬価・点数で会計を出す調剤業務アプリ。
 
+![業務の流れ](./docs/images/workflow.png)
+
+薬局の業務の流れと、このアプリが扱う工程（青）。くわしくは [docs/ワークフロー定義書.md](./docs/ワークフロー定義書.md)。
+
 ```sh
 npm install
 npm run db:reset
