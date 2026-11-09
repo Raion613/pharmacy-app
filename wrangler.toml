@@ -2,8 +2,8 @@ name = "pharmacy-app"
 pages_build_output_dir = "public"
 compatibility_date = "2026-10-01"
 
-# 本番に出すときは `wrangler d1 create pharmacy` で作られた ID に置き換える
+# 本番の D1（2026-11-09 作成）
 [[d1_databases]]
 binding = "DB"
 database_name = "pharmacy"
-database_id = "00000000-0000-0000-0000-000000000000"
+database_id = "210646d9-de28-473f-b7cc-d70dfca3450e"
