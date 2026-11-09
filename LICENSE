@@ -1,0 +1,17 @@
+Copyright (c) 2026 本多健太郎 (Kentaro Honda). All rights reserved.
+
+このリポジトリのソースコード・画面・文書（以下「本ソフトウェア」）の著作権は、本多健太郎に帰属します。
+権利者の書面による許可なく、次のことを禁じます。
+
+1. 本ソフトウェアの全部または一部を複製・改変・翻案・再配布・公開すること
+2. 本ソフトウェアを元にした製品・サービスを作ること、自分が作ったものとして示すこと
+3. 本ソフトウェアを AI・機械学習のモデルの学習・評価・検索用のデータとして収集・利用すること
+4. AI のツールに本ソフトウェアを読ませ、複製・書き換え・転用したコードを作らせること
+
+閲覧は、権利者が招待した人が、採用選考のために見る場合に限って認めます。
+
+No license is granted. Without prior written permission from the copyright holder, you may not copy, modify,
+distribute, publish, or create derivative works of this software, present it as your own work, or use it to
+train, evaluate, or prompt any AI or machine-learning system.
+
+Data under data/raw/ are public data published by their respective owners; see README for sources.

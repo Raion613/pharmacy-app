@@ -13,9 +13,11 @@
     "db:seed": "node scripts/seed-demo.js && wrangler d1 execute pharmacy --local --file=db/generated/seed.sql",
     "db:reset": "npm run db:init && npm run db:import && npm run db:references && npm run db:seed",
     "e2e": "node e2e/keyboard-flow.js",
-    "e2e:master": "node e2e/master-import.js"
+    "e2e:master": "node e2e/master-import.js",
+    "build": "node scripts/build-dist.js"
   },
   "devDependencies": {
+    "javascript-obfuscator": "^4.1.1",
     "playwright-core": "^1.64.1",
     "wrangler": "^4.157.0"
   }
