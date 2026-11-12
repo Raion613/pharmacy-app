@@ -9,8 +9,8 @@ const { patient, prescription: rx, pharmacy, handbook } = await api(`/api/prescr
 document.title = `お薬手帳 ${patient.name} ${rx.dispensedOn}`;
 
 // 電子版お薬手帳のデータ（JAHIS 形式・Shift_JIS）はサーバーが作る
-const { text } = handbook;
-const bytes = Uint8Array.from(atob(handbook.sjisBase64), (c) => c.charCodeAt(0));
+// 1つの QR コードに入らないときは、サーバーが仕様書の決まりで分けてくる。分けた数だけ並べる
+const qrs = handbook.parts.map((p) => qrSvg(encodeQr(Uint8Array.from(atob(p.sjisBase64), (c) => c.charCodeAt(0))), 3));
 const unit = (u) => (u === "" ? "規格単位" : u);
 
 document.querySelector("#sheet").innerHTML = `
@@ -25,9 +25,9 @@ document.querySelector("#sheet").innerHTML = `
       <footer>${escapeHtml(pharmacy.name)}　TEL ${escapeHtml(pharmacy.phone)}<br>薬剤師 ${escapeHtml(rx.createdBy)}</footer>
     </div>
     <div class="qr-block">
-      <div class="qr">${qrSvg(encodeQr(bytes), 3)}</div>
-      <p>電子版お薬手帳のアプリで読み取れます</p>
-      <details class="raw"><summary>QR コードの中身</summary><pre>${escapeHtml(text)}</pre></details>
+      ${qrs.map((svg, i) => `<div class="qr">${qrs.length > 1 ? `<span class="qr-no">${i + 1} / ${qrs.length}</span>` : ""}${svg}</div>`).join("")}
+      <p>電子版お薬手帳のアプリで読み取れます${qrs.length > 1 ? `（${qrs.length}つに分けています。全部読み取ってください）` : ""}</p>
+      <details class="raw"><summary>QR コードの中身</summary><pre>${escapeHtml(handbook.parts.map((p) => p.text).join("\n"))}</pre></details>
     </div>
   </section>`;
 

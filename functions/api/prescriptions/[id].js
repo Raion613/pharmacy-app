@@ -5,7 +5,7 @@ import { prescriptionsOf } from "../../../src/server/prescriptions.js";
 import { auditStatement } from "../../../src/server/audit.js";
 import { notesOf } from "../../../src/server/records.js";
 import { assertPrescription } from "../../../src/server/tenant.js";
-import { jahisText, toShiftJis } from "../../../src/rules/okusuri-techo.js";
+import { jahisText, toShiftJis, splitJahis } from "../../../src/rules/okusuri-techo.js";
 
 const PURPOSE = { receipt: "領収証・明細書", handbook: "お薬手帳", inspection: "調剤監査" };
 
@@ -32,7 +32,9 @@ export async function onRequestGet({ params, request, env, data }) {
   let handbook = null;
   if (key === "handbook") {
     const text = jahisText({ patient, pharmacy: pharmacyJson, prescription });
-    handbook = { text, sjisBase64: btoa(String.fromCharCode(...toShiftJis(text))) };
+    // QR コード1つに入らなければ、仕様書の決まりで分ける（分けた数だけ QR コードを出す）
+    const dataId = prescription.createdAt.replace(/\D/g, "").slice(0, 14);
+    handbook = { parts: splitJahis(text, dataId).map((t) => ({ text: t, sjisBase64: btoa(Array.from(toShiftJis(t), (b) => String.fromCharCode(b)).join("")) })) };
   }
   return json({ patient, notes, prescription, pharmacy: pharmacyJson, handbook });
 }

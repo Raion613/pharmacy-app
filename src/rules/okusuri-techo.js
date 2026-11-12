@@ -2,7 +2,8 @@
 //
 // 電子版のデータは JAHIS「電子版お薬手帳データフォーマット仕様書 Ver.2.0」（JAHISTC03）。
 //   Shift_JIS のテキスト。1行が1レコードで、先頭がレコード番号、項目はカンマ区切り、行末は CR LF。
-//   使うレコード：バージョン、1 患者情報、5 調剤等年月日、11 調剤－医療機関等、15 調剤－医師・薬剤師、201 薬品、301 用法
+//   使うレコード：バージョン、1 患者情報、5 調剤等年月日、11 調剤－医療機関等、15 調剤－医師・薬剤師、201 薬品、301 用法、
+//   911 分割制御（QR コード1つに入らないときだけ）
 const CRLF = "\r\n";
 const JAHIS_VERSION = "JAHISTC03";
 
@@ -27,6 +28,31 @@ export function jahisText({ patient, pharmacy, prescription }) {
     lines.push(record(301, rp.rpNo, rp.usage, rp.days, "日分", 1, 1, "", 1));
   }
   return lines.join(CRLF) + CRLF;
+}
+
+// QR コード1つに入るバイト数（型番40・誤り訂正レベル M・8ビットバイトモード：データ 2334 コード語から、モードと文字数の 20 ビットを引く）
+export const QR_MAX_BYTES = 2331;
+
+// 1つの QR コードに入らないときだけ、データをレコード（行）の切れ目で分ける（仕様書 3.2.10 補足（3））。
+//   分けたどれにも先頭にバージョンレコードを付け、最後に分割制御レコード「911,データ固有ID(14桁),分割数,連番」を付ける。
+//   dataId：データ固有ID。処方を保存した日時（YYYYMMDDhhmmss）を使う。入るなら分けずに1つで返す（911 は付けない）
+export function splitJahis(text, dataId, maxBytes = QR_MAX_BYTES) {
+  if (toShiftJis(text).length <= maxBytes) return [text];
+  if (!/^\d{14}$/.test(dataId)) throw new Error(`データ固有IDは14桁の数字です：${dataId}`);
+  const [version, ...records] = text.split(CRLF).slice(0, -1);
+  const size = (line) => toShiftJis(line).length + CRLF.length;
+  const control = size(`911,${dataId},999,999`); // 分割制御レコードの分（分割数・連番は最大3桁）を先に取っておく
+  const groups = [];
+  let current = [], used = size(version) + control;
+  for (const line of records) {
+    if (size(version) + size(line) + control > maxBytes) throw new Error("1行だけで QR コード1つに入りません");
+    if (used + size(line) > maxBytes) { groups.push(current); current = []; used = size(version) + control; }
+    current.push(line);
+    used += size(line);
+  }
+  groups.push(current);
+  if (groups.length > 999) throw new Error("分割数は999までです");
+  return groups.map((g, i) => [version, ...g, `911,${dataId},${groups.length},${i + 1}`].join(CRLF) + CRLF);
 }
 
 // 項目の中の半角カンマは区切りと紛れるので全角にする（仕様書 3.2.5）

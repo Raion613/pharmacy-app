@@ -37,6 +37,7 @@ body.print-page { background: var(--bg); min-height: 100vh; }
 .sticker footer { margin-top: 4px; font-size: 11px; }
 .qr-block { display: grid; gap: 4px; justify-items: start; }
 .qr-block p { margin: 0; font-size: 13px; }
+.qr-no { display: block; font-size: 12px; font-weight: 700; } /* QR コードを分けたときの「1 / 3」 */
 .qr-block .raw pre { max-width: 420px; white-space: pre-wrap; font-size: 11px; background: #f6f8f9; padding: 6px; }
 
 @media print {

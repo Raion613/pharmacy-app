@@ -3,7 +3,7 @@ import { test, before, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { calcFees, copayYen, eraOf } from "../src/rules/chozai-fee.js";
-import { jahisText, toShiftJis } from "../src/rules/okusuri-techo.js";
+import { jahisText, toShiftJis, splitJahis } from "../src/rules/okusuri-techo.js";
 import { encodeQr } from "../public/assets/js/qr.js";
 import { openD1 } from "../src/dev/sqlite-d1.js";
 import { loadMasterFile, MASTER_FILES } from "../src/dev/load-master.js";
@@ -234,6 +234,22 @@ test("電子版お薬手帳（JAHIS Ver.2.0）：レコードの並びと書き�
     "201,2,試験散，1%,1.5,g,2,610000001,1", // 半角カンマは全角に
     "301,2,1日1回就寝前,7,日分,1,1,,1",
   ].join("\r\n") + "\r\n");
+});
+
+test("電子版お薬手帳：QR コード1つに入らないときだけ、行の切れ目で分け、どれにもバージョンと分割制御レコード（911）を付ける", () => {
+  const text = jahisText(SAMPLE);
+  assert.deepEqual(splitJahis(text, "20261022093000"), [text]); // 入るなら分けない
+  const parts = splitJahis(text, "20261022093000", 150);
+  assert.ok(parts.length > 1);
+  parts.forEach((p, i) => {
+    const lines = p.split("\r\n").slice(0, -1);
+    assert.equal(lines[0], "JAHISTC03,1");
+    assert.equal(lines.at(-1), `911,20261022093000,${parts.length},${i + 1}`);
+    assert.ok(toShiftJis(p).length <= 150);
+  });
+  // 分けた中身（バージョンと 911 を除く）をつなぐと、元のレコードに戻る
+  const body = (t) => t.split("\r\n").slice(1, -1).filter((l) => !l.startsWith("911,"));
+  assert.deepEqual(parts.flatMap(body), body(text));
 });
 
 test("Shift_JIS への変換：JIS X 0208 の文字は2バイト、半角カナは1バイト、機種依存文字は「■」", () => {
