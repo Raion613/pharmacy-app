@@ -585,7 +585,11 @@ await page.fill("#reply-body", "受け取りは何時ごろになりますか");
 await page.keyboard.press("Control+Enter");
 await page.waitForFunction(() => document.querySelectorAll("#chat-log li").length === 3);
 await page.fill("#receive-q", "おの");
-await page.waitForFunction(() => document.querySelector("#receive-patient").options.length > 0);
+// 「おの」で絞り込んだ結果が届くまで待つ（候補の欄は検索が届くまで空か、前の候補のまま）
+await page.waitForFunction(() => {
+  const options = [...document.querySelector("#receive-patient").options];
+  return options.length > 0 && options.every((o) => o.text.includes("小野寺"));
+});
 await page.fill("#receive-body", "血圧の薬を1日飲み忘れました");
 await page.click("#receive-form button[type=submit]");
 await page.waitForFunction(() => document.querySelector("#chat-head").textContent.includes("小野寺"));
@@ -830,7 +834,8 @@ const code = (offset) => hotp(secret, stepOf(Date.now()) + offset);
 await page.fill("#code", "000000");
 await page.click("#confirm-form button");
 await page.waitForFunction(() => document.querySelector("#code-error").textContent !== "");
-await page.fill("#code", await code(0));
+const setupCode = await code(0); // 30秒の区切りをまたいでも同じ数字を使い回せるよう、文字列で持っておく
+await page.fill("#code", setupCode);
 await page.click("#confirm-form button");
 await page.waitForFunction(() => document.querySelector("#mfa-state").textContent === "有効");
 await page.click("#logout");
@@ -840,7 +845,7 @@ await page.fill("#password", "pharmacy-demo");
 await page.click("#login-form button[type=submit]");
 await page.waitForSelector("#mfa-form:not([hidden])");
 assert.equal((await page.request.get(`${BASE}/api/patients`)).status(), 401, "6桁を入れる前に入れてしまう");
-await page.fill("#mfa-code", await code(0)); // 設定で使った数字は使い回せない
+await page.fill("#mfa-code", setupCode); // 設定で使った数字は使い回せない
 await page.click("#mfa-form button");
 await page.waitForSelector("#mfa-error:not([hidden])");
 await Promise.all([page.waitForURL(/\/patients$/), (async () => { await page.fill("#mfa-code", await code(1)); await page.click("#mfa-form button"); })()]);
