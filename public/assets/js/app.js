@@ -111,6 +111,21 @@ export async function api(path, { method = "GET", body } = {}) {
   return data;
 }
 
+// ボタンを離した瞬間に、縦に一度だけ縮んで戻る（トゥーンの「潰れて戻る」をごく小さく）。
+// 何千回押しても邪魔にならないよう、0.16秒・最大3%・音なし・形（transform）だけで、レイアウトは動かさない。
+// マウスでも、フォーカスしたボタンを Enter / Space で押したときも同じ動き
+const PRESS_POP = [
+  { transform: "translateY(1px) scale(1.02, .94)" },
+  { transform: "translateY(-1px) scale(.99, 1.03)", offset: .45 },
+  { transform: "none" },
+];
+const REDUCED_MOTION = matchMedia("(prefers-reduced-motion: reduce)");
+document.addEventListener("click", (e) => {
+  const btn = e.target.closest(".btn");
+  if (!btn || REDUCED_MOTION.matches) return;
+  btn.animate(PRESS_POP, { duration: 160, easing: "cubic-bezier(.3, .7, .4, 1)" });
+});
+
 // 想定外のエラーは隠さず通知する（詳細はコンソール）
 window.addEventListener("unhandledrejection", (e) => {
   const message = e.reason instanceof ApiError ? e.reason.message : "処理中にエラーが発生しました。画面を再読み込みしてください";

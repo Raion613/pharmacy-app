@@ -61,7 +61,7 @@ body.app { display: flex; }
 .sidebar a[aria-current="page"] { background: #2f3337; border-left-color: #4cc0ef; color: #fff; }
 .sidebar a:focus-visible { outline: 2px solid #4cc0ef; outline-offset: -2px; }
 
-.main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.main { flex: 1; min-width: 0; display: flex; flex-direction: column; overflow-y: auto; }
 .topbar {
   min-height: 48px; flex-shrink: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 6px 16px;
   background: var(--panel); border-bottom: 1px solid var(--border);
@@ -81,11 +81,13 @@ body.app { display: flex; }
 .crumbs a { color: var(--accent); text-decoration: none; }
 .crumbs a:hover { text-decoration: underline; }
 .crumbs .sep { color: var(--border-strong); }
-.content { flex: 1; min-height: 0; overflow: auto; padding: 14px 16px; }
+/* 中身の領域は、上の帯（注意の多い患者の帯など）が高くなっても潰さない。入らなければ画面全体（.main）を1本でスクロールする */
+.content { flex: 1; min-height: max(360px, 55vh); overflow: auto; padding: 14px 16px; }
 .content.split { display: flex; gap: 14px; overflow: hidden; }
 .content.split > * { min-height: 0; }
 
 .actionbar {
+  position: sticky; bottom: 0; z-index: 5; /* 画面全体がスクロールしても、操作バーは下に残す */
   flex-shrink: 0; display: flex; align-items: center; gap: 10px; padding: 8px 16px;
   background: var(--actionbar); color: #dfe4e8; font-size: 12px;
 }
@@ -110,10 +112,14 @@ kbd {
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 32px; padding: 0 14px;
   border: 1px solid var(--border-strong); border-radius: var(--radius); background: #fff; cursor: pointer;
-  white-space: nowrap; transition: background-color .12s, transform .06s;
+  white-space: nowrap; transition: background-color .12s, transform .06s, box-shadow .06s;
+  /* 押し心地：下の縁を 2px だけ厚く見せ（ベベル）、押すと縁が沈む。押したまま＝沈んだまま、離すと app.js が小さく弾ませる */
+  box-shadow: inset 0 -2px 0 rgba(0, 0, 0, .09), inset 0 1px 0 rgba(255, 255, 255, .6);
 }
 .btn:hover { background: #f3f6f8; }
-.btn:active { transform: translateY(1px); }
+.btn:active { transform: translateY(1px); box-shadow: inset 0 1px 2px rgba(0, 0, 0, .14); transition-duration: 0s; }
+.btn-ghost, .btn-ghost:active, .actionbar .btn:not(.btn-primary), .main-toolbar .btn-quiet { box-shadow: none; }
+@media (prefers-reduced-motion: reduce) { .btn, .btn:active { transform: none; transition: background-color .12s; } }
 .btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 700; }
 .btn-primary:hover { background: var(--accent-strong); }
 .btn-primary[disabled] { background: #8aa9b8; border-color: #8aa9b8; cursor: default; }
@@ -173,8 +179,9 @@ kbd {
 
 /* 患者の帯 */
 .patient-band { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px; padding: 10px 14px; }
-.patient-band .name { font-size: 19px; font-weight: 700; letter-spacing: .02em; white-space: nowrap; }
-.patient-band .kana { font-size: 12px; color: var(--sub); white-space: nowrap; }
+/* 氏名・カナは普段は1行。長くて入らないときだけ折り返す（画面の横にはみ出さない） */
+.patient-band .name { font-size: 19px; font-weight: 700; letter-spacing: .02em; overflow-wrap: anywhere; }
+.patient-band .kana { font-size: 12px; color: var(--sub); overflow-wrap: anywhere; }
 .patient-band dl { display: flex; flex-wrap: wrap; gap: 4px 18px; margin: 0; }
 .patient-band dt { font-size: 11px; color: var(--sub); }
 .patient-band dd { margin: 0; font-weight: 700; }
@@ -247,7 +254,7 @@ dialog .dialog-foot { display: flex; justify-content: flex-end; gap: 8px; paddin
 @media (max-width: 900px) {
   .sidebar { width: 52px; }
   .sidebar a { font-size: 10px; }
-  .content.split { flex-direction: column; overflow: auto; }
+  .content.split { flex: none; flex-direction: column; overflow: visible; } /* 縦に積んだら中身の高さのまま置き、画面全体を1本でスクロール */
   .actionbar .keys { display: none; }
   .grid th, .grid td { padding-left: 6px; padding-right: 6px; } /* 一覧表の列の左右の余白を詰めて、表を画面に収める */
 }
@@ -270,9 +277,9 @@ dialog .dialog-foot { display: flex; justify-content: flex-end; gap: 8px; paddin
 .back-button:hover { background: #f3f6f8; }
 .back-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .topbar.with-back h1 { font-size: 20px; padding: 2px 12px; border-radius: var(--radius); background: var(--accent-soft); color: var(--accent-strong); }
-.subject { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 12px; min-width: 0; }
-.subject-name { font-size: 22px; font-weight: 700; white-space: nowrap; }
-.subject-kana { font-size: 13px; color: var(--sub); white-space: nowrap; }
+.subject { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 12px; min-width: 0; flex: 0 1 auto; }
+.subject-name { font-size: 22px; font-weight: 700; white-space: normal; overflow-wrap: anywhere; }
+.subject-kana { font-size: 13px; color: var(--sub); white-space: normal; overflow-wrap: anywhere; }
 .subject-facts { font-size: 14px; font-weight: 700; white-space: nowrap; }
 
 /* 画面の操作の帯（薬歴）：画面でいちばん目立つ帯。ここから全部の操作を始める */

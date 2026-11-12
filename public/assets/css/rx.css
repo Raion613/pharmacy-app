@@ -74,7 +74,7 @@
 /* 右側の集計 */
 .rx-summary { width: 320px; flex-shrink: 0; display: flex; flex-direction: column; overflow: auto; }
 .summary-body { display: grid; gap: 12px; }
-.total-box { display: flex; align-items: baseline; gap: 8px; padding-bottom: 8px; border-bottom: 2px solid var(--accent); }
+.total-box { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: baseline; gap: 0 8px; padding-bottom: 8px; border-bottom: 2px solid var(--accent); }
 .total-box .label { font-weight: 700; }
 .total-box .total { font-size: 30px; font-weight: 700; color: var(--accent-strong); margin-left: auto; line-height: 1.1; }
 .total-box .yen { color: var(--sub); }
@@ -101,17 +101,19 @@
 @media (max-width: 1200px) {
   .rx-summary { width: 240px; }
   .total-box .total { font-size: 24px; }
-  .rp-edit th.rp-no-col { width: 44px; }
+  .rp-edit th.rp-no-col { width: 52px; } /* 「Rp20」まで入る幅 */
   .rp-edit th.qty-col { width: 112px; }
   .rp-edit th.price-col { width: 112px; }
-  .rp-edit th.cost-col { width: 76px; }
+  .rp-edit th.cost-col { width: 86px; } /* 「999.99円」まで入る幅 */
   .qty-wrap .input { width: 64px; }
   .rp-foot-edit { padding-left: 52px; }
   .rp-foot-edit .usage { width: 160px; }
 }
 
 @media (max-width: 900px) {
-  .rx-summary { width: auto; }
+  /* 縦に積むときは、処方の欄を中身の高さのまま置き、画面全体を1本でスクロールする（欄だけを縮めて小さなスクロール箱にしない） */
+  .rx-form, .rps { flex: none; overflow: visible; }
+  .rx-summary { width: auto; overflow: visible; }
   .suggest { width: calc(100vw - 80px); }
 }
 
