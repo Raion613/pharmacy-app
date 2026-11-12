@@ -30,7 +30,7 @@
 - **Cloudflare Pages ＋ Pages Functions ＋ D1（中身は SQLite）＋ 素の HTML / CSS / JavaScript**（2026-11-03、Express から変更。面接官が URL を踏むだけで触れるようにするため。ズーの製品もブラウザで動くクラウド型）
 - フロントのフレームワークは使わない（中身を自分で説明できる状態を保つため）
 - **計算・規則はサーバーだけに置く（2026-11-09）**：[src/rules/](./src/rules/) は画面に配らない。画面は /api/calc/ に入力を送り、結果だけを表示する。public/assets/js には表示の整形だけ
-- **公開版は npm run build で dist/ に作る**：JS を難読化し、権利と AI への警告を先頭に入れる。deploy/jamming.txt（git に入れない）の文も配信用にだけ入れる。ログインしていない人にはログイン画面の部品以外を返さない。ログインの試行回数制限あり（[src/server/throttle.js](./src/server/throttle.js)）
+- **公開版は npm run build で dist/ に作る**：JS を難読化し、権利と AI への警告を先頭に入れる。deploy/jamming.txt（git に入れない）の文も配信用にだけ入れる。ログインしていない人にはログイン画面の部品と紹介の PV（[public/promo.html](./public/promo.html)）以外を返さない。ログインの試行回数制限あり（[src/server/throttle.js](./src/server/throttle.js)）
 - パスワードは PBKDF2-SHA256（Workers に bcrypt が無いため。目的は bcrypt と同じ）
 - 参照データ：MEDIS の HOT コードマスター（薬の箱の GTIN → 医薬品コード）と、厚労省の薬価基準収載品目リスト（後発医薬品のある先発医薬品）。[scripts/import-references.js](./scripts/import-references.js) で取り込む
 - テストは Node 標準の `node:test`。D1 と同じ呼び方ができる `node:sqlite` の薄い包み（[src/dev/sqlite-d1.js](./src/dev/sqlite-d1.js)）で、本番と同じ SQL・保存処理を通す

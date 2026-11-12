@@ -1,0 +1,414 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow, noarchive, noai, noimageai">
+<title>薬剤料計算・薬歴 PV</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&display=swap" rel="stylesheet">
+<!--
+  約10秒のモーションPV。絵は描かず、アプリの部品（表・数字・キー・ロゴ）だけを動かし、音を合わせる。
+  映像も音も同じ時計（AudioContext.currentTime）から求めるので、ずれない。
+  数字は支払基金の医薬品マスターの実データ：ノルバスク錠５ｍｇ 13.70円（令和7年度版）→ 10.80円（令和8年4月1日〜）。
+  1日2錠：27.40円 → 3点、21.60円 → 2点（15円以下は1点、超える分は10円又はその端数ごとに1点）。28日分で 84点 → 56点。
+-->
+<style>
+:root {
+  --accent: #0a7fb3; --accent-strong: #086891; --accent-soft: #e4f3fa;
+  --text: #24292d; --sub: #4d5a64; --border: #dde2e5; --border-strong: #c3cbd1; --head: #eef1f3; --bg: #f2f4f5;
+}
+html, body { margin: 0; height: 100%; overflow: hidden; background: #16191c; }
+body { font-family: "BIZ UDPGothic", "Yu Gothic UI", Meiryo, sans-serif; color: var(--text); }
+#stage {
+  position: absolute; left: 50%; top: 50%; width: 1280px; height: 720px; overflow: hidden;
+  background: var(--bg); transform-origin: 50% 50%;
+}
+.o { position: absolute; left: 0; top: 0; opacity: 0; will-change: transform, opacity; }
+
+/* PTP シート（10錠）。上の段の5つが順に押し出される */
+#sheet { width: 400px; height: 160px; border-radius: 16px; background: linear-gradient(#eef1f3 0 55%, #d3d9de 55%);
+  box-shadow: inset 0 -5px 0 rgba(0,0,0,.06), 0 10px 24px rgba(0,0,0,.12); }
+.bubble { position: absolute; width: 56px; height: 56px; margin: -28px 0 0 -28px; border-radius: 50%;
+  background: radial-gradient(circle at 50% 50%, #fff 0 19px, #e3e8eb 20px 100%);
+  box-shadow: inset 0 -4px 0 rgba(0,0,0,.08), 0 2px 0 rgba(255,255,255,.9); }
+.bubble.popped { background: radial-gradient(circle, #b9c2c8 0 17px, #cfd6db 18px 100%); box-shadow: inset 0 3px 4px rgba(0,0,0,.18); }
+
+/* 錠剤：上半分が明るく、下に硬い影（トゥーンの2段塗り）、真ん中に割線 */
+.tab { width: 50px; height: 50px; border-radius: 50%; background: linear-gradient(#fff 0 58%, #e2e7ea 58%);
+  box-shadow: 0 4px 0 rgba(0,0,0,.08); }
+.tab::after { content: ""; position: absolute; left: 10px; right: 10px; top: 24px; height: 2px; border-radius: 1px; background: rgba(0,0,0,.1); }
+
+/* 処方の表（アプリの .panel と同じ作り） */
+#card { width: 840px; height: 320px; background: #fff; border: 1px solid var(--border); border-radius: 4px;
+  box-shadow: 0 14px 40px rgba(0,0,0,.12); }
+#card .head { position: absolute; left: 0; right: 0; top: 0; height: 44px; display: flex; align-items: center; gap: 12px;
+  padding: 0 16px; background: var(--head); border-bottom: 1px solid var(--border); font-weight: 700; font-size: 18px; }
+#card .head .spacer { flex: 1; }
+#card .date { display: flex; align-items: baseline; gap: 8px; font-size: 13px; color: var(--sub); }
+#card .date b { display: inline-block; padding: 1px 8px; font-size: 18px; color: var(--text); border-radius: 3px; font-variant-numeric: tabular-nums; }
+#pills { position: absolute; left: 18px; top: 64px; display: flex; gap: 8px; }
+#pills i { width: 24px; height: 24px; border-radius: 50%; background: linear-gradient(#fff 0 58%, #e2e7ea 58%);
+  box-shadow: 0 2px 0 rgba(0,0,0,.1), 0 0 0 1px var(--border-strong); }
+#row { position: absolute; left: 0; right: 0; top: 44px; height: 64px; display: flex; align-items: center;
+  border-bottom: 1px solid var(--border); box-shadow: inset 4px 0 0 var(--accent); background: var(--accent-soft); }
+#row span { position: absolute; font-size: 21px; white-space: nowrap; }
+#row .name { left: 90px; font-weight: 700; font-size: 23px; }
+.calc { position: absolute; left: 90px; right: 32px; display: flex; align-items: baseline; gap: 12px; font-size: 22px; white-space: nowrap; }
+.calc .label { width: 70px; font-size: 14px; color: var(--sub); font-weight: 700; }
+.calc .spacer { flex: 1; }
+.v { display: inline-block; padding: 0 6px; border-radius: 3px; font-variant-numeric: tabular-nums; font-weight: 700; transform-origin: 50% 60%; }
+#calc1 { top: 138px; }
+#calc2 { top: 206px; }
+#v-total { font-size: 64px; line-height: 1; color: var(--accent-strong); }
+#v-total small { font-size: 26px; margin-left: 4px; }
+#tag { padding: 6px 14px; border-radius: 4px; background: var(--accent); color: #fff; font-weight: 700; font-size: 18px; white-space: nowrap;
+  box-shadow: inset 0 -3px 0 rgba(0,0,0,.18); }
+#caption { font-size: 30px; font-weight: 700; white-space: nowrap; }
+
+/* キーボードの場面 */
+#lead { font-size: 22px; color: var(--sub); font-weight: 700; white-space: nowrap; }
+.field { width: 230px; height: 56px; display: flex; align-items: center; padding: 0 14px; box-sizing: border-box; background: #fff;
+  border: 1px solid var(--border-strong); border-radius: 4px; font-size: 21px; font-weight: 700; white-space: nowrap; }
+.field::before { content: attr(data-label); position: absolute; left: 2px; top: -24px; font-size: 14px; color: var(--sub); }
+.field .val { display: inline-block; transform-origin: 0 60%; }
+#ring { width: 240px; height: 66px; border: 3px solid var(--accent); border-radius: 6px; box-sizing: border-box;
+  box-shadow: 0 0 0 5px rgba(10,127,179,.2); }
+.key { height: 66px; display: grid; place-items: center; border-radius: 8px; color: #fff; font: 700 24px/1 Consolas, monospace;
+  background: #4b5157; border: 1px solid #7b848c; box-sizing: border-box; box-shadow: inset 0 -6px 0 rgba(0,0,0,.35), 0 3px 0 rgba(0,0,0,.2); }
+.key.down { box-shadow: inset 0 -1px 0 rgba(0,0,0,.35), 0 1px 0 rgba(0,0,0,.2); background: #3f454a; }
+#k-tab { width: 120px; }
+#k-enter { width: 160px; background: var(--accent); border-color: #2a9fd3; }
+#k-enter.down { background: var(--accent-strong); }
+#flood { width: 100px; height: 100px; border-radius: 50%; background: var(--accent); }
+
+/* カプセルとロゴ */
+#cap { width: 220px; height: 90px; }
+.half { position: absolute; top: 0; width: 110px; height: 90px; }
+#half-l { left: 0; border-radius: 45px 0 0 45px; background: linear-gradient(#fff 0 60%, #d7e2e8 60%); }
+#half-r { left: 110px; border-radius: 0 45px 45px 0; background: linear-gradient(#c4ebfb 0 60%, #8fd3ef 60%); }
+.half::after { content: ""; position: absolute; top: 14px; height: 10px; width: 46px; border-radius: 5px; background: rgba(255,255,255,.85); }
+#half-l::after { left: 28px; }
+#half-r::after { left: 20px; background: rgba(255,255,255,.6); }
+#mark { width: 130px; height: 130px; display: grid; place-items: center; border-radius: 28px; background: #fff; color: var(--accent);
+  font-size: 78px; font-weight: 700; box-shadow: inset 0 -9px 0 rgba(0,0,0,.08), 0 8px 0 rgba(0,0,0,.12); }
+#title { position: absolute; left: 500px; top: 300px; display: flex; color: #fff; font-size: 62px; font-weight: 700; white-space: nowrap; }
+#title span { display: inline-block; opacity: 0; }
+#subtitle { position: absolute; left: 504px; top: 392px; color: rgba(255,255,255,.88); font-size: 25px; font-weight: 700; opacity: 0; white-space: nowrap; }
+
+/* 再生の案内 */
+#start { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(22,25,28,.55); border: 0; cursor: pointer;
+  color: #fff; font: 700 30px "BIZ UDPGothic", sans-serif; }
+#start small { display: block; margin-top: 10px; font-size: 16px; font-weight: 400; opacity: .8; }
+#start[hidden] { display: none; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="o" id="sheet"></div>
+  <div class="o tab"></div><div class="o tab"></div><div class="o tab"></div><div class="o tab"></div><div class="o tab"></div>
+
+  <div class="o" id="card">
+    <div class="head">処方入力<span class="spacer"></span><span class="date">調剤日<b id="v-date">2026.03.31</b></span></div>
+    <div id="row"><span class="name">ノルバスク錠５ｍｇ</span><span style="left:470px">2錠</span><span style="left:560px">1日1回 朝食後</span><span style="left:752px">28日</span></div>
+    <div id="pills"><i></i><i></i></div>
+    <div class="calc" id="calc1"><span class="label">薬価</span><span class="v" id="v-unit">13.70</span>円 × 2錠<span class="spacer"></span>1日分 <span class="v" id="v-day">27.40</span>円</div>
+    <div class="calc" id="calc2"><span class="label">薬剤料</span><span class="v" id="v-pt">3</span>点 × 28日<span class="spacer"></span><span class="v" id="v-total">84<small>点</small></span></div>
+  </div>
+  <div class="o" id="tag">4月1日 薬価改定</div>
+  <div class="o" id="caption">調剤日の薬価で、計算し直す。</div>
+
+  <div class="o" id="lead">マウスを使わずに、打ち込む。</div>
+  <div class="o field" data-label="薬名"><span class="val">ノルバスク錠５ｍｇ</span></div>
+  <div class="o field" data-label="1日量"><span class="val">2錠</span></div>
+  <div class="o field" data-label="日数"><span class="val">28日</span></div>
+  <div class="o" id="ring"></div>
+  <div class="o key" id="k-tab">Tab</div>
+  <div class="o key" id="k-enter">Enter</div>
+  <div class="o" id="flood"></div>
+
+  <div class="o" id="cap"><div class="half" id="half-l"></div><div class="half" id="half-r"></div></div>
+  <div class="o" id="mark">薬</div>
+  <div id="title"></div>
+  <div id="subtitle">調剤日の薬価で、正しく。</div>
+
+  <button id="start" type="button"><span>▶ 再生<small>音が出ます（Enter / Space でも再生）</small></span></button>
+</div>
+
+<script>
+// ---------- 道具 ----------
+const $ = (s) => document.querySelector(s);
+const $$ = (s) => [...document.querySelectorAll(s)];
+const clamp = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
+const P = (t, at, dur) => clamp((t - at) / dur);            // 時刻 t が [at, at+dur] のどこか（0〜1）
+const lerp = (a, b, k) => a + (b - a) * k;
+const outCubic = (k) => 1 - (1 - k) ** 3;
+const inCubic = (k) => k ** 3;
+const inOut = (k) => (k < 0.5 ? 4 * k ** 3 : 1 - (-2 * k + 2) ** 3 / 2);
+const outBack = (k, s = 1.7) => 1 + (s + 1) * (k - 1) ** 3 + s * (k - 1) ** 2;
+// 潰れて戻る：at の瞬間から dur 秒、横に広がり縦に縮む→逆→収まる。[横, 縦] の倍率
+function squash(t, at, dur = 0.3, amp = 0.12) {
+  const k = P(t, at, dur);
+  if (k <= 0 || k >= 1) return [1, 1];
+  const w = Math.sin(k * Math.PI * 2.5) * (1 - k) ** 2 * amp;
+  return [1 + w, 1 - w];
+}
+// 要素の中心を (x, y) に置く
+function place(el, x, y, { sx = 1, sy = sx, r = 0, o = 1 } = {}) {
+  el.style.transform = `translate(${x}px,${y}px) translate(-50%,-50%) rotate(${r}deg) scale(${sx},${sy})`;
+  el.style.opacity = o;
+}
+const setText = (el, s) => { if (el.textContent !== s) el.textContent = s; };
+const yen = (sen) => (sen / 100).toFixed(2);
+// 値が切り替わる：縦に畳んで、新しい値で弾んで開く。変わったセルは黄色が引いていく（アプリの .flash と同じ色）
+function flip(el, t, at, before, after) {
+  const swap = at + 0.07;
+  setText(el, t < swap ? before : after);
+  const sy = t < at ? 1 : t < swap ? 1 - P(t, at, 0.07) : outBack(P(t, swap, 0.14), 2.6);
+  el.style.transform = `scaleY(${Math.max(sy, 0.001)})`;
+  el.style.backgroundColor = `rgba(255,224,138,${t < at ? 0 : 1 - P(t, at, 1.1)})`;
+}
+
+// ---------- 部品 ----------
+const sheet = $("#sheet"), tabs = $$(".tab"), card = $("#card"), tag = $("#tag"), caption = $("#caption");
+const vDate = $("#v-date"), vUnit = $("#v-unit"), vDay = $("#v-day"), vPt = $("#v-pt"), vTotal = $("#v-total");
+const row = $("#row"), pills = $("#pills"), calc1 = $("#calc1"), calc2 = $("#calc2");
+const lead = $("#lead"), fields = $$(".field"), ring = $("#ring"), kTab = $("#k-tab"), kEnter = $("#k-enter"), flood = $("#flood");
+const cap = $("#cap"), halfL = $("#half-l"), halfR = $("#half-r"), mark = $("#mark"), title = $("#title"), subtitle = $("#subtitle");
+const stage = $("#stage"), start = $("#start");
+
+const bubbles = [];
+for (let r = 0; r < 2; r++) for (let c = 0; c < 5; c++) {
+  const b = document.createElement("i");
+  b.className = "bubble";
+  b.style.left = `${60 + 70 * c}px`;
+  b.style.top = `${50 + 60 * r}px`;
+  sheet.append(b);
+  bubbles.push(b);
+}
+const TITLE = "薬剤料計算・薬歴";
+title.innerHTML = [...TITLE].map((ch) => `<span>${ch}</span>`).join("");
+const titleChars = [...title.children];
+
+// ---------- 時刻表（秒） ----------
+const POP = [0.55, 0.8, 1.05, 1.3, 1.55];   // 錠剤が押し出される
+const TAB1 = 6.35, TAB2 = 6.6, ENTER = 6.95; // キーを押す
+const SNAP = 7.85;                           // カプセルが閉じる
+const END = 9.9;
+
+// ---------- 映像：時刻 t の画面を1枚描く ----------
+function render(t) {
+  // 1. PTP シートが下から入り、上の段の錠剤が1つずつ飛び出して並ぶ
+  const sIn = outBack(P(t, 0, 0.45), 1.4), sOut = inCubic(P(t, 1.85, 0.35));
+  const [ssx, ssy] = squash(t, 0.42, 0.3, 0.06);
+  place(sheet, 640, lerp(900, 380, sIn) + sOut * 620, { sx: ssx, sy: ssy, r: lerp(-6, 0, sIn) + sOut * 10, o: t < 2.3 ? 1 : 0 });
+  for (let i = 0; i < 5; i++) {
+    bubbles[i].classList.toggle("popped", t >= POP[i]);
+    const [bx, by] = squash(t, POP[i], 0.22, 0.25);
+    bubbles[i].style.transform = `scale(${bx},${by})`;
+  }
+  tabs.forEach((tab, i) => {
+    if (t < POP[i]) { tab.style.opacity = 0; return; }
+    const k = P(t, POP[i], 0.45);
+    let x = lerp(500 + 70 * i, 640 + (i - 2) * 80, outCubic(k));
+    let y = lerp(350, 190, outBack(k, 2)) - Math.sin(Math.PI * k) * 70 + Math.sin((t - POP[i]) * 6 + i) * 3 * P(t, POP[i] + 0.45, 0.2);
+    let s = lerp(0.7, 1, outBack(k));
+    const r = lerp(0, i % 2 ? 360 : -360, outCubic(k));
+    let o = 1;
+    if (i < 2) { // 2錠は処方の行の頭へ移る
+      const m = inOut(P(t, 1.95, 0.4));
+      x = lerp(x, 250 + 32 * i, m); y = lerp(y, 256, m); s = lerp(s, 0.48, m);
+      o = t < 2.35 ? 1 : 0;
+    } else {     // 残りは膨らんで消える
+      const m = P(t, 1.9 + (i - 2) * 0.05, 0.16);
+      s *= (1 + 0.3 * Math.sin(Math.PI * m)) * (1 - m);
+      o = m < 1 ? 1 : 0;
+    }
+    place(tab, x, y, { sx: s, r, o });
+  });
+
+  // 2. 処方の表。行が左から現れ、薬価 → 1日分 → 点数と数えていく
+  const cIn = P(t, 1.95, 0.4), cOut = inCubic(P(t, 6.0, 0.3));
+  place(card, 640, 340 - cOut * 40, { sx: lerp(0.92, 1, outBack(cIn)) - cOut * 0.04, o: outCubic(cIn) * (1 - cOut) });
+  pills.style.opacity = t >= 2.35 ? 1 : 0;
+  row.style.clipPath = `inset(0 ${100 - 100 * outCubic(P(t, 2.3, 0.35))}% 0 0)`;
+  const l1 = outCubic(P(t, 2.7, 0.25)), l2 = outCubic(P(t, 3.15, 0.25));
+  calc1.style.opacity = l1; calc1.style.transform = `translateY(${(1 - l1) * 14}px)`;
+  calc2.style.opacity = l2; calc2.style.transform = `translateY(${(1 - l2) * 14}px)`;
+
+  // 3. 調剤日が 4月1日をまたぐと、薬価・1日分・点数が順に切り替わり、合計を数え直す
+  flip(vDate, t, 4.0, "2026.03.31", "2026.04.01");
+  flip(vUnit, t, 4.45, "13.70", "10.80");
+  if (t < 4.6) setText(vDay, yen(Math.round(2740 * outCubic(P(t, 2.75, 0.3)))));
+  flip(vDay, t, 4.6, vDay.textContent, "21.60");
+  flip(vPt, t, 4.75, "3", "2");
+  const total = t < 4.9 ? Math.round(84 * outCubic(P(t, 3.2, 0.4))) : Math.round(lerp(84, 56, outCubic(P(t, 4.9, 0.4))));
+  vTotal.firstChild.textContent = String(total);
+  const [tx, ty] = t < 5.3 ? squash(t, 3.6, 0.35, 0.16) : squash(t, 5.3, 0.35, 0.16);
+  vTotal.style.transform = `scale(${tx},${ty})`;
+  vTotal.style.backgroundColor = `rgba(255,224,138,${t < 4.9 ? 0 : 1 - P(t, 4.9, 1.2)})`;
+  const tg = P(t, 4.1, 0.3);
+  place(tag, 950, 150 - cOut * 40, { sx: outBack(tg, 2.4), o: (tg > 0 ? 1 : 0) * (1 - cOut) });
+  const cp = outCubic(P(t, 5.4, 0.3));
+  place(caption, 640, 570 + 20 * (1 - cp) - cOut * 40, { o: cp * (1 - cOut) });
+
+  // 4. キーボードだけで：Tab で次の欄へ、Enter で確定
+  const ld = outCubic(P(t, 6.05, 0.3));
+  place(lead, 640, 190 + (1 - ld) * 12, { o: ld });
+  fields.forEach((f, i) => {
+    const k = P(t, 6.1 + 0.05 * i, 0.3);
+    place(f, 380 + 260 * i, 300, { sx: lerp(0.9, 1, outBack(k)), o: outCubic(k) });
+    const typedAt = [0, TAB1 + 0.08, TAB2 + 0.08][i];
+    const v = f.firstChild, tk = P(t, typedAt, 0.18);
+    v.style.opacity = i === 0 || t >= typedAt ? 1 : 0;
+    v.style.transform = i === 0 ? "none" : `scale(${outBack(tk, 3)})`;
+  });
+  const ringX = t < TAB1 ? 380 : t < TAB2 ? lerp(380, 640, outBack(P(t, TAB1, 0.16))) : lerp(640, 900, outBack(P(t, TAB2, 0.16)));
+  const [rx, ry] = squash(t, ENTER, 0.3, 0.08);
+  place(ring, ringX, 300, { sx: rx, sy: ry, o: outCubic(P(t, 6.2, 0.15)) });
+  const kIn = P(t, 6.05, 0.3);
+  pressKey(kTab, t, [TAB1, TAB2], 560, 470, outBack(kIn));
+  pressKey(kEnter, t, [ENTER], 730, 470, outBack(P(t, 6.1, 0.3)));
+  const fl = inOut(P(t, 6.98, 0.45));
+  place(flood, 730, 470, { sx: fl * 32, o: t >= 6.98 ? 1 : 0 });
+
+  // 5. カプセルが左右から閉じ、ロゴの「薬」に変わって、名前が並ぶ
+  const hk = inCubic(P(t, 7.45, 0.4));
+  halfL.style.transform = `translateX(${lerp(-735, 0, hk)}px)`;
+  halfR.style.transform = `translateX(${lerp(735, 0, hk)}px)`;
+  const [cx, cy] = squash(t, SNAP, 0.3, 0.14), ck = inCubic(P(t, 8.0, 0.2));
+  place(cap, 640, 360, { sx: cx * (1 - ck * 0.6), sy: cy * (1 - ck * 0.6), r: 90 * ck, o: t >= 7.45 ? 1 - ck : 0 });
+  const mIn = P(t, 8.08, 0.35), [mx, my] = squash(t, 8.43, 0.3, 0.08);
+  place(mark, lerp(640, 410, outCubic(P(t, 8.4, 0.35))), 360, { sx: outBack(mIn, 2.2) * mx, sy: outBack(mIn, 2.2) * my, o: mIn > 0 ? 1 : 0 });
+  titleChars.forEach((s, i) => {
+    const k = P(t, 8.45 + 0.04 * i, 0.35);
+    s.style.opacity = outCubic(k);
+    s.style.transform = `translateY(${(1 - outBack(k, 2)) * 30}px)`;
+  });
+  const sb = outCubic(P(t, 8.95, 0.3));
+  subtitle.style.opacity = sb;
+  subtitle.style.transform = `translateY(${(1 - sb) * 10}px)`;
+}
+
+// キー：押した瞬間に沈み（影が薄くなる）、離すと小さく弾む
+function pressKey(el, t, presses, x, y, s) {
+  let dy = 0, sx = 1, sy = 1, down = false;
+  for (const p of presses) {
+    if (t >= p && t < p + 0.07) { dy = 5 * outCubic(P(t, p, 0.03)); down = true; }
+    const [a, b] = squash(t, p + 0.07, 0.2, 0.07);
+    sx *= a; sy *= b;
+  }
+  el.classList.toggle("down", down);
+  place(el, x, y + dy, { sx: s * sx, sy: s * sy, o: s > 0 ? 1 : 0 });
+}
+
+// ---------- 音：その場で合成する（素材ファイルなし） ----------
+let ac, out, noiseBuf;
+function initAudio() {
+  ac = new AudioContext();
+  const comp = ac.createDynamicsCompressor();
+  out = ac.createGain();
+  out.gain.value = 0.8;
+  out.connect(comp).connect(ac.destination);
+  noiseBuf = ac.createBuffer(1, ac.sampleRate, ac.sampleRate);
+  const d = noiseBuf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+}
+function env(g, t, attack, peak, decay) {
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(peak, t + attack);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + attack + decay);
+}
+function tone(type, f0, f1, t, dur, peak, attack = 0.003) {
+  const o = ac.createOscillator(), g = ac.createGain();
+  o.type = type;
+  o.frequency.setValueAtTime(f0, t);
+  if (f1) o.frequency.exponentialRampToValueAtTime(f1, t + attack + dur);
+  env(g, t, attack, peak, dur);
+  o.connect(g).connect(out);
+  o.start(t); o.stop(t + attack + dur + 0.05);
+}
+function noise(t, dur, peak, type, f0, f1, q = 1, attack = 0.004) {
+  const s = ac.createBufferSource(), f = ac.createBiquadFilter(), g = ac.createGain();
+  s.buffer = noiseBuf;
+  f.type = type; f.Q.value = q;
+  f.frequency.setValueAtTime(f0, t);
+  if (f1) f.frequency.exponentialRampToValueAtTime(f1, t + attack + dur);
+  env(g, t, attack, peak, dur);
+  s.connect(f).connect(g).connect(out);
+  s.start(t); s.stop(t + attack + dur + 0.05);
+}
+const S = {
+  pop: (t, f) => { tone("sine", f * 1.7, f, t, 0.09, 0.5); noise(t, 0.02, 0.22, "highpass", 3000); },
+  tick: (t, f = 2600, v = 0.1) => tone("triangle", f, 0, t, 0.025, v),
+  whoosh: (t, dur, up = true, v = 0.2) => noise(t, dur * 0.4, v, "bandpass", up ? 300 : 3200, up ? 3600 : 280, 1.2, dur * 0.6),
+  thud: (t) => tone("sine", 220, 90, t, 0.12, 0.45),
+  flip: (t) => { noise(t, 0.03, 0.3, "highpass", 2500); noise(t + 0.05, 0.03, 0.2, "highpass", 3800); },
+  ding: (t, f) => { tone("sine", f, 0, t, 0.6, 0.22); tone("sine", f * 2.01, 0, t, 0.3, 0.06); },
+  key: (t, heavy = false) => { noise(t, 0.035, 0.35, "bandpass", 2200, 1400, 2); tone("sine", heavy ? 130 : 190, 70, t, heavy ? 0.12 : 0.06, heavy ? 0.5 : 0.3); },
+  snap: (t) => { tone("square", 1300, 300, t, 0.05, 0.1); noise(t, 0.05, 0.35, "bandpass", 4000, 1500, 1.5); tone("sine", 120, 55, t, 0.16, 0.55); },
+  chime: (t) => {
+    [1046.5, 1318.5, 1568, 2093].forEach((f, i) => tone("triangle", f, 0, t + i * 0.045, 1.4, 0.12, 0.005));
+    tone("sine", 261.6, 0, t, 1.6, 0.2, 0.01);
+  },
+  kick: (t) => tone("sine", 150, 45, t, 0.18, 0.32),
+  hat: (t) => noise(t, 0.03, 0.06, "highpass", 7000),
+};
+function scheduleSound(t0) {
+  const at = (s) => t0 + s;
+  S.whoosh(at(0), 0.4); S.thud(at(0.42));
+  POP.forEach((p, i) => S.pop(at(p), 620 * [1, 9 / 8, 5 / 4, 3 / 2, 5 / 3][i]));
+  S.whoosh(at(1.85), 0.3, false, 0.14);
+  [1.9, 1.95, 2.0].forEach((p) => tone("sine", 900, 1500, at(p), 0.05, 0.12));
+  for (let b = 2; b <= 6; b++) { S.kick(at(b)); S.hat(at(b + 0.5)); }
+  noise(at(2.3), 0.12, 0.12, "bandpass", 1500, 4000, 1, 0.12);
+  for (let j = 0; j < 7; j++) S.tick(at(2.75 + j * 0.045), 2000 + j * 80);
+  S.tick(at(3.15), 1800, 0.14);
+  for (let j = 0; j < 10; j++) S.tick(at(3.2 + j * 0.04), 2000 + j * 90);
+  S.ding(at(3.6), 1318.5);
+  S.flip(at(4.0)); tone("sine", 700, 1050, at(4.1), 0.07, 0.2);
+  S.flip(at(4.45)); S.flip(at(4.6)); S.flip(at(4.75));
+  for (let j = 0; j < 8; j++) S.tick(at(4.9 + j * 0.05), 2800 - j * 110);
+  S.ding(at(5.3), 1046.5);
+  noise(at(5.4), 0.1, 0.08, "bandpass", 1200, 3000, 1, 0.1);
+  S.whoosh(at(6.0), 0.25, false, 0.12);
+  [6.1, 6.15, 6.2].forEach((p) => S.tick(at(p), 1600, 0.08));
+  S.key(at(TAB1)); S.key(at(TAB2)); S.key(at(ENTER), true);
+  S.tick(at(TAB1 + 0.08), 2400, 0.06); S.tick(at(TAB2 + 0.08), 2400, 0.06);
+  S.whoosh(at(7.0), 0.45, true, 0.26);
+  S.whoosh(at(7.45), 0.4, true, 0.12);
+  S.snap(at(SNAP));
+  S.chime(at(8.12));
+}
+
+// ---------- 再生 ----------
+let t0 = null;
+function frame() {
+  const t = ac.currentTime - t0;
+  render(Math.max(t, 0));
+  if (t < END) requestAnimationFrame(frame);
+  else start.hidden = false;
+}
+async function play() {
+  if (!ac) initAudio();
+  await ac.resume();
+  start.hidden = true;
+  t0 = ac.currentTime + 0.15;
+  scheduleSound(t0);
+  requestAnimationFrame(frame);
+}
+start.addEventListener("click", play);
+document.addEventListener("keydown", (e) => {
+  if ((e.key === "Enter" || e.key === " ") && !start.hidden) { e.preventDefault(); play(); }
+});
+
+function fit() {
+  const s = Math.min(innerWidth / 1280, innerHeight / 720);
+  stage.style.transform = `translate(-50%,-50%) scale(${s})`;
+}
+addEventListener("resize", fit);
+fit();
+render(0);
+</script>
+</body>
+</html>

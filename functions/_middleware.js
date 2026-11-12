@@ -9,6 +9,8 @@ const PUBLIC_PATHS = new Set([
   "/assets/favicon.svg", "/assets/css/app.css", "/assets/css/tour.css", "/assets/css/login.css",
   "/assets/js/login.js", "/assets/js/app.js", "/assets/js/icons.js", "/assets/js/format.js", "/assets/js/tour.js",
   "/assets/js/record-kinds.js", "/assets/js/burden-text.js", "/assets/js/kohi-text.js",
+  // 紹介の PV（1枚の HTML で完結。アプリのコードは入っていない）。URL を踏んだ人がログインせずに見られるようにする
+  "/promo", "/promo.html",
 ]);
 
 // すべての応答に付けるヘッダー
