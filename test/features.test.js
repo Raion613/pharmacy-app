@@ -240,3 +240,22 @@ test("監査：「（選）」のコードの処方は、対になる普通の�
   const saved = await saveInspection(db, user, "rx-s", { scans: ["(01)14987060003734(17)991231(10)L1"] });
   assert.equal(saved.ng, 0);
 });
+
+test("監査：箱にバーコードの無い薬（生薬など）は、目で確かめた記録で代える。バーコードのある薬は目視で代えられない", async () => {
+  db.exec(`
+    INSERT INTO drugs (code, yj_code, name, unit, generic, general_name, sentei, pair_code, narcotic, name_key, general_key, attrs_published_on) VALUES
+      ('615100001', '5100001X1000', 'エイジツ', 'g', 0, NULL, 0, NULL, 0, 'エイジツ', '', '2026-03-19'),
+      ('612220508', '2233002Q1035', 'ムコダインシロップ５％', 'mL', 0, NULL, 1, NULL, 0, 'ムコダイン', '', '2026-03-19'),
+      ('672220508', '2233002Q1035', 'ムコダインシロップ５％（選）', 'mL', 0, NULL, 2, '612220508', 0, 'ムコダイン', '', '2026-03-19');
+    INSERT INTO drug_packages VALUES ('14987060003734', '612220508', '1', '調剤用 500ＭＬ');
+    INSERT INTO prescriptions (id, patient_id, prescribed_on, dispensed_on, handbook, drug_points, total_points, burden_percent, copay_yen, created_at, created_by)
+      VALUES ('rx-v', 1, '2026-10-01', '2026-10-01', 'paper', 7, 7, 30, 20, '2026-10-01T01:00:00Z', 1);
+    INSERT INTO prescription_rps (id, prescription_id, rp_no, usage, rx_days, days, daily_yen, points_per_day, points) VALUES ('rp-v', 'rx-v', 1, '1日3回', 7, 7, '10.00', 1, 7);
+    INSERT INTO prescription_items (rp_id, line_no, drug_code, daily_qty_milli, price_sen) VALUES ('rp-v', 1, '615100001', 2000, 500), ('rp-v', 2, '672220508', 10800, 645);`);
+  await assert.rejects(saveInspection(db, user, "rx-v", { scans: [], visual: ["615100001"] }), /まだ読んでいない薬があります（1品目）/);
+  await assert.rejects(saveInspection(db, user, "rx-v", { scans: [], visual: ["615100001", "672220508"] }), /バーコードのある薬は、読んで確かめてください/);
+  await saveInspection(db, user, "rx-v", { scans: ["(01)14987060003734(17)991231(10)L1"], visual: ["615100001"] });
+  const [ins] = await inspectionsOf(db, "rx-v");
+  assert.deepEqual(ins.visual.map((v) => v.drugName), ["エイジツ"]);
+  assert.deepEqual(ins.scans.map((s) => s.result), ["match"]);
+});

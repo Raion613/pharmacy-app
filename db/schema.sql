@@ -597,6 +597,13 @@ CREATE TABLE inspection_scans (
   PRIMARY KEY (inspection_id, line_no)
 );
 
+-- 箱にバーコードの無い薬（生薬など、HOT コードマスターに包装が無い薬）を、薬剤師が目で確かめた記録
+CREATE TABLE inspection_visual_checks (
+  inspection_id TEXT NOT NULL REFERENCES inspections(id),
+  drug_code     TEXT NOT NULL,
+  PRIMARY KEY (inspection_id, drug_code)
+);
+
 -- 「つながる薬局」（ファーマシフト社の LINE 公式アカウントのサービス）でのやり取り。
 -- 実際のサービスとはつないでいない。受信したメッセージをここに入れる形だけを作った
 CREATE TABLE line_messages (
