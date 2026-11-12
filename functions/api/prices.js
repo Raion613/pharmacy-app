@@ -7,6 +7,6 @@ export async function onRequestGet({ request, env }) {
   const date = params.get("date");
   if (!isDate(date)) throw new HttpError(400, "日付が不正です");
   const codes = (params.get("codes") ?? "").split(",").filter(Boolean);
-  if (codes.length > 90) throw new HttpError(400, "一度に引ける薬は90品目までです");
+  if (codes.length > 300) throw new HttpError(400, "一度に引ける薬は300品目までです"); // 1枚の処方の最大（20剤×15品目）
   return json(Object.fromEntries(await pricesAt(env.DB, codes, date)));
 }

@@ -64,10 +64,10 @@ export function toDrugJson(row, date) {
 export async function pricesAt(db, codes, date) {
   const unique = [...new Set(codes)];
   if (unique.length === 0) return new Map();
-  const placeholders = unique.map((_, i) => `?${i + 2}`).join(", ");
+  // コードは JSON の配列1つで渡す（D1 は1本の SQL に入れられる値が100個まで。1枚の処方は最大300品目）
   const { results } = await db
-    .prepare(`SELECT ${DRUG_COLUMNS} FROM drugs d ${PRICE_AT_DATE_JOIN} WHERE d.code IN (${placeholders})`)
-    .bind(date, ...unique)
+    .prepare(`SELECT ${DRUG_COLUMNS} FROM drugs d ${PRICE_AT_DATE_JOIN} WHERE d.code IN (SELECT value FROM json_each(?2))`)
+    .bind(date, JSON.stringify(unique))
     .all();
   return new Map(results.map((row) => [row.code, toDrugJson(row, date)]));
 }

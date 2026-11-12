@@ -46,6 +46,8 @@ class D1Statement {
   }
 
   bind(...params) {
+    // 本物の D1 は1本の SQL に入れられる値が100個まで（?1〜?100）。テストでも同じところで落とす
+    if (params.length > 100) throw new Error(`D1_ERROR: variable number must be between ?1 and ?100（${params.length}個）`);
     return new D1Statement(this.raw, this.sql, params);
   }
 
