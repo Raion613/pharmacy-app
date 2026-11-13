@@ -25,12 +25,12 @@
 .pbox h3 { font-size: 12px; font-weight: 700; color: var(--sub); margin: 0 0 2px; display: flex; gap: 6px; align-items: baseline; }
 .pbox h3 .sub { font-weight: 400; }
 #cautions .meta, #next .meta, #other .meta { font-size: 11px; color: var(--sub); margin-left: 6px; white-space: nowrap; }
-.pbox .new { animation: flash 1.6s var(--ease-out); }
+.pbox .new { animation: flash 1.6s var(--ease-fade); }
 /* 患者メモ：分類ごとに1つの欄。分類の行に触れると色が付き、押すとその分類にチェックが入った状態で入力の窓が開く */
 .note-text { margin: 0; white-space: pre-line; }
 [data-note-row] { cursor: pointer; outline: none; }
-[data-note-row] > *, .cautions tr[data-note-row] > * { transition: background-color .15s var(--ease-out); }
-section[data-note-row] { margin: 0 -4px; padding: 1px 4px; border-radius: 4px; transition: background-color .15s var(--ease-out); }
+[data-note-row] > *, .cautions tr[data-note-row] > * { transition: background-color .15s var(--ease-fade); }
+section[data-note-row] { margin: 0 -4px; padding: 1px 4px; border-radius: 4px; transition: background-color .15s var(--ease-fade); }
 /* 区分の行ごとに色を変えて、行の境目を見やすく */
 .cautions tr:nth-child(even) th, .cautions tr:nth-child(even) td { background: rgba(0, 40, 60, .045); }
 .cautions tr[data-note-row]:is(:hover, :focus-visible) > *, section[data-note-row]:is(:hover, :focus-visible) { background: var(--accent-soft); }
@@ -116,7 +116,7 @@ section[data-note-row] { margin: 0 -4px; padding: 1px 4px; border-radius: 4px; t
 
 .visit-card { border: 1px solid var(--border-strong); border-radius: var(--radius); background: #fff; scroll-margin: 12px; }
 .visit-card[aria-selected="true"] { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-line); }
-.visit-card.saved { animation: flash 1.6s var(--ease-out); }
+.visit-card.saved { animation: flash 1.6s var(--ease-fade); }
 .vc-head { display: flex; align-items: center; gap: 10px; padding: 6px 10px; background: #f7f9fa; border-bottom: 1px solid var(--border); cursor: pointer; }
 .visit-card[aria-selected="true"] .vc-head { background: var(--accent-soft); }
 .vc-date { font-weight: 700; font-size: 15px; }
@@ -140,7 +140,7 @@ section[data-note-row] { margin: 0 -4px; padding: 1px 4px; border-radius: 4px; t
 .vc-rp li.added { color: #17602f; }
 .vc-rp li.modified { color: #7a5400; }
 .vc-records { padding: 8px 10px; display: grid; gap: 8px; align-content: start; }
-.record.new { animation: flash 1.6s var(--ease-out); }
+.record.new { animation: flash 1.6s var(--ease-fade); }
 .soap { margin: 0; display: grid; grid-template-columns: 22px 1fr; gap: 3px 6px; }
 .soap dt {
   width: 20px; height: 20px; display: grid; place-items: center; border-radius: 2px; margin-top: 1px;

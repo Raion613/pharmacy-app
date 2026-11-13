@@ -210,7 +210,7 @@ const PRESS_POP = [
   { transform: "translateY(-1px) scale(.99, 1.03)", offset: .45, easing: "cubic-bezier(.65, 0, .35, 1)" },
   { transform: "none" },
 ];
-const PRESS_WIDE = [{ transform: "scale(.985)", easing: "cubic-bezier(.22, 1, .36, 1)" }, { transform: "none" }];
+const PRESS_WIDE = [{ transform: "scale(.985)", easing: "cubic-bezier(.16, 1, .3, 1)" }, { transform: "none" }];
 const PRESSABLE = "button, .btn, summary, [role='option'], label:has(input[type='radio'], input[type='checkbox'])";
 export const REDUCED_MOTION = matchMedia("(prefers-reduced-motion: reduce)");
 document.addEventListener("click", (e) => {
@@ -233,7 +233,7 @@ document.addEventListener("pointerdown", (e) => {
 // 閉じるときは同じ形へ戻る（app.css の dialog:not([open]) が --dialog-from を使う）。押した物が分からなければ、下から浮かぶ。
 // 窓は押した瞬間に開く（中身の通信を待たない。届いたものから窓の中に入る）。
 // 動かすのは形（transform）と透明度（opacity）だけ。どちらも描き直しが要らず、画面を描く処理と別に動くので、重い画面でもコマが落ちない。
-// 曲線は Apple のばね（app.css の --spring-*）
+// 曲線は app.css の --ease-out（一瞬で出てピタッと止まる）と --ease-fade（背景の暗さ）。パネルの大きさなので 0.28秒
 let lastPress = null;
 window.addEventListener("pointerdown", (e) => { lastPress = { el: e.target, at: performance.now() }; }, true);
 window.addEventListener("keydown", (e) => {
@@ -244,7 +244,8 @@ function pressOrigin(dialog) {
   const el = lastPress.el.closest(".board-card, .visit-card, tr, .pbox-body li, .pbox") ?? lastPress.el.closest(".btn, button, a, summary, label, [role='option']");
   return el === null || dialog.contains(el) ? null : el;
 }
-const SPRING_OPEN = getComputedStyle(document.documentElement).getPropertyValue("--spring-open");
+const ROOT_STYLE = getComputedStyle(document.documentElement);
+const EASE_OUT = ROOT_STYLE.getPropertyValue("--ease-out"), EASE_FADE = ROOT_STYLE.getPropertyValue("--ease-fade");
 // 押した物への変換：窓全体を縦横同じ比率で縮めて、押した物の中に収まる大きさ・中心にする
 function originShape(d, el) {
   const r = d.getBoundingClientRect(), o = el.getBoundingClientRect();
@@ -263,9 +264,8 @@ document.addEventListener("toggle", (e) => {
   const from = el === null ? "translateY(28px) scale(.94)" : originShape(d, el);
   d.style.setProperty("--dialog-from", from);
   if (REDUCED_MOTION.matches) return;
-  const timing = { duration: 800, easing: SPRING_OPEN };
-  d.animate([{ transform: from }, { transform: "none" }], timing);
-  d.animate([{ opacity: 0 }, { opacity: 1 }], { ...timing, pseudoElement: "::backdrop" });
+  d.animate([{ transform: from }, { transform: "none" }], { duration: 280, easing: EASE_OUT });
+  d.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 280, easing: EASE_FADE, pseudoElement: "::backdrop" });
   d.classList.remove("opening"); // 動きを付けてから外す（同じコマで、動きの最初の状態から見え始める）
 }, true);
 
@@ -327,7 +327,7 @@ new MutationObserver((records) => {
   if (REDUCED_MOTION.matches || !document.documentElement.classList.contains("page-ready")) return; // 画面を組み立てている間（まだ見えていない）は動かさない
   for (const r of records) {
     if (r.oldValue === null || r.target.hidden) continue;
-    r.target.animate([{ opacity: 0, translate: "0 6px" }, { opacity: 1, translate: "0 0" }], { duration: 200, easing: "cubic-bezier(.2, .8, .3, 1)" });
+    r.target.animate([{ opacity: 0, translate: "0 6px" }, { opacity: 1, translate: "0 0" }], { duration: 200, easing: EASE_OUT });
   }
 }).observe(document.documentElement, { attributes: true, attributeFilter: ["hidden"], attributeOldValue: true, subtree: true });
 

@@ -182,7 +182,7 @@ async function mount(src, url, animating) {
     const fades = [];
     if (animating() && !REDUCED_MOTION.matches) {
       for (const el of document.querySelectorAll(".main > :not(.topbar):not(.crumbs):not(.actionbar), .sheet")) {
-        fades.push(el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 180, easing: "ease-out" }).finished);
+        fades.push(el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 180, easing: "cubic-bezier(.333, .667, .667, 1)" }).finished);
       }
     }
     if (!document.querySelector(".main")?.contains(document.activeElement)) document.querySelector(".main [autofocus], .sheet [autofocus]")?.focus();

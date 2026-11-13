@@ -16,9 +16,9 @@
 /* ドロップ先。ファイルを持って重ねると青く、読み込み中は点滅、読めたら緑の線 */
 .drop {
   display: flex; align-items: center; gap: 14px; padding: 22px 18px; border: 2px dashed var(--border-strong);
-  border-radius: 6px; background: #fafbfc; transition: border-color .15s var(--ease-out), background .15s var(--ease-out), transform .15s var(--ease-out);
+  border-radius: 6px; background: #fafbfc; transition: border-color .15s var(--ease-fade), background .15s var(--ease-fade), transform .15s var(--ease-out);
 }
-.drop-icon { color: var(--sub); transition: color .15s var(--ease-out), transform .15s var(--ease-out); }
+.drop-icon { color: var(--sub); transition: color .15s var(--ease-fade), transform .15s var(--ease-out); }
 .drop-text { flex: 1; display: grid; gap: 4px; }
 .drop.over { border-color: var(--accent); background: var(--accent-soft); transform: scale(1.01); }
 .drop.over .drop-icon { color: var(--accent); transform: translateY(-3px); }

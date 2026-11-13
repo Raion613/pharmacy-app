@@ -18,7 +18,7 @@
   const center = (r) => [r.left + r.width / 2, r.top + r.height / 2];
   const EASE = "cubic-bezier(.65, 0, .25, 1)";
   // app.css の --ease-out / --ease-in / --ease-in-out と同じ曲線。等速では動かさない
-  const EASE_OUT = "cubic-bezier(.22, 1, .36, 1)", EASE_IN = "cubic-bezier(.55, 0, .78, .3)", EASE_IN_OUT = "cubic-bezier(.65, 0, .35, 1)";
+  const EASE_OUT = "cubic-bezier(.16, 1, .3, 1)", EASE_IN = "cubic-bezier(.333, 0, .667, .333)", EASE_IN_OUT = "cubic-bezier(.65, 0, .35, 1)";
   // 何段もある動き（潰れて戻る・膨らんで消える）は段ごとに曲線をかける（WAAPI は書かないと段と段の間が等速になる）
   const eased = (frames, easing = EASE_IN_OUT) => frames.map((f, i) => (i === frames.length - 1 ? f : { easing, ...f }));
   let running = false;

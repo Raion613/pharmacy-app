@@ -32,7 +32,7 @@
 
 - **Cloudflare Pages ＋ Pages Functions ＋ D1（中身は SQLite）＋ 素の HTML / CSS / JavaScript**（2026-11-03、Express から変更。面接官が URL を踏むだけで触れるようにするため。ズーの製品もブラウザで動くクラウド型）
 - フロントのフレームワークは使わない（中身を自分で説明できる状態を保つため）
-- **画面はページを読み直さず、中身だけを差し替える（2026-11-13）**：[router.js](./public/assets/js/router.js)。各画面の処理は `export default async function mount()` の中に書く。window・document に付けた受け口と setInterval は画面を移ると外れる。データは押した瞬間に先読みする。動きの基準は [docs/動きの決まり.md](./docs/動きの決まり.md)。**等速では何も動かさない**（曲線は app.css の --spring-* と --ease-*。JS の animate() は曲線を必ず書く）
+- **画面はページを読み直さず、中身だけを差し替える（2026-11-13）**：[router.js](./public/assets/js/router.js)。各画面の処理は `export default async function mount()` の中に書く。window・document に付けた受け口と setInterval は画面を移ると外れる。データは押した瞬間に先読みする。動きの基準は [docs/動きの決まり.md](./docs/動きの決まり.md)。**等速では何も動かさない**（曲線は ChronoAbyss と同じ形で app.css の --ease-*。JS の animate() は曲線を必ず書く）
 - **e2e は手元の DB を使わない**：`npm run e2e` が e2e 用のサーバー（ポート 8789・.wrangler/e2e-state）を起こし、DB を種データで作り直して（約1秒）流す。直した画面の分だけ `npm run e2e -- rx kohi`（[e2e/flows/](./e2e/flows/) のファイル名の一部）。全部は公開前に1回。続けて何度も流すなら `npm run e2e:server` を起こしておく
 - **計算・規則はサーバーだけに置く（2026-11-09）**：[src/rules/](./src/rules/) は画面に配らない。画面は /api/calc/ に入力を送り、結果だけを表示する。public/assets/js には表示の整形だけ
 - **公開版は npm run build で dist/ に作る**：JS を難読化し、権利と AI への警告を先頭に入れる。deploy/jamming.txt（git に入れない）の文も配信用にだけ入れる。ログインしていない人にはログイン画面の部品と紹介の PV（[public/promo.html](./public/promo.html)）以外を返さない。ログインの試行回数制限あり（[src/server/throttle.js](./src/server/throttle.js)）
