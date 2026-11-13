@@ -37,10 +37,6 @@
       <div class="pbox-head">次に確認すること</div>
       <div class="pbox-body" id="next"></div>
     </section>
-    <section class="pbox" data-box="meds">
-      <div class="pbox-head">今の処方<span class="sub" id="meds-date"></span></div>
-      <div class="pbox-body" id="current-meds"></div>
-    </section>
     <section class="pbox" data-box="other">
       <div class="pbox-head">生活・後発品の意向</div>
       <div class="pbox-body" id="other"></div>
@@ -131,12 +127,6 @@
         <span class="tag tag-warn" id="drafted-tag" hidden>下書きから</span>
       </div>
       <div class="soap-grid" id="soap-fields"></div>
-      <div class="record-checks">
-        <div class="field">
-          <span class="label" id="leftover-label">残薬</span>
-          <div class="radio-row" role="radiogroup" aria-labelledby="leftover-label" id="leftover"></div>
-        </div>
-      </div>
       <span class="error-text" data-error="subjective"></span>
     </div>
     <aside class="assist" id="assist">
@@ -161,6 +151,11 @@
     </aside>
     </div>
     <div class="dialog-foot">
+      <div class="record-leftover">
+        <span class="label" id="leftover-label">残薬</span>
+        <div class="radio-row" role="radiogroup" aria-labelledby="leftover-label" id="leftover"></div>
+        <span class="error-text" data-error="leftover"></span>
+      </div>
       <button type="button" class="btn" data-close>キャンセル <kbd>Esc</kbd></button>
       <button type="submit" class="btn btn-primary">保存 <kbd>Ctrl+Enter</kbd></button>
     </div>

@@ -1,5 +1,5 @@
 // 薬歴：再来局した患者を開いたときに、この人について知っておくべきことを1画面で見渡す。
-//   箱：患者・注意点（アレルギー歴・副作用歴・疾患・併用薬）・次に確認すること（前回の P・申し送り）・今の処方・生活・検査値
+//   箱：患者・注意点（アレルギー歴・副作用歴・疾患・併用薬）・次に確認すること（前回の P・申し送り）・生活・検査値
 //   箱「処方の推移」：薬 × 来局日の表。いつ始まり・変わり・止まったか
 //   箱「経過」：全来局を新しい順に。並べ方は「折り返し」か「1〜3段の帯（左が新しい）」を選べる。選んだ来局だけ処方の中身と操作を出す
 //   箱の並び順と大きさは「配置を変える」で利用者ごとに変えられる（layout-grid.js）
@@ -72,10 +72,9 @@ export default async function mount() {
   const band = document.querySelector("#band");
   const cautionsEl = document.querySelector("#cautions");
   const nextEl = document.querySelector("#next");
-  const medsEl = document.querySelector("#current-meds");
   const otherEl = document.querySelector("#other");
   const labsEl = document.querySelector("#labs");
-  // 初期の配置。並び順に左上から詰める（12列）。左に患者・検査値・メモ帳、その右に注意点・次に確認すること・今の処方、
+  // 初期の配置。並び順に左上から詰める（12列）。左に患者・検査値・メモ帳、その右に注意点・次に確認すること、
   // その下に処方の推移、いちばん下に経過（下へいくらでも伸びる）
   const layout = setupLayout({
     grid: document.querySelector("#pt-grid"),
@@ -85,9 +84,8 @@ export default async function mount() {
     defaults: {
       boxes: [
         { id: "patient", w: 2, h: 1 },
-        { id: "cautions", w: 4, h: 3 },
-        { id: "next", w: 3, h: 2 },
-        { id: "meds", w: 3, h: 3 },
+        { id: "cautions", w: 5, h: 3 },
+        { id: "next", w: 5, h: 2 },
         { id: "labs", w: 2, h: 1 },
         { id: "memo", w: 2, h: 1 },
         { id: "other", w: 3, h: 1 },
@@ -209,7 +207,7 @@ export default async function mount() {
     return null;
   }
 
-  // ---------- 上：患者・注意点・次に確認すること・今の処方・生活・検査値 ----------
+  // ---------- 上：患者・注意点・次に確認すること・生活・検査値 ----------
   // 箱の置き場所と大きさは利用者が変えられる（layout-grid.js）
 
   // 患者メモは分類ごとに1つの欄（中は何行でも）。分類の行を押す（Enter）と、その分類にチェックが入った状態で入力の窓が開く（下の「患者メモ」）
@@ -281,23 +279,6 @@ export default async function mount() {
       + `<section data-category="handover" data-note-row tabindex="0"><h3>申し送り</h3>${noteHtml("handover", flash)}</section>`;
   }
 
-  // 今の処方：最終来局の薬と、いつから続いているか（同じ薬が途切れずに出ている最初の来局）
-  function renderMeds() {
-    if (prescriptions.length === 0) {
-      medsEl.innerHTML = '<span class="none">来局の記録なし</span>';
-      return;
-    }
-    const latest = prescriptions[0];
-    document.querySelector("#meds-date").textContent = formatDate(latest.dispensedOn);
-    medsEl.innerHTML = `<ul class="meds">${[...drugsOf(latest).values()].map((d) => {
-    let i = 0;
-    while (i + 1 < prescriptions.length && drugsOf(prescriptions[i + 1]).has(d.code)) i++;
-    const recent = i === 0 && prescriptions.length > 1;
-    return `<li><span class="name">${escapeHtml(d.name)}</span><span class="dose">${qtyText(d)}</span>
-      <span class="since ${recent ? "recent" : ""}">${escapeHtml(d.usage)} ／ ${recent ? "最終来局で追加" : `${formatDate(prescriptions[i].dispensedOn)}から（${i + 1}回）`}</span></li>`;
-  }).join("")}</ul>`;
-  }
-
   // 生活状況と後発品の意向
   function renderOther(flash) {
     otherEl.innerHTML = ["lifestyle", "generic"].map((key) =>
@@ -322,7 +303,6 @@ export default async function mount() {
   function renderSummary(flash = []) {
     renderCautions(flash);
     renderNext(flash);
-    renderMeds();
     renderOther(flash);
     renderLabs();
     document.querySelector(".note-text.new")?.scrollIntoView({ block: "nearest" });
@@ -694,7 +674,8 @@ export default async function mount() {
     select(i);
     const rx = prescriptions[i];
     recordForm.reset();
-    recordForm.elements.leftover.value = "unchecked";
+    // 残薬の疑義照会をした来局は、最初から「残薬あり」（照会と記録が食い違わないように）
+    if (rx.inquiries.some((q) => q.kind === "leftover")) recordForm.elements.leftover.value = "some";
     clearFormErrors(recordForm);
     document.querySelector("#record-dialog-title").textContent = `指導記録を記載　${formatDate(rx.dispensedOn)}の来局`;
     const before = latestRecordFrom(i + 1);
@@ -1152,7 +1133,7 @@ export default async function mount() {
       <div class="tour-map">
         <div><b>いちばん上</b>戻る（患者一覧へ）・画面の名前・患者の氏名</div>
         <div><b>青い帯</b>右端に新規処方。左に閲覧記録と配置を変える</div>
-        <div><b>箱</b>患者・注意点・次に確認すること・今の処方・メモ帳・検査値、処方の推移、経過。書き足すときは箱を押す</div>
+        <div><b>箱</b>患者・注意点・次に確認すること・メモ帳・検査値、処方の推移、経過。書き足すときは箱を押す</div>
         <div><b>経過の帯</b>選んだ来局の処方の確認・調剤監査・お薬手帳・領収証・トレーシングレポート</div>
         <div><b>いちばん下</b>選んだ来局の引き継ぎのチェックと、右下の確定</div>
       </div>`,

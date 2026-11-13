@@ -9,7 +9,7 @@
 }
 /* 箱ごとの、中身が崩れない最小の幅（layout-grid.js が、画面が狭いときに列を広げて並べるのに使う） */
 [data-box="patient"], [data-box="labs"], [data-box="memo"] { --box-min: 200px; }
-[data-box="next"], [data-box="meds"], [data-box="other"] { --box-min: 260px; }
+[data-box="next"], [data-box="other"] { --box-min: 260px; }
 [data-box="cautions"] { --box-min: 340px; }
 [data-box="matrix"], [data-box="history"] { --box-min: 480px; }
 .pbox { position: relative; display: flex; flex-direction: column; min-width: 0; background: #fff; border: 1px solid var(--border); border-radius: var(--radius); }
@@ -63,13 +63,6 @@ section[data-note-row] { margin: 0 -4px; padding: 1px 4px; border-radius: 4px; t
 .last-plan p { margin: 0; white-space: pre-wrap; font-weight: 700; }
 #next [data-category="handover"] li + li { margin-top: 3px; }
 
-/* 今の処方 */
-.meds li { display: grid; grid-template-columns: 1fr auto; gap: 0 8px; padding: 4px 0; border-bottom: 1px solid var(--border); }
-.meds li:last-child { border-bottom: 0; }
-.meds .name { font-weight: 700; }
-.meds .dose { text-align: right; white-space: nowrap; }
-.meds .since { grid-column: 1 / -1; font-size: 12px; color: var(--sub); }
-.meds .since.recent { color: var(--ok); font-weight: 700; }
 
 /* 生活・後発品・検査値 */
 #other { display: grid; gap: 6px; align-content: start; }
@@ -200,7 +193,8 @@ dialog.wide { width: 780px; }
   background: var(--accent); color: #fff; font-weight: 700;
 }
 .soap-field label { font-size: 12px; font-weight: 700; color: var(--sub); }
-.record-checks { display: flex; gap: 24px; flex-wrap: wrap; }
+.record-leftover { margin-right: auto; display: flex; align-items: center; gap: 8px; } /* 必ず選ぶ項目は、スクロールしなくても見える下の帯に */
+.record-leftover .label { font-weight: 700; }
 
 @media (max-width: 1200px) {
   .vc-body { grid-template-columns: 1fr; }
