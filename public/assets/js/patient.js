@@ -104,7 +104,7 @@ export default async function mount() {
   const timeline = document.querySelector("#timeline");
   const matrixView = document.querySelector("#matrix-view");
   // 操作の帯のうち、選んでいる来局に対して働くボタン
-  const visitButtons = ["#write-record", "#to-tracing", "#to-revise", "#to-inspect", "#to-handbook", "#to-receipt"].map((s) => document.querySelector(s));
+  const visitButtons = ["#to-tracing", "#to-revise", "#to-inspect", "#to-handbook", "#to-receipt"].map((s) => document.querySelector(s));
   const visitLabel = document.querySelector("#visit-label");
   let selectedIndex = -1;
 
@@ -678,6 +678,10 @@ export default async function mount() {
       toast("来局がまだありません。先に処方を入力してください", "error");
       return;
     }
+    if (prescriptions[i].records.length > 0) { // 指導記録は1回の来局に1つ。書くのは来局カードの「未記載」の枠から
+      toast(`${formatDate(prescriptions[i].dispensedOn)}の来局の指導記録は記載済みです`, "error");
+      return;
+    }
     recordIndex = i;
     select(i);
     const rx = prescriptions[i];
@@ -1077,7 +1081,6 @@ export default async function mount() {
   const openNewRx = () => openOverlay(`/rx?patient=${patient.id}`);
   const openTracing = () => openOverlay(tracingHref(selected()));
   document.querySelector("#new-rx").addEventListener("click", openNewRx);
-  document.querySelector("#write-record").addEventListener("click", () => openRecordDialog());
   document.querySelector("#to-tracing").addEventListener("click", openTracing);
   // 済んだ来局の見直し・再発行（出すのは受付状況の各段階から。受付状況は前日より前の会計済みを出さないので、ここから全部の来局に届く）
   // 保存した処方を直す（会計の後でも。直す前の内容は履歴に残る）
@@ -1130,7 +1133,7 @@ export default async function mount() {
   renderMatrix();
   if (prescriptions.length > 0) {
     const savedIndex = prescriptions.findIndex((rx) => rx.id === visitId);
-    select(savedIndex >= 0 ? savedIndex : 0, savedIndex >= 0); // 開いたときは上（注意点など）から見せる。保存した直後と受付から開いたときだけ、その来局まで送る
+    select(savedIndex >= 0 ? savedIndex : 0, false); // 開いたときは、いつも画面の一番上（注意点など）から見せる。受付から開いても、その来局は選ぶだけで送らない
     if (savedIndex >= 0 && savedId) timeline.querySelector(`.visit-card[data-index="${savedIndex}"]`).classList.add("saved");
     timeline.focus({ preventScroll: true });
   }
@@ -1190,7 +1193,7 @@ export default async function mount() {
       optional: true,
       title: "指導記録を書く",
       body: `<p>記録が無い来局には<strong>「指導記録 未記載」</strong>の枠が出ます。</p>
-      <p><kbd>Alt</kbd>+<kbd>K</kbd> で、選んでいる来局の記録を書けます。書く画面には、その来局の処方の変化と、それまでの留意点（P）が出ます。</p>
+      <p>枠の「記載する」か <kbd>Alt</kbd>+<kbd>K</kbd> で、その来局の記録を書けます。記録は1回の来局に1つです。書く画面には、その来局の処方の変化と、それまでの留意点（P）が出ます。</p>
       <p>書く画面の右側では、次のことができます。</p>
       <ul>
         <li><b>会話の録音</b>：服薬指導の会話を録音して文字にします（このアプリでは決まった文を返します）。会話から既往歴・併用薬などの候補を拾い、選ぶと患者メモに足せます</li>
@@ -1225,7 +1228,7 @@ export default async function mount() {
         <li>押して付ける：前回の P に応えた（前回の P があるとき）・アレルギー・併用薬を照らした・処方が変わった理由を聞いた（変わったとき）</li>
         <li>指導記録を書くと付く：S・O・A を書いた・次回の P を書いた</li>
       </ul>
-      <p>右に<b>指導記録を書く</b> <kbd>Alt</kbd>+<kbd>K</kbd> と<b>トレーシングレポート</b> <kbd>Alt</kbd>+<kbd>T</kbd>。<b>処方を確認</b> <kbd>Alt</kbd>+<kbd>U</kbd> で、選んだ来局の処方を見て、会計の後でも直せます（直す前の内容は来局カードに「訂正」として残ります。薬・量が変われば調剤監査から、窓口の額が変われば会計からやり直し）。選んだ来局の<b>調剤監査・お薬手帳・領収証・明細書</b>もここから開き直せます（領収証の再発行、済んだ監査の記録の確認）。前回の処方を写すのは処方入力の画面（<kbd>Alt</kbd>+<kbd>D</kbd>）からです。</p>`,
+      <p>右に<b>トレーシングレポート</b> <kbd>Alt</kbd>+<kbd>T</kbd>。<b>処方を確認</b> <kbd>Alt</kbd>+<kbd>U</kbd> で、選んだ来局の処方を見て、会計の後でも直せます（直す前の内容は来局カードに「訂正」として残ります。薬・量が変われば調剤監査から、窓口の額が変われば会計からやり直し）。選んだ来局の<b>調剤監査・お薬手帳・領収証・明細書</b>もここから開き直せます（領収証の再発行、済んだ監査の記録の確認）。前回の処方を写すのは処方入力の画面（<kbd>Alt</kbd>+<kbd>D</kbd>）からです。</p>`,
     },
 
 

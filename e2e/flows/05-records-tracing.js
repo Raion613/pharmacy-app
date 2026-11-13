@@ -25,6 +25,24 @@ await page.keyboard.press("Control+Enter");
 await page.waitForSelector("#lab-dialog:not([open])", { state: "attached" });
 assert.match(await text("#labs"), /eGFR\s*52mL[\s\S]*↑[\s\S]*用紙から/);
 
+// 15. テンプレート：選んで写す
+step("指導記録のテンプレートを写す（写して閉じる。記録はこの後で書く）");
+await page.locator("#timeline").focus();
+await page.keyboard.press("Alt+K");
+await page.waitForSelector("#record-dialog[open]");
+await page.selectOption("#template-select", { label: "残薬あり" });
+await page.click("#apply-template");
+assert.match(await page.inputValue("#soap-plan"), /お薬カレンダーの利用を提案/);
+// 今の内容をテンプレートに：名前はアプリの窓で聞く（ブラウザの prompt は使わない）
+await page.click("#save-template");
+await page.waitForSelector(".ask-dialog[open] input[name=text]");
+await page.keyboard.type("e2eの型");
+await page.keyboard.press("Enter");
+await page.waitForFunction(() => /テンプレート「e2eの型」を保存しました/.test(document.querySelector(".toasts")?.textContent ?? ""));
+await page.waitForSelector(".ask-dialog", { state: "detached" });
+await page.keyboard.press("Escape");
+await page.waitForSelector("#record-dialog:not([open])", { state: "attached" });
+
 // 14. 指導記録：録音ファイルを読み込む → 文字起こし → 会話から拾ったメモ → 下書き（Alt+G）→ 提案を P に → 保存
 step("指導記録：録音ファイルの文字起こし・会話から拾ったメモ・下書き・提案");
 await page.locator("#timeline").focus();
@@ -51,21 +69,7 @@ assert.match(await text(selectedCard), /服薬指導の会話（3秒・ファイ
 assert.match(await text('[data-category="concomitant"]'), /ドラッグストアで買った胃腸薬[\s\S]*服薬指導の会話より/);
 assert.match(await text(".toasts"), /患者メモに 1件書き足しました/);
 
-// 15. テンプレート：選んで写す
-step("指導記録のテンプレートを写す");
-await page.keyboard.press("Alt+K");
-await page.waitForSelector("#record-dialog[open]");
-await page.selectOption("#template-select", { label: "残薬あり" });
-await page.click("#apply-template");
-assert.match(await page.inputValue("#soap-plan"), /お薬カレンダーの利用を提案/);
-// 今の内容をテンプレートに：名前はアプリの窓で聞く（ブラウザの prompt は使わない）
-await page.click("#save-template");
-await page.waitForSelector(".ask-dialog[open] input[name=text]");
-await page.keyboard.type("e2eの型");
-await page.keyboard.press("Enter");
-await page.waitForFunction(() => /テンプレート「e2eの型」を保存しました/.test(document.querySelector(".toasts")?.textContent ?? ""));
-await page.waitForSelector(".ask-dialog", { state: "detached" });
-await page.keyboard.press("Escape");
+
 
 await page.goto(`${BASE}/patient?id=3`); // 次の手順は遠藤さんの薬歴から
 await page.waitForSelector(selectedCard);

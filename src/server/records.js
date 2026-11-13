@@ -117,6 +117,8 @@ export async function createRecord(db, user, prescriptionId, body) {
   const r = validateRecord(body);
   const rx = await db.prepare("SELECT id, patient_id, dispensed_on FROM prescriptions WHERE id = ?1").bind(prescriptionId).first();
   if (!rx) throw new HttpError(404, "処方が見つかりません");
+  // 指導記録は1回の来局に1つ
+  if (await db.prepare("SELECT 1 FROM guidance_records WHERE prescription_id = ?1").bind(rx.id).first()) throw new HttpError(409, "この来局の指導記録は記載済みです");
   if (r.conversationId !== null) {
     const c = await db.prepare("SELECT prescription_id FROM conversations WHERE id = ?1").bind(r.conversationId).first();
     if (!c || c.prescription_id !== rx.id) throw new HttpError(422, "入力に誤りがあります", [{ path: "conversationId", message: "この来局の会話ではありません" }]);

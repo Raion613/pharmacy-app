@@ -137,13 +137,13 @@ test("指導記録：S・O・A・P のどれも空なら保存しない。残薬
   assert.equal(await count("guidance_records"), 0);
 });
 
-test("指導記録：処方にひも付き、薬歴の来局ごとに新しい順で入る", async () => {
+test("指導記録：処方にひも付き、1回の来局に1つだけ", async () => {
   const r = await createRecord(db, user, "rx-1", soap({ subjective: "眠い", plan: "次回確認" }));
   assert.equal(r.patientId, 1);
-  await createRecord(db, user, "rx-1", soap({ plan: "追記", leftover: "some" }));
+  await assert.rejects(createRecord(db, user, "rx-1", soap({ plan: "2つ目", leftover: "some" })), /記載済み/);
   const [rx] = await prescriptionsOf(db, 1);
-  assert.deepEqual(rx.records.map((g) => [g.plan, g.leftover]), [["追記", "some"], ["次回確認", "none"]]);
-  assert.equal(rx.records[1].subjective, "眠い");
+  assert.deepEqual(rx.records.map((g) => [g.plan, g.leftover]), [["次回確認", "none"]]);
+  assert.equal(rx.records[0].subjective, "眠い");
   assert.equal(rx.records[0].createdBy, "テスト 薬剤師");
   const log = await db.prepare("SELECT action, patient_id FROM access_logs ORDER BY id DESC").first();
   assert.deepEqual(log, { action: "record.create", patient_id: 1 });
