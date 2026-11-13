@@ -17,6 +17,10 @@
   const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   const center = (r) => [r.left + r.width / 2, r.top + r.height / 2];
   const EASE = "cubic-bezier(.65, 0, .25, 1)";
+  // app.css の --ease-out / --ease-in / --ease-in-out と同じ曲線。等速では動かさない
+  const EASE_OUT = "cubic-bezier(.22, 1, .36, 1)", EASE_IN = "cubic-bezier(.55, 0, .78, .3)", EASE_IN_OUT = "cubic-bezier(.65, 0, .35, 1)";
+  // 何段もある動き（潰れて戻る・膨らんで消える）は段ごとに曲線をかける（WAAPI は書かないと段と段の間が等速になる）
+  const eased = (frames, easing = EASE_IN_OUT) => frames.map((f, i) => (i === frames.length - 1 ? f : { easing, ...f }));
   let running = false;
   window.replayIntro = async (kind) => {
     if (running) return;
@@ -67,7 +71,7 @@
     return tab.animate(frames, { duration: 720, easing: "linear", fill: "forwards" }).finished.then(() => {
       tab.remove();
       pill.style.visibility = "";
-      return pill.animate([{ transform: "scale(1.6, .6)" }, { transform: "scale(.85, 1.2)", offset: 0.5 }, { transform: "none" }], { duration: 240, easing: "ease-out" }).finished;
+      return pill.animate(eased([{ transform: "scale(1.6, .6)" }, { transform: "scale(.85, 1.2)", offset: 0.5 }, { transform: "none" }]), { duration: 240 }).finished;
     });
   }
 
@@ -75,7 +79,7 @@
   function revealRest(items, start) {
     return Promise.all(items.map((el, i) => el.animate(
       [{ opacity: 0, transform: "translateY(8px)" }, { opacity: 1, transform: "none" }],
-      { duration: 320, delay: start + i * 90, easing: "ease-out", fill: "backwards" },
+      { duration: 320, delay: start + i * 90, easing: EASE_OUT, fill: "backwards" },
     ).finished));
   }
 
@@ -140,14 +144,14 @@
         { transform: `translate(${qx - tx}px, ${qy - ty}px) scale(${kt})`, color: "#fff" },
         { transform: "none" },
       ], { duration: 820, easing: EASE, fill: "backwards" }),
-      sub.animate([{ opacity: 1 }, { opacity: 0, transform: "translateY(10px)" }], { duration: 300, easing: "ease-in", fill: "forwards" }),
+      sub.animate([{ opacity: 1 }, { opacity: 0, transform: "translateY(10px)" }], { duration: 300, easing: EASE_IN, fill: "forwards" }),
     ];
     const rest = revealRest([document.querySelector(".login-title p"), document.querySelector("#login-form"), document.querySelector(".demo-note"), document.querySelector(".replay"), document.querySelector(".login-title .tour-button")], 520);
     // 「薬」の印が着地する直前に、印から錠剤が3つ飛び出して、入力欄の印に入る（印はそのたびに小さく弾む）
     const pillEls = [...document.querySelectorAll(".login-box .pill")];
     pillEls.forEach((p) => { p.style.visibility = "hidden"; });
     const pills = pillEls.map((pill, i) => wait(760 + i * 110).then(() => {
-      mark.animate([{ transform: "none" }, { transform: "scale(1.12, .9)" }, { transform: "none" }], { duration: 180, composite: "add" });
+      mark.animate(eased([{ transform: "none" }, { transform: "scale(1.12, .9)" }, { transform: "none" }]), { duration: 180, composite: "add" });
       return flyTablet([mx, my], pill, i);
     }));
     document.documentElement.classList.remove("login-intro"); // ここからは各部品の動き（開始の状態を保つ）が見え方を決める
@@ -178,7 +182,7 @@
     const bubbles = [...sheet.querySelectorAll("i")].slice(0, 5);
     sheet.animate([{ transform: `translateY(${cy + H}px) rotate(-6deg)` }, { transform: "none" }],
       { duration: 450, easing: "cubic-bezier(.3, 1.4, .5, 1)", fill: "backwards" });
-    wait(420).then(() => sheet.animate([{ transform: "none" }, { transform: "scale(1.06, .94)" }, { transform: "scale(.98, 1.02)" }, { transform: "none" }],
+    wait(420).then(() => sheet.animate(eased([{ transform: "none" }, { transform: "scale(1.06, .94)" }, { transform: "scale(.98, 1.02)" }, { transform: "none" }]),
       { duration: 300, composite: "add" }));
 
     // 飛び出して、シートの上に並んで浮く（PV と同じ：弧を描いて上がり、1回転しながら 0.7倍 → 1倍）
@@ -186,7 +190,7 @@
     const hover = (i) => [cx + (i - 2) * 56, cy - H / 2 - 64];
     const tablets = await Promise.all(bubbles.map((b, i) => wait(POP[i]).then(() => {
       b.classList.add("popped");
-      b.animate([{ transform: "scale(1)" }, { transform: "scale(1.25, .8)" }, { transform: "scale(.92, 1.08)" }, { transform: "scale(1)" }], { duration: 220 });
+      b.animate(eased([{ transform: "scale(1)" }, { transform: "scale(1.25, .8)" }, { transform: "scale(.92, 1.08)" }, { transform: "scale(1)" }]), { duration: 220 });
       const [sx, sy] = center(b.getBoundingClientRect()), [tx, ty] = hover(i);
       const tab = document.createElement("i");
       tab.className = "intro-tablet";
@@ -205,7 +209,7 @@
     // シートが入力欄の枠へ
     await wait(1850 - POP[4]);
     const f = form.getBoundingClientRect();
-    sheet.querySelector(".bubbles").animate([{ opacity: 1 }, { opacity: 0 }], { duration: 160, fill: "forwards" });
+    sheet.querySelector(".bubbles").animate([{ opacity: 1 }, { opacity: 0 }], { duration: 160, easing: EASE_IN, fill: "forwards" });
     const grow = sheet.animate([
       { left: `${cx - W / 2}px`, top: `${cy - H / 2}px`, width: `${W}px`, height: `${H}px`, borderRadius: "14px", backgroundColor: "#e2e7ea", boxShadow: "inset 0 -45px 0 #d3d9de, 0 10px 24px rgba(0, 0, 0, .12)" },
       { left: `${f.left}px`, top: `${f.top}px`, width: `${f.width}px`, height: `${f.height}px`, borderRadius: "3px", backgroundColor: "#fff", boxShadow: "inset 0 0 0 #d3d9de, 0 0 0 rgba(0, 0, 0, 0)" },
@@ -218,13 +222,13 @@
       return flyTablet(hover(i), pill, i, 1);
     }));
     const pops = tablets.slice(3).map((tab, j) => wait(j * 50).then(() => tab.animate(
-      [{ scale: 1 }, { scale: 1.3, offset: 0.5 }, { scale: 0 }], { duration: 160, easing: "ease-in", fill: "forwards" }, // scale は transform とは別に効く（飛んだ位置のまま膨らむ）
+      [{ scale: 1, easing: EASE_OUT }, { scale: 1.3, offset: 0.5, easing: EASE_IN }, { scale: 0 }], { duration: 160, fill: "forwards" }, // scale は transform とは別に効く（飛んだ位置のまま膨らむ）
     ).finished.then(() => tab.remove())));
 
     await grow.finished;
     const rest = revealRest([...document.querySelectorAll(".login-title > .mark, .login-title h1, .login-title p, .login-title .tour-button"), document.querySelector(".demo-note"), document.querySelector(".replay")], 0);
     document.documentElement.classList.remove("login-intro"); // 枠は、シートの下でそのまま見え始める
-    await sheet.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 140, fill: "forwards" }).finished;
+    await sheet.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 140, easing: EASE_IN, fill: "forwards" }).finished;
     sheet.remove();
     await Promise.all([rest, ...flights, ...pops]);
   }

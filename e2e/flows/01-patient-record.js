@@ -63,51 +63,56 @@ assert.doesNotMatch(await text(selectedCard), /指導記録 未記載/);
 // 前回の留意点は「いちばん新しい来局」の P のまま（古い来局に書き足しても替わらない）
 assert.match(await text("#last-plan"), /減煙を続けられるよう/);
 
-// 3-3. Alt+M で患者メモ。アレルギー歴を足すと、上の帯に赤い札が増える
-step("Alt+M で患者メモを追加（アレルギー歴は帯に出る）");
+// 3-3. Alt+M で患者メモ。分類ごとに大きな欄が1つ。アレルギー歴を書くと、上の帯に赤い札が増える
+step("Alt+M で患者メモを書く（分類ごとに1つの欄。アレルギー歴は帯に出る）");
 await page.keyboard.press("Alt+M");
 await page.waitForSelector("#note-dialog[open]");
 // 注意点で書けるのはアレルギー歴・副作用歴・疾患・併用薬だけ（生活・意向・申し送りはそれぞれの箱で）
 assert.deepEqual(await page.$$eval('#note-categories input[name="category"]', (rs) => rs.map((r) => r.value)), ["allergy", "adverse", "disease", "concomitant"]);
+assert.equal(await page.locator("#note-body").isDisabled(), true); // 分類を選ぶまで書けない
 await page.keyboard.press("Control+Enter");
 await page.waitForFunction(() => document.querySelector('#note-form [data-error="category"]').textContent !== "");
-assert.equal(await text('#note-form [data-error="body"]'), "内容を入力してください");
 await page.locator('#note-form input[name="category"][value="allergy"]').check();
-// 1行に1件。Enter で次の行が増え、2件が別々のメモになる
-await page.locator("#note-rows input").first().focus();
+// Enter は改行。何行書いても1つの欄
+await page.locator("#note-body").focus();
+await page.keyboard.press("Control+End");
 await page.keyboard.type("ペニシリン系で発疹（本人申告）");
 await page.keyboard.press("Enter");
-await page.waitForFunction(() => document.querySelectorAll("#note-rows input").length === 2 && document.activeElement === document.querySelectorAll("#note-rows input")[1]);
 await page.keyboard.type("卵");
 await page.keyboard.press("Control+Enter");
 await page.waitForSelector("#note-dialog:not([open])", { state: "attached" });
 assert.match(await text("#cautions"), /アレルギー[\s\S]*ペニシリン系で発疹（本人申告）[\s\S]*卵[\s\S]*副作用/);
-assert.match(await text('[data-category="allergy"]'), /ペニシリン系で発疹（本人申告）[\s\S]*デモ 薬剤師/);
-assert.equal(await page.locator('[data-category="allergy"] li').count() >= 2, true);
+assert.match(await text('[data-category="allergy"]'), /ペニシリン系で発疹（本人申告）\n卵[\s\S]*デモ 薬剤師/);
+assert.equal(await page.locator('[data-category="allergy"] .note-text').count(), 1);
 
 step("箱を押すと、その箱の入力が開く（次に確認すること → 申し送り）");
 await page.click('[data-box="next"] .pbox-head');
 await page.waitForSelector("#note-dialog[open]");
-assert.equal(await text("#note-dialog-title"), "患者メモを追加（申し送り）");
+assert.equal(await text("#note-dialog-title"), "患者メモ（申し送り）");
 assert.deepEqual(await page.$$eval('#note-categories input[name="category"]', (rs) => rs.map((r) => [r.value, r.checked])), [["handover", true]]);
 await page.keyboard.press("Escape");
 await page.waitForSelector("#note-dialog:not([open])", { state: "attached" });
 
-step("患者メモを直す（行を押すとその場に小さな窓。Enter で保存、Esc でやめる。直す前の内容は残る）");
-await page.locator('[data-category="allergy"] li[data-edit-note]', { hasText: "卵" }).click();
-await page.waitForSelector("#note-pop[open]");
-assert.equal(await page.inputValue("#note-pop input"), "卵");
-await page.fill("#note-pop input", "卵（加熱したものは食べられる）");
-await page.keyboard.press("Enter");
-await page.waitForSelector("#note-pop:not([open])", { state: "attached" });
+step("分類の行を押すと、その分類にチェックが入った同じ窓が開く（直す前の内容は欄の下に残る）");
+await page.click('[data-category="allergy"] th');
+await page.waitForSelector("#note-dialog[open]");
+assert.equal(await page.$eval('#note-form input[name="category"]:checked', (r) => r.value), "allergy");
+assert.equal(await page.evaluate(() => document.activeElement.id), "note-body");
+await page.fill("#note-body", (await page.inputValue("#note-body")).replace("卵", "卵（加熱したものは食べられる）"));
+await page.keyboard.press("Control+Enter");
+await page.waitForSelector("#note-dialog:not([open])", { state: "attached" });
 assert.match(await text('[data-category="allergy"]'), /卵（加熱したものは食べられる）[\s\S]*（修正）/);
-// キーボードでも：行にフォーカスして Enter
-await page.locator('[data-category="allergy"] li[data-edit-note]', { hasText: "加熱" }).focus();
+// キーボードでも：疾患の行にフォーカスして Enter → 疾患にチェックが入って開く
+await page.locator('[data-category="disease"]').focus();
 await page.keyboard.press("Enter");
-await page.waitForSelector("#note-pop[open]");
-assert.match(await page.locator(".note-pop-history").innerText(), /^卵/);
+await page.waitForSelector("#note-dialog[open]");
+assert.equal(await page.$eval('#note-form input[name="category"]:checked', (r) => r.value), "disease");
+// 分類を切り替えると、その分類の今の内容と前の内容が出る
+await page.locator('#note-form input[name="category"][value="allergy"]').check();
+assert.match(await page.inputValue("#note-body"), /卵（加熱したものは食べられる）/);
+assert.match(await page.locator("#note-history").innerText(), /^ペニシリン系で発疹（本人申告）\n卵/);
 await page.keyboard.press("Escape");
-await page.waitForSelector("#note-pop:not([open])", { state: "attached" });
+await page.waitForSelector("#note-dialog:not([open])", { state: "attached" });
 await page.locator("#timeline").focus();
 
 // 4. Alt+N で処方入力。薬名 → Enter → 1日量 → Enter → 次の薬 …

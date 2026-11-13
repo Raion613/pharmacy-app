@@ -9,6 +9,11 @@
   --spring-nav: linear(0, 0.0111, 0.0401, 0.0816, 0.1313, 0.186, 0.2431, 0.3008, 0.3577, 0.4129, 0.4656, 0.5154, 0.562, 0.6053, 0.6452, 0.6819, 0.7154, 0.7459, 0.7736, 0.7985, 0.821, 0.8412, 0.8594, 0.8756, 0.89, 0.9029, 0.9144, 0.9246, 0.9336, 0.9416, 0.9487, 0.9549, 0.9605, 0.9653, 0.9696, 0.9734, 0.9767, 0.9796, 0.9822, 0.9844, 0.9864, 0.9881, 0.9896, 0.991, 0.9921, 0.9931, 0.994, 0.9948, 0.9955, 0.996, 0.9966, 0.997, 0.9974, 0.9977, 0.998, 0.9983, 0.9985, 0.9987, 0.9989, 0.999, 0.9992, 0.9993, 0.9994, 0.9995, 1); /* d=0.45 bounce=0 → 0.720s */
   --spring-open: linear(0, 0.0113, 0.0411, 0.0843, 0.1368, 0.1952, 0.2568, 0.3195, 0.3817, 0.4422, 0.5, 0.5547, 0.6057, 0.6529, 0.6961, 0.7355, 0.771, 0.8029, 0.8313, 0.8565, 0.8787, 0.8981, 0.9151, 0.9297, 0.9424, 0.9532, 0.9624, 0.9702, 0.9768, 0.9822, 0.9868, 0.9905, 0.9935, 0.996, 0.9979, 0.9994, 1.0006, 1.0014, 1.0021, 1.0025, 1.0028, 1.0029, 1.003, 1.0029, 1.0029, 1.0027, 1.0026, 1.0024, 1.0022, 1.002, 1.0019, 1.0017, 1.0015, 1.0013, 1.0012, 1.001, 1.0009, 1.0008, 1.0007, 1.0006, 1.0005, 1.0004, 1.0004, 1.0003, 1); /* d=0.5 bounce=0.12 → 0.800s */
   --spring-close: linear(0, 0.0111, 0.0401, 0.0816, 0.1313, 0.186, 0.2431, 0.3008, 0.3577, 0.4129, 0.4656, 0.5154, 0.562, 0.6053, 0.6452, 0.6819, 0.7154, 0.7459, 0.7736, 0.7985, 0.821, 0.8412, 0.8594, 0.8756, 0.89, 0.9029, 0.9144, 0.9246, 0.9336, 0.9416, 0.9487, 0.9549, 0.9605, 0.9653, 0.9696, 0.9734, 0.9767, 0.9796, 0.9822, 0.9844, 0.9864, 0.9881, 0.9896, 0.991, 0.9921, 0.9931, 0.994, 0.9948, 0.9955, 0.996, 0.9966, 0.997, 0.9974, 0.9977, 0.998, 0.9983, 0.9985, 0.9987, 0.9989, 0.999, 0.9992, 0.9993, 0.9994, 0.9995, 1); /* d=0.36 bounce=0 → 0.576s */
+  /* 小さな動き（触れた・押した・現れる・消える・色が変わる）の曲線。等速（linear・曲線の指定なし）では動かさない（docs/動きの決まり.md）。
+     現れる・応える＝出だしが速く着地で緩む、消える＝ゆっくり離れて速く去る、画面の中で場所を移る＝両端で緩む */
+  --ease-out: cubic-bezier(.22, 1, .36, 1);
+  --ease-in: cubic-bezier(.55, 0, .78, .3);
+  --ease-in-out: cubic-bezier(.65, 0, .35, 1);
   --accent: #0a7fb3;
   --accent-strong: #086891;
   --accent-soft: #e4f3fa;
@@ -59,7 +64,7 @@ body.app { display: flex; }
 .sidebar a.mark {
   position: relative; height: 48px; padding: 0; display: grid; place-items: center; border-bottom: 1px solid #5b6167; border-left: 0;
 }
-.sidebar a.mark span { transition: transform .18s ease, box-shadow .18s ease; }
+.sidebar a.mark span { transition: transform .18s var(--ease-out), box-shadow .18s var(--ease-out); }
 .sidebar a.mark:hover { background: transparent; }
 .sidebar a.mark:hover span, .sidebar a.mark:focus-visible span { transform: scale(1.08); box-shadow: 0 0 0 3px rgba(76, 192, 239, .35); }
 .sidebar a.mark[aria-current="page"] { background: transparent; }
@@ -132,14 +137,14 @@ kbd {
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 32px; padding: 0 14px;
   border: 1px solid var(--border-strong); border-radius: var(--radius); background: #fff; cursor: pointer;
-  white-space: nowrap; transition: background-color .12s, transform .06s, box-shadow .06s;
+  white-space: nowrap; transition: background-color .12s var(--ease-out), transform .06s var(--ease-out), box-shadow .06s var(--ease-out);
   /* 押し心地：下の縁を 2px だけ厚く見せ（ベベル）、押すと縁が沈む。押したまま＝沈んだまま、離すと app.js が小さく弾ませる */
   box-shadow: inset 0 -2px 0 rgba(0, 0, 0, .09), inset 0 1px 0 rgba(255, 255, 255, .6);
 }
 .btn:hover { background: #f3f6f8; }
 .btn:active { transform: translateY(1px); box-shadow: inset 0 1px 2px rgba(0, 0, 0, .14); transition-duration: 0s; }
 .btn-ghost, .btn-ghost:active, .actionbar .btn:not(.btn-primary), .main-toolbar .btn-quiet { box-shadow: none; }
-@media (prefers-reduced-motion: reduce) { .btn, .btn:active { transform: none; transition: background-color .12s; } }
+@media (prefers-reduced-motion: reduce) { .btn, .btn:active { transform: none; transition: background-color .12s var(--ease-out); } }
 .btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 700; }
 .btn-primary:hover { background: var(--accent-strong); }
 .btn-primary[disabled] { background: #8aa9b8; border-color: #8aa9b8; cursor: default; }
@@ -225,15 +230,15 @@ kbd {
 .toasts { position: fixed; right: 16px; bottom: 64px; display: flex; flex-direction: column; gap: 8px; z-index: 50; }
 .toast {
   min-width: 260px; max-width: 420px; padding: 10px 14px; border-radius: var(--radius); color: #fff; background: #2f3a42;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, .18); border-left: 4px solid #4cc0ef; animation: toast-in .18s ease-out;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, .18); border-left: 4px solid #4cc0ef; animation: toast-in .18s var(--ease-out);
 }
 .toast.error { border-left-color: #ff7b6b; background: #4a2723; }
-.toast.leaving { opacity: 0; transform: translateY(6px); transition: opacity .2s, transform .2s; }
+.toast.leaving { opacity: 0; transform: translateY(6px); transition: opacity .2s var(--ease-in), transform .2s var(--ease-in); }
 @keyframes toast-in { from { opacity: 0; transform: translateY(8px); } }
 
 /* 値が変わったことを一瞬だけ知らせる */
 @keyframes flash { from { background: #ffe08a; } to { background: transparent; } }
-.flash { animation: flash 1.1s ease-out; }
+.flash { animation: flash 1.1s var(--ease-out); }
 
 /* ダイアログ */
 dialog {
@@ -278,7 +283,7 @@ dialog .dialog-foot { display: flex; justify-content: flex-end; gap: 8px; paddin
 
 /* 薬の名前・患者の記録（メモ・申し送り・前回の P・SOAP）は、濁点と半濁点が見分けやすい書体で（上の --font-read）。画面の部品の文字は今のまま */
 .drug-input, .rx-name, .suggest .s-name, .suggest .s-sub, .drug-title, #drugs .name, #drugs .sub, .check-items .name, #scan-log b,
-.meds .name, .vc-rx, .vc-changes, .matrix tbody th, .note-item, .note-pop-history li, #note-pop .input, .note-rows .input,
+.meds .name, .vc-rx, .vc-changes, .matrix tbody th, .note-text, .note-history li, #note-body,
 .last-plan, .soap dd, #soap-fields textarea, .record-context { font-family: var(--font-read); }
 .burden-who { margin: 0; line-height: 1.7; }
 .burden-events { margin: 0; padding: 10px 12px; list-style: none; display: grid; gap: 6px; background: #fff8e6; border: 1px solid #f0d9a0; border-radius: var(--radius); }
@@ -407,30 +412,28 @@ dialog { will-change: transform; }
 /* 閉じる：不透明のまま、押した物の位置と大きさ（--dialog-from）へ縮み、縮み切った瞬間に消える。背景も同じ速さで戻る */
 dialog:not([open]) {
   opacity: 0; transform: var(--dialog-from, translateY(16px) scale(.94));
-  transition: transform .576s var(--spring-close), opacity .12s linear .26s, /* 目で見て縮み切るところで消す（ばねの尾が収まるのを待つと、縮んだ窓が押した物の上に居座って見える） */
-    overlay .576s allow-discrete, display .576s allow-discrete;
+  transition: transform .576s var(--spring-close), opacity .12s var(--ease-in) .26s, /* 目で見て縮み切るところで消す（ばねの尾が収まるのを待つと、縮んだ窓が押した物の上に居座って見える） */ overlay .576s var(--ease-out) allow-discrete, display .576s var(--ease-out) allow-discrete;
 }
 /* 開く直前の1コマは見せない（app.js が動きを付けてから外す） */
 dialog.opening, dialog.opening::backdrop { opacity: 0 !important; transition: none; }
 dialog::backdrop { background-color: rgba(30, 36, 40, .42); opacity: 0; }
 dialog[open]::backdrop { opacity: 1; } /* 開くときは app.js が窓と同じ曲線で動かす */
-dialog:not([open])::backdrop { transition: opacity .576s var(--spring-close), overlay .576s allow-discrete, display .576s allow-discrete; }
-dialog.note-pop::backdrop { background-color: transparent; } /* 患者メモを直す小さな窓は、画面を暗くしない */
+dialog:not([open])::backdrop { transition: opacity .576s var(--spring-close), overlay .576s var(--ease-out) allow-discrete, display .576s var(--ease-out) allow-discrete; }
 /* 重なる窓の中の画面は、そろったら浮かび上がる（router.js の overlay:ready → overlay.js） */
-dialog.overlay iframe { opacity: 0; transition: opacity .18s ease-out; }
+dialog.overlay iframe { opacity: 0; transition: opacity .18s var(--ease-out); }
 dialog.overlay iframe.ready { opacity: 1; }
 /* 候補の一覧・吹き出しは、閉じるときも一瞬で消さずに沈める（出るときは app.js が浮かび上がらせる） */
-.suggest, .chart-tip { transition: opacity .12s, translate .12s, display .12s allow-discrete; }
+.suggest, .chart-tip { transition: opacity .12s var(--ease-out), translate .12s var(--ease-out), display .12s var(--ease-out) allow-discrete; }
 .suggest[hidden], .chart-tip[hidden] { opacity: 0; translate: 0 -4px; }
 /* 押して画面を移る行・札・カード・メニュー：押した跡を残す */
 tr.pressed > td, .board-card.pressed, .visit-card.pressed { background-color: #d9ecf6 !important; }
 .sidebar a.pressed { background: var(--sidebar-hover); }
 /* 選んだ行・押した切り替えボタン・今の画面の印は、色をなめらかに変える */
 [aria-selected], [aria-pressed], [aria-current], [aria-selected] > td, .radio-row label, .burden-choices label {
-  transition: background-color .15s, border-color .15s, box-shadow .15s, color .15s;
+  transition: background-color .15s var(--ease-out), border-color .15s var(--ease-out), box-shadow .15s var(--ease-out), color .15s var(--ease-out);
 }
 /* 開閉の見出し（details）：開いた中身が浮かぶ */
-details::details-content { opacity: 0; transition: opacity .18s, content-visibility .18s allow-discrete; }
+details::details-content { opacity: 0; transition: opacity .18s var(--ease-out), content-visibility .18s var(--ease-out) allow-discrete; }
 details[open]::details-content { opacity: 1; }
 @media (prefers-reduced-motion: reduce) {
   dialog, dialog::backdrop, details::details-content, .suggest, .chart-tip, dialog.overlay iframe { transition: none; }

@@ -203,10 +203,13 @@ export default async function mount() {
   // ---------- 上：患者・注意点・次に確認すること・今の処方・生活・検査値 ----------
   // 箱の置き場所と大きさは利用者が変えられる（layout-grid.js）
 
-  const notesOf = (key) => notes.filter((n) => n.category === key);
-  // 行を押す（Enter）とその場で直せる（下の「患者メモを直す」）
-  const noteItems = (key, newNoteId) => notesOf(key).map((n) => `<li class="note-item ${n.id === newNoteId ? "new" : ""}" tabindex="0" data-edit-note="${n.id}">${escapeHtml(n.body)}<span class="meta">${
-  formatDate(n.createdAt.slice(0, 10))} ${escapeHtml(n.createdBy)}${n.history.length ? "（修正）" : ""}</span></li>`).join("");
+  // 患者メモは分類ごとに1つの欄（中は何行でも）。分類の行を押す（Enter）と、その分類にチェックが入った状態で入力の窓が開く（下の「患者メモ」）
+  const noteOf = (key) => notes.find((n) => n.category === key);
+  const noteHtml = (key, flash) => {
+    const n = noteOf(key);
+    return n ? `<p class="note-text ${flash.includes(key) ? "new" : ""}">${escapeHtml(n.body)}<span class="meta">${
+      formatDate(n.createdAt.slice(0, 10))} ${escapeHtml(n.createdBy)}${n.history.length ? "（修正）" : ""}</span></p>` : '<span class="none">記録なし</span>';
+  };
 
   // 患者：氏名と、来局時に確かめる基本の事実。「負担」を押すと負担割合を変える窓
   band.addEventListener("click", async (e) => {
@@ -251,24 +254,22 @@ export default async function mount() {
   const CAUTION_KEYS = ["allergy", "adverse", "disease", "concomitant"];
   const CAUTION_LABEL = { allergy: "アレルギー", adverse: "副作用", disease: "疾患", concomitant: "併用薬" };
 
-  function renderCautions(newNoteId) {
+  function renderCautions(flash) {
     cautionsEl.innerHTML = `<table class="cautions">${CAUTION_KEYS.map((key) => {
-    const items = noteItems(key, newNoteId);
-    const alert = items && NOTE_CATEGORIES.find((c) => c.key === key).alert;
-    return `<tr data-category="${key}" class="${alert ? "alert" : ""}"><th>${CAUTION_LABEL[key]}</th>
-      <td>${items ? `<ul>${items}</ul>` : '<span class="none">記録なし</span>'}</td></tr>`;
+    const alert = noteOf(key) && NOTE_CATEGORIES.find((c) => c.key === key).alert;
+    return `<tr data-category="${key}" data-note-row tabindex="0" class="${alert ? "alert" : ""}"><th>${CAUTION_LABEL[key]}</th>
+      <td>${noteHtml(key, flash)}</td></tr>`;
   }).join("")}</table>`;
   }
 
   // 次に確認すること：前回の指導記録の P と、申し送り
-  function renderNext(newNoteId) {
+  function renderNext(flash) {
     const last = latestRecordFrom(0);
-    const handover = noteItems("handover", newNoteId);
     nextEl.innerHTML = (last && last.record.plan
       ? `<section class="last-plan" id="last-plan"><h3>前回の留意点（P）<span class="sub">${formatDate(last.rx.dispensedOn)} ${escapeHtml(last.record.createdBy)}</span></h3>
         <p>${escapeHtml(last.record.plan)}</p></section>`
       : "")
-      + `<section data-category="handover"><h3>申し送り</h3>${handover ? `<ul>${handover}</ul>` : '<span class="none">記録なし</span>'}</section>`;
+      + `<section data-category="handover" data-note-row tabindex="0"><h3>申し送り</h3>${noteHtml("handover", flash)}</section>`;
   }
 
   // 今の処方：最終来局の薬と、いつから続いているか（同じ薬が途切れずに出ている最初の来局）
@@ -289,11 +290,9 @@ export default async function mount() {
   }
 
   // 生活状況と後発品の意向
-  function renderOther(newNoteId) {
-    otherEl.innerHTML = ["lifestyle", "generic"].map((key) => {
-      const items = noteItems(key, newNoteId);
-      return `<section data-category="${key}"><h3>${escapeHtml(NOTE_LABEL[key])}</h3>${items ? `<ul>${items}</ul>` : '<span class="none">記録なし</span>'}</section>`;
-    }).join("");
+  function renderOther(flash) {
+    otherEl.innerHTML = ["lifestyle", "generic"].map((key) =>
+      `<section data-category="${key}" data-note-row tabindex="0"><h3>${escapeHtml(NOTE_LABEL[key])}</h3>${noteHtml(key, flash)}</section>`).join("");
   }
 
   // 検査値：項目ごとの最新の値と測定日。前回の値があれば矢印で増減を添える
@@ -310,13 +309,14 @@ export default async function mount() {
     labsEl.innerHTML = rows ? `<ul class="labs">${rows}</ul>` : '<span class="none">記録なし</span>';
   }
 
-  function renderSummary(newNoteId = null) {
-    renderCautions(newNoteId);
-    renderNext(newNoteId);
+  // flash：書き換えた分類（その欄を黄色く光らせる）
+  function renderSummary(flash = []) {
+    renderCautions(flash);
+    renderNext(flash);
     renderMeds();
-    renderOther(newNoteId);
+    renderOther(flash);
     renderLabs();
-    if (newNoteId !== null) document.querySelector("li.new").scrollIntoView({ block: "nearest" });
+    document.querySelector(".note-text.new")?.scrollIntoView({ block: "nearest" });
   }
 
   // ---------- 中央：経過 ----------
@@ -572,127 +572,86 @@ export default async function mount() {
   }
   for (const b of shapeButtons) b.addEventListener("click", () => layout.setOption("historyRows", Number(b.dataset.rows)));
 
-  // ---------- 患者メモの追加 ----------
-  // 1行に1件（アレルギー1つ、併用薬1つ）。何行でもまとめて登録し、1行ずつ別のメモになる。
+  // ---------- 患者メモ ----------
+  // 分類ごとに1つの大きな欄。追加も修正もこの窓で行う。箱の中の分類の行を押すと、その分類にチェックが入った状態で開く。
+  // 分類を切り替えても書きかけは窓を閉じるまで残り、保存で、変えた分類を全部書く。前の内容は消えずに残り、欄の下に並ぶ
 
   const noteDialog = document.querySelector("#note-dialog");
   const noteForm = document.querySelector("#note-form");
-  const noteRows = document.querySelector("#note-rows");
+  const noteBody = noteForm.elements.body;
+  const noteHistory = document.querySelector("#note-history");
   // 箱ごとに書ける分類（ほかの分類は、それぞれの箱で書く）
   const BOX_CATEGORIES = {
     cautions: ["allergy", "adverse", "disease", "concomitant"],
     next: ["handover"],
     other: ["lifestyle", "generic"],
   };
+  const drafts = new Map(); // 分類 → 書きかけの内容
+  let noteCategory = null;
+  const savedText = (key) => noteOf(key)?.body ?? "";
 
-  function addNoteRow() {
-    noteRows.insertAdjacentHTML("beforeend", `<li><input class="input" name="body" maxlength="${NOTE_MAX}" autocomplete="off"
-    placeholder="例：セフカペン（フロモックス）で発疹（3歳、他院）"></li>`);
-    return noteRows.lastElementChild.querySelector("input");
+  function showNoteCategory(key) {
+    if (noteCategory !== null) drafts.set(noteCategory, noteBody.value);
+    noteCategory = key;
+    noteBody.disabled = false;
+    noteBody.value = drafts.get(key) ?? savedText(key);
+    noteHistory.innerHTML = (noteOf(key)?.history ?? []).map((h) =>
+      `<li>${escapeHtml(h.body)}<span class="meta">${formatDate(h.createdAt.slice(0, 10))} ${escapeHtml(h.createdBy)}</span></li>`).join("");
   }
 
-  // 箱の分類だけを選べる形で開く。分類が1つの箱（次に確認すること）は選ばずに書く
-  function openNoteDialog(box = "cautions") {
+  // category：押した行の分類（無ければ、分類が1つの箱はそれ、ほかは選んでから書く）
+  function openNoteDialog(box = "cautions", category = BOX_CATEGORIES[box].length === 1 ? BOX_CATEGORIES[box][0] : null) {
     const keys = BOX_CATEGORIES[box];
     document.querySelector("#note-categories").innerHTML = NOTE_CATEGORIES.filter((c) => keys.includes(c.key)).map((c) =>
       `<label><input type="radio" name="category" value="${c.key}">${escapeHtml(c.label)}</label>`).join("");
-    document.querySelector("#note-dialog-title").textContent = `患者メモを追加（${{ cautions: "注意点", next: "申し送り", other: "生活・後発品の意向" }[box]}）`;
-    noteForm.reset();
+    document.querySelector("#note-dialog-title").textContent = `患者メモ（${{ cautions: "注意点", next: "申し送り", other: "生活・後発品の意向" }[box]}）`;
     clearFormErrors(noteForm);
-    noteRows.innerHTML = "";
-    addNoteRow();
+    drafts.clear();
+    noteCategory = null;
+    noteBody.value = "";
+    noteBody.disabled = true;
+    noteHistory.innerHTML = "";
     noteDialog.showModal();
-    if (keys.length === 1) {
-      noteForm.querySelector('input[name="category"]').checked = true;
-      noteRows.querySelector("input").focus();
-    } else {
+    if (category === null) {
       noteForm.querySelector('input[name="category"]').focus();
+      return;
     }
+    noteForm.querySelector(`input[name="category"][value="${category}"]`).checked = true;
+    showNoteCategory(category);
+    noteBody.focus();
+    noteBody.setSelectionRange(noteBody.value.length, noteBody.value.length); // 続きを書けるように末尾へ
+    noteBody.scrollTop = noteBody.scrollHeight;
   }
 
-  document.querySelector("#note-add-row").addEventListener("click", () => addNoteRow().focus());
-  // 行で Enter：次の行へ（最後の行に書いてあれば行を足す）
-  noteRows.addEventListener("keydown", (e) => {
-    if (e.key !== "Enter" || e.ctrlKey || e.isComposing) return;
-    e.preventDefault();
-    const next = e.target.closest("li").nextElementSibling?.querySelector("input");
-    if (next) next.focus();
-    else if (e.target.value.trim() !== "") addNoteRow().focus();
+  noteForm.addEventListener("change", (e) => {
+    if (e.target.name === "category") showNoteCategory(e.target.value);
   });
 
   noteForm.addEventListener("submit", async (e) => {
     e.preventDefault();
-    const category = noteForm.elements.category.value;
-    const bodies = [...noteRows.querySelectorAll("input")].map((i) => i.value.trim()).filter((v) => v !== "");
+    clearFormErrors(noteForm);
+    if (noteCategory === null) {
+      noteForm.querySelector('[data-error="category"]').textContent = "分類を選んでください";
+      noteForm.querySelector('input[name="category"]').focus();
+      return;
+    }
+    drafts.set(noteCategory, noteBody.value);
+    const changed = [...drafts].filter(([key, text]) => text.trim() !== savedText(key)).map(([key]) => key);
+    if (changed.length === 0) {
+      noteDialog.close();
+      return;
+    }
     await submit(noteForm, async () => {
-      const added = await api(`/api/patients/${patient.id}/notes`, {
-        method: "POST",
-        body: { notes: (bodies.length ? bodies : [""]).map((body) => ({ category, body, source: "manual" })) },
-      });
-      notes.unshift(...added);
+      for (const key of changed) {
+        const latest = await api(`/api/patients/${patient.id}/notes/${key}`, { method: "PUT", body: { before: savedText(key), body: drafts.get(key) } });
+        notes.splice(0, notes.length, ...latest);
+      }
       suggestionCache.clear();
       noteDialog.close();
       renderBand();
-      renderSummary(added[0].id);
-      toast(`${NOTE_LABEL[category]}のメモを${added.length}件追加しました`);
+      renderSummary(changed);
+      toast(`${changed.map((key) => NOTE_LABEL[key]).join("・")}を保存しました`);
     });
-  });
-
-  // ---------- 患者メモを直す ----------
-  // メモの行を押す（Enter）と、その行の上に小さな窓が浮き、その場で書き直せる。Enter で保存、Esc か窓の外を押すとやめる。
-  // 直す前の内容は消えずに残り、窓の下に小さく並ぶ。
-
-  const notePop = document.querySelector("#note-pop");
-  const notePopForm = document.querySelector("#note-pop-form");
-  const notePopInput = notePopForm.elements.body;
-  let popNote = null;
-
-  function openNotePop(li) {
-    popNote = notes.find((n) => n.id === Number(li.dataset.editNote));
-    notePopInput.value = popNote.body;
-    notePopForm.querySelector("[data-error]").textContent = "";
-    notePopForm.querySelector(".note-pop-history").innerHTML = popNote.history.map((h) =>
-      `<li>${escapeHtml(h.body)}<span class="meta">${formatDate(h.createdAt.slice(0, 10))} ${escapeHtml(h.createdBy)}</span></li>`).join("");
-    const r = li.getBoundingClientRect();
-    const width = Math.max(r.width + 16, 360);
-    notePop.style.width = `${width}px`;
-    notePop.style.left = `${Math.max(8, Math.min(r.left - 8, window.innerWidth - width - 8))}px`;
-    notePop.style.top = `${r.top - 8}px`;
-    notePop.showModal();
-    notePopInput.select();
-  }
-  document.addEventListener("click", (e) => {
-    const li = e.target.closest("[data-edit-note]");
-    if (li) openNotePop(li);
-  });
-  document.addEventListener("keydown", (e) => {
-    if (e.key !== "Enter" || !e.target.matches?.("[data-edit-note]")) return;
-    e.preventDefault();
-    openNotePop(e.target);
-  });
-  // 窓の外（背景）を押したらやめる
-  notePop.addEventListener("click", (e) => {
-    if (e.target === notePop) notePop.close();
-  });
-  notePopForm.addEventListener("submit", async (e) => {
-    e.preventDefault();
-    if (notePopInput.value.trim() === popNote.body) {
-      notePop.close();
-      return;
-    }
-    let fixed;
-    try {
-      fixed = await api(`/api/patients/${patient.id}/notes/${popNote.id}`, { method: "PUT", body: { category: popNote.category, body: notePopInput.value } });
-    } catch (err) {
-      if (!(err instanceof ApiError) || err.status !== 422) throw err;
-      notePopForm.querySelector("[data-error]").textContent = err.details[0].message;
-      return;
-    }
-    notes.splice(notes.indexOf(popNote), 1, fixed);
-    suggestionCache.clear();
-    notePop.close();
-    renderBand();
-    renderSummary(fixed.id);
   });
 
   // ---------- 指導記録の記載 ----------
@@ -956,10 +915,8 @@ export default async function mount() {
       rx.records.unshift(record);
       // 会話から拾ったメモのうち、チェックしたものを患者メモに足す
       const picked = [...recordForm.querySelectorAll("[data-extract]:checked")].map((c) => assist.extracted[Number(c.dataset.extract)]);
-      let added = [];
-      if (picked.length) {
-        added = await api(`/api/patients/${patient.id}/notes`, { method: "POST", body: { notes: picked.map((n) => ({ ...n, source: "conversation" })) } });
-        notes.unshift(...added);
+      if (picked.length) { // 分類ごとの欄の後ろに1行ずつ足す
+        notes.splice(0, notes.length, ...await api(`/api/patients/${patient.id}/notes`, { method: "POST", body: { notes: picked.map((n) => ({ ...n, source: "conversation" })) } }));
         suggestionCache.clear();
         renderBand();
       }
@@ -974,7 +931,7 @@ export default async function mount() {
       select(i);
       timeline.querySelector(`.record[data-id="${record.id}"]`).classList.add("new");
       timeline.focus({ preventScroll: true });
-      toast(`指導記録を保存しました${added.length ? `（患者メモ ${added.length}件も追加）` : ""}`);
+      toast(`指導記録を保存しました${picked.length ? `（患者メモに ${picked.length}件書き足しました）` : ""}`);
     });
   });
 
@@ -1081,19 +1038,25 @@ export default async function mount() {
     });
     form.querySelector("[data-close]").addEventListener("click", () => form.closest("dialog").close());
   }
-  // 箱を押すと、その箱の入力が開く（メモの行を押したときは、その行を直す。配置を変えている間は開かない）
+  // 箱を押すと、その箱の入力が開く。患者メモの箱は、押した所の分類（疾患の行なら疾患）にチェックが入った状態で開く（配置を変えている間は開かない）
   const BOX_INPUT = {
-    cautions: () => openNoteDialog("cautions"),
-    next: () => openNoteDialog("next"),
-    other: () => openNoteDialog("other"),
+    cautions: (category) => openNoteDialog("cautions", category),
+    next: (category) => openNoteDialog("next", category),
+    other: (category) => openNoteDialog("other", category),
     labs: () => openLabDialog(),
     memo: () => memoPad.open(),
   };
   const ptGrid = document.querySelector("#pt-grid");
   ptGrid.addEventListener("click", (e) => {
-    if (ptGrid.classList.contains("editing") || e.target.closest("[data-edit-note], button, a, input, select, textarea")) return;
+    if (ptGrid.classList.contains("editing") || e.target.closest("button, a, input, select, textarea")) return;
     const box = e.target.closest(".pbox[data-box]");
-    if (box && BOX_INPUT[box.dataset.box]) BOX_INPUT[box.dataset.box]();
+    if (box && BOX_INPUT[box.dataset.box]) BOX_INPUT[box.dataset.box](e.target.closest("[data-note-row]")?.dataset.category);
+  });
+  // 分類の行で Enter：その分類で開く
+  ptGrid.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter" || !e.target.matches("[data-note-row]") || ptGrid.classList.contains("editing")) return;
+    e.preventDefault();
+    BOX_INPUT[e.target.closest(".pbox[data-box]").dataset.box](e.target.dataset.category);
   });
   for (const key of Object.keys(BOX_INPUT)) ptGrid.querySelector(`.pbox[data-box="${key}"]`).classList.add("box-input");
 
@@ -1192,8 +1155,7 @@ export default async function mount() {
       target: "#cautions",
       title: "注意点",
       body: `<p>アレルギー歴・副作用歴・疾患・併用薬を1つの表にまとめています。<strong>赤い行</strong>はアレルギー歴と副作用歴です。</p>
-      <p>箱を押すか <kbd>Alt</kbd>+<kbd>M</kbd> で、アレルギー歴・副作用歴・疾患・併用薬のメモを追加します（生活・後発品の意向と申し送りは、それぞれの箱を押して書きます）。<strong>1行に1件</strong>（アレルギー1つ、併用薬1つ）で、<kbd>Enter</kbd> で次の行に進み、何件でもまとめて登録できます。分類は、厚労省の通知が薬歴に記載を求める項目に合わせています。</p>
-      <p>メモの行を押すと、その場で書き直せます（<kbd>Enter</kbd> で保存、<kbd>Esc</kbd> でやめる）。直す前の内容は消えずに残ります。</p>`,
+      <p>分類ごとに欄が1つです（疾患なら疾患の欄に、何行でも書けます）。<strong>行を押すと</strong>、その分類にチェックが入った状態で入力の窓が開き、書き足すのも直すのも同じ窓です（<kbd>Alt</kbd>+<kbd>M</kbd> でも開きます）。直す前の内容は消えずに残り、窓の欄の下に並びます。分類は、厚労省の通知が薬歴に記載を求める項目に合わせています。</p>`,
     },
     {
       target: "#next",

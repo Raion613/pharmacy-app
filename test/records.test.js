@@ -2,7 +2,7 @@
 import { test, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import { openD1 } from "../src/dev/sqlite-d1.js";
-import { createNotes, updateNote, createRecord, notesOf } from "../src/server/records.js";
+import { createNotes, setNote, createRecord, notesOf } from "../src/server/records.js";
 import { prescriptionsOf } from "../src/server/prescriptions.js";
 import { getPatient, searchPatients } from "../src/server/patients.js";
 import { searchKey } from "../public/assets/js/text.js";
@@ -47,7 +47,7 @@ const count = async (table) => (await db.prepare(`SELECT COUNT(*) AS n FROM ${ta
 test("患者メモ：分類と内容を検証する", async () => {
   assert.deepEqual(await pathsOf(createNote(db, user, 1, { category: "unknown", body: "" })), ["category", "body"]);
   assert.deepEqual(await pathsOf(createNote(db, user, 1, { category: "toString", body: "x" })), ["category"]);
-  assert.deepEqual(await pathsOf(createNote(db, user, 1, { category: "allergy", body: "あ".repeat(301) })), ["body"]);
+  assert.deepEqual(await pathsOf(createNote(db, user, 1, { category: "allergy", body: "あ".repeat(2001) })), ["body"]);
   await assert.rejects(createNote(db, user, 99, { category: "allergy", body: "x" }), (e) => e.status === 404);
   assert.equal(await count("patient_notes"), 0);
 });
@@ -81,31 +81,47 @@ test("検索は濁点・半濁点を取り違えても当たる（薬の検索�
   assert.equal(searchKey("ヴォリコナゾール"), "ウォリコナソール");
 });
 
-test("患者メモ：1件ずつ分けてまとめて登録する（同じ分類を何件でも）", async () => {
+test("患者メモ：分類ごとに1つ。書き足すと同じ欄の後ろに1行ずつつながる", async () => {
   await createNotes(db, user, 1, { notes: [{ category: "allergy", body: "セフェム系で発疹" }, { category: "allergy", body: "卵" }] });
-  assert.deepEqual((await notesOf(db, 1)).map((n) => n.body).sort(), ["セフェム系で発疹", "卵"]);
-});
-
-test("患者メモ：直すと今の内容が変わり、直す前の内容は履歴に残る。直せるのは今の内容だけ", async () => {
-  const [first] = await createNote(db, user, 1, { category: "concomitant", body: "ロキソプロフェン" });
-  const fixed = await updateNote(db, user, 1, first.id, { category: "concomitant", body: "ロキソプロフェン（整形外科、頓用）" });
-  const again = await updateNote(db, user, 1, fixed.id, { category: "adverse", body: "ロキソプロフェンで胃痛" });
+  await createNote(db, user, 1, { category: "allergy", body: "そば" });
   const notes = await notesOf(db, 1);
   assert.equal(notes.length, 1);
-  assert.deepEqual([notes[0].category, notes[0].body], ["adverse", "ロキソプロフェンで胃痛"]);
-  assert.deepEqual(notes[0].history.map((h) => h.body), ["ロキソプロフェン（整形外科、頓用）", "ロキソプロフェン"]);
-  assert.equal(again.id, notes[0].id);
-  assert.equal(await count("patient_notes"), 3); // 書き換えずに足している
-  assert.deepEqual(await pathsOf(updateNote(db, user, 1, first.id, { category: "allergy", body: "x" })), ["body"]); // 直し済みの古い内容は直せない
-  assert.deepEqual(await pathsOf(updateNote(db, user, 1, notes[0].id, { category: "allergy", body: " " })), ["body"]);
-  await assert.rejects(updateNote(db, user, 2, notes[0].id, { category: "allergy", body: "x" }), (e) => e.status === 404); // 別の患者のメモ
-  const logs = await db.prepare("SELECT action FROM access_logs ORDER BY id").all();
-  assert.deepEqual(logs.results.map((l) => l.action), ["note.create", "note.update", "note.update"]);
+  assert.equal(notes[0].body, "セフェム系で発疹\n卵\nそば");
+  assert.deepEqual(notes[0].history.map((h) => h.body), ["セフェム系で発疹\n卵"]);
 });
 
-test("患者メモ：直してアレルギー歴でなくなれば、注意の分類からも外れる", async () => {
-  const [n] = await createNote(db, user, 1, { category: "allergy", body: "卵" });
-  await updateNote(db, user, 1, n.id, { category: "lifestyle", body: "卵は食べられる（聞き違い）" });
+test("患者メモ：前の作りで何件かある分類は、古い順につないで1つに見せ、書き換えると1つにまとまる", async () => {
+  for (const [i, body] of ["高血圧", "糖尿病", "腰痛"].entries()) {
+    await db.prepare("INSERT INTO patient_notes (patient_id, category, body, source, created_at, created_by) VALUES (1, 'disease', ?1, 'manual', ?2, ?3)")
+      .bind(body, `2026-10-0${i + 1}T00:00:00.000Z`, user.id).run();
+  }
+  assert.equal((await notesOf(db, 1))[0].body, "高血圧\n糖尿病\n腰痛");
+  const notes = await setNote(db, user, 1, "disease", { before: "高血圧\n糖尿病\n腰痛", body: "高血圧・糖尿病（HbA1c 7.2）\n腰痛" });
+  assert.equal(notes.length, 1);
+  assert.equal(notes[0].body, "高血圧・糖尿病（HbA1c 7.2）\n腰痛");
+  assert.deepEqual(notes[0].history.map((h) => h.body).sort(), ["糖尿病", "腰痛", "高血圧"].sort());
+  assert.equal(await count("patient_notes"), 4); // 書き換えずに足している
+});
+
+test("患者メモ：同じ窓で書き換える。前の内容は履歴に残り、空にすると記録なしに戻る。開いた後にほかの人が書き換えていたら止める", async () => {
+  await setNote(db, user, 1, "concomitant", { before: "", body: "ロキソプロフェン" });
+  let notes = await setNote(db, user, 1, "concomitant", { before: "ロキソプロフェン", body: "ロキソプロフェン（整形外科、頓用）" });
+  assert.deepEqual(notes[0].history.map((h) => h.body), ["ロキソプロフェン"]);
+  assert.deepEqual(await pathsOf(setNote(db, user, 1, "concomitant", { before: "ロキソプロフェン", body: "x" })), ["body"]); // 古い内容をもとに書いた
+  assert.deepEqual(await pathsOf(setNote(db, user, 1, "concomitant", { before: "ロキソプロフェン（整形外科、頓用）", body: "あ".repeat(2001) })), ["body"]);
+  await assert.rejects(setNote(db, user, 1, "unknown", { before: "", body: "x" }), (e) => e.status === 404);
+  await assert.rejects(setNote(db, user, 99, "concomitant", { before: "", body: "x" }), (e) => e.status === 404);
+  notes = await setNote(db, user, 1, "concomitant", { before: "ロキソプロフェン（整形外科、頓用）", body: " " });
+  assert.equal(notes.length, 0);
+  await setNote(db, user, 1, "concomitant", { before: "", body: "胃腸薬" });
+  assert.equal((await notesOf(db, 1))[0].history.length, 3);
+  const logs = await db.prepare("SELECT action FROM access_logs ORDER BY id").all();
+  assert.deepEqual(logs.results.map((l) => l.action), ["note.create", "note.update", "note.update", "note.update"]);
+});
+
+test("患者メモ：アレルギー歴を空にすれば、注意の分類からも外れる", async () => {
+  await createNote(db, user, 1, { category: "allergy", body: "卵" });
+  await setNote(db, user, 1, "allergy", { before: "卵", body: "" });
   assert.deepEqual((await getPatient(db, 1)).alertCategories, []);
 });
 

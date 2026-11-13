@@ -452,7 +452,8 @@ CREATE TABLE patient_notes (
   source     TEXT NOT NULL CHECK (source IN ('manual', 'conversation')), -- 手で書いた／服薬指導の会話から拾って薬剤師が確かめた
   created_at TEXT NOT NULL,
   created_by INTEGER NOT NULL REFERENCES users(id),
-  revises    INTEGER REFERENCES patient_notes(id) -- 直す前の行。NULL＝最初に書いた行
+  revises    INTEGER REFERENCES patient_notes(id), -- 直す前の行。NULL＝最初に書いた行
+  merged_into INTEGER REFERENCES patient_notes(id) -- 分類ごとに1つにまとめたとき、まとめた先の行（前の作りは1行1件だった）
 );
 
 CREATE INDEX idx_patient_notes_patient ON patient_notes(patient_id, created_at);

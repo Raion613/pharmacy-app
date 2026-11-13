@@ -111,7 +111,7 @@ const PATIENT_SELECT = `
   SELECT pa.id, pa.patient_no, pa.name, pa.kana, pa.birth_date, pa.sex, pa.burden_percent, pa.burden_reason, pa.burden_until, pa.burden_checked_on, pa.handbook_kind,
          (SELECT MAX(dispensed_on) FROM prescriptions WHERE patient_id = pa.id) AS last_dispensed_on,
          (SELECT group_concat(DISTINCT n.category) FROM patient_notes n
-           WHERE n.patient_id = pa.id AND n.category IN ('allergy', 'adverse')
+           WHERE n.patient_id = pa.id AND n.category IN ('allergy', 'adverse') AND n.body <> '' AND n.merged_into IS NULL
              AND NOT EXISTS (SELECT 1 FROM patient_notes x WHERE x.revises = n.id)) AS alert_categories
     FROM patients pa`;
 

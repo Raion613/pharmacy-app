@@ -204,19 +204,20 @@ async function request(path, method, body) {
 // ボタン・選択肢・開閉の見出し・候補を押した瞬間に、小さく潰れて戻る（トゥーンの「潰れて戻る」をごく小さく）。
 // 何千回押しても邪魔にならないよう、0.16秒・最大3%・音なし・形（transform）だけで、レイアウトは動かさない。
 // 横に長い物（選択肢の行など）は潰さず、わずかに沈むだけにする。マウスでも、Enter / Space で押したときも同じ動き
+// 段ごとに曲線をかける（WAAPI は書かないと段と段の間が等速になる）
 const PRESS_POP = [
-  { transform: "translateY(1px) scale(1.02, .94)" },
-  { transform: "translateY(-1px) scale(.99, 1.03)", offset: .45 },
+  { transform: "translateY(1px) scale(1.02, .94)", easing: "cubic-bezier(.65, 0, .35, 1)" },
+  { transform: "translateY(-1px) scale(.99, 1.03)", offset: .45, easing: "cubic-bezier(.65, 0, .35, 1)" },
   { transform: "none" },
 ];
-const PRESS_WIDE = [{ transform: "scale(.985)" }, { transform: "none" }];
+const PRESS_WIDE = [{ transform: "scale(.985)", easing: "cubic-bezier(.22, 1, .36, 1)" }, { transform: "none" }];
 const PRESSABLE = "button, .btn, summary, [role='option'], label:has(input[type='radio'], input[type='checkbox'])";
 export const REDUCED_MOTION = matchMedia("(prefers-reduced-motion: reduce)");
 document.addEventListener("click", (e) => {
   if (REDUCED_MOTION.matches || e.target.matches("input")) return; // ラベルを押すと入力欄にもクリックが届くので、二重に動かさない
   const el = e.target.closest(PRESSABLE);
   if (!el) return;
-  el.animate(el.offsetWidth > 220 ? PRESS_WIDE : PRESS_POP, { duration: 160, easing: "cubic-bezier(.3, .7, .4, 1)" });
+  el.animate(el.offsetWidth > 220 ? PRESS_WIDE : PRESS_POP, { duration: 160 });
 });
 
 // 押して画面を移る物（行・札・カード・メニュー）は、押し下げた瞬間に押した跡を付ける（離すのを待たない）。画面を移らなければすぐ消す
@@ -418,7 +419,7 @@ export function renderPatientBand(el, p, notes, { editable = false } = {}) {
   const kohi = escapeHtml(kohiBandText(p.kohi, today()));
   const alerts = notes.filter((n) => n.category === "allergy" || n.category === "adverse");
   const alertHtml = alerts.length
-    ? alerts.map((n) => `<span class="alert-chip" title="${escapeHtml(n.body)}">${icon("alert", 14)}<b>${NOTE_LABEL[n.category]}</b>${escapeHtml(n.body)}</span>`).join("")
+    ? alerts.map((n) => `<span class="alert-chip" title="${escapeHtml(n.body)}">${icon("alert", 14)}<b>${NOTE_LABEL[n.category]}</b>${escapeHtml(n.body.replaceAll("\n", "／"))}</span>`).join("")
     : '<span class="alert-none">アレルギー歴・副作用歴の記録なし</span>';
   el.innerHTML = `
     <div><div class="kana">${escapeHtml(p.kana)}</div><div class="name">${escapeHtml(p.name)}</div></div>

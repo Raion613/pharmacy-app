@@ -30,8 +30,32 @@ async function requirePatient(db, patientId) {
   if (!patient) throw new HttpError(404, "患者が見つかりません");
 }
 
-// メモを1件ずつ（アレルギー1つ、併用薬1つ）まとめて入れる。手で書いたものも、会話から拾って薬剤師が選んだものも。
-// 全部入るか、1つも入らないか
+// 患者メモは分類ごとに1つ（疾患なら疾患の欄が1つ、中は何行でも書ける）。
+// 今の内容の行＝まだ誰も直しておらず、ほかの行にまとめられてもいない行。前の作り（1行1件）で何件かある分類は、古い順につないで1つとして扱う
+async function currentRows(db, patientId, category) {
+  const { results } = await db.prepare(
+    `SELECT n.id, n.body, n.source FROM patient_notes n
+      WHERE n.patient_id = ?1 AND n.category = ?2 AND n.merged_into IS NULL
+        AND NOT EXISTS (SELECT 1 FROM patient_notes x WHERE x.revises = n.id)
+      ORDER BY n.created_at, n.id`,
+  ).bind(patientId, category).all();
+  return results;
+}
+const joinBodies = (rows) => rows.map((r) => r.body).filter((b) => b !== "").join("\n");
+
+// 分類の内容を書き換える文。前の内容は消さない：新しい行が一番新しい行を revises で指し、ほかの行は merged_into で新しい行にまとめる
+function rewriteStatements(db, user, patientId, rows, note, now) {
+  const newest = rows.at(-1)?.id ?? null;
+  const others = rows.slice(0, -1).map((r) => r.id);
+  return [
+    insertNote(db, user, patientId, note, now, newest),
+    ...(others.length ? [db.prepare(
+      `UPDATE patient_notes SET merged_into = (SELECT id FROM patient_notes WHERE revises = ?1) WHERE id IN (${others.map((_, i) => `?${i + 2}`).join(", ")})`,
+    ).bind(newest, ...others)] : []),
+  ];
+}
+
+// 書き足す（会話から拾って薬剤師が選んだもの・種データ）。分類ごとに、今の内容の後ろに1行ずつ足す。全部入るか、1つも入らないか
 export async function createNotes(db, user, patientId, body) {
   if (!Array.isArray(body.notes) || body.notes.length === 0 || body.notes.length > MAX_NOTES_AT_ONCE) {
     throw new HttpError(422, "入力に誤りがあります", [{ path: "notes", message: `メモを1〜${MAX_NOTES_AT_ONCE}件選んでください` }]);
@@ -39,11 +63,36 @@ export async function createNotes(db, user, patientId, body) {
   const notes = body.notes.map((n) => validateNote(n));
   await requirePatient(db, patientId);
   const now = nowIso();
-  const results = await db.batch([
-    ...notes.map((n) => insertNote(db, user, patientId, n, now)),
-    auditStatement(db, user.id, "note.create", patientId, notes.map((n) => NOTE_LABEL[n.category]).join("・")),
-  ]);
-  return notes.map((n, i) => ({ id: results[i].results[0].id, ...n, createdAt: now, createdBy: user.display_name, history: [] }));
+  const statements = [];
+  for (const [category, added] of Map.groupBy(notes, (n) => n.category)) {
+    const rows = await currentRows(db, patientId, category);
+    const text = [joinBodies(rows), ...added.map((n) => n.body)].filter((b) => b !== "").join("\n");
+    if (text.length > NOTE_MAX) throw new HttpError(422, "入力に誤りがあります", [{ path: "body", message: `${NOTE_LABEL[category]}は${NOTE_MAX}文字までです` }]);
+    statements.push(...rewriteStatements(db, user, patientId, rows, { category, body: text, source: rows.at(-1)?.source ?? added[0].source }, now));
+  }
+  await db.batch([...statements, auditStatement(db, user.id, "note.create", patientId, [...new Set(notes.map((n) => NOTE_LABEL[n.category]))].join("・"))]);
+  return notesOf(db, patientId);
+}
+
+// 分類の内容を、書いた欄のとおりに置き換える（追加も修正も同じ窓から）。空にすると、その分類は「記録なし」に戻る（前の内容は残る）。
+// before は窓を開いたときの内容。そのあいだにほかの人が書き換えていたら、黙って上書きせずに止める
+export async function setNote(db, user, patientId, category, body) {
+  if (!Object.hasOwn(NOTE_LABEL, category)) throw new HttpError(404, "分類が見つかりません");
+  const text = String(body.body ?? "").trim();
+  if (text.length > NOTE_MAX) throw new HttpError(422, "入力に誤りがあります", [{ path: "body", message: `内容は${NOTE_MAX}文字までです` }]);
+  await requirePatient(db, patientId);
+  const rows = await currentRows(db, patientId, category);
+  const now = joinBodies(rows);
+  if (now !== String(body.before ?? "").trim()) {
+    throw new HttpError(422, "入力に誤りがあります", [{ path: "body", message: `ほかの人が先に${NOTE_LABEL[category]}を書き換えました。画面を読み直してください` }]);
+  }
+  if (text !== now) {
+    await db.batch([
+      ...rewriteStatements(db, user, patientId, rows, { category, body: text, source: "manual" }, nowIso()),
+      auditStatement(db, user.id, rows.length ? "note.update" : "note.create", patientId, NOTE_LABEL[category]),
+    ]);
+  }
+  return notesOf(db, patientId);
 }
 
 export function validateRecord(body) {
@@ -119,39 +168,29 @@ export async function createConversation(db, user, prescriptionId, body) {
   };
 }
 
-// メモを直す。直した内容を新しい行として足し、直す前の行は残す。直せるのは今の内容（まだ誰も直していない行）だけ
-export async function updateNote(db, user, patientId, noteId, body) {
-  const old = await db.prepare(
-    `SELECT n.id, n.source, EXISTS (SELECT 1 FROM patient_notes x WHERE x.revises = n.id) AS revised
-       FROM patient_notes n WHERE n.id = ?1 AND n.patient_id = ?2`,
-  ).bind(noteId, patientId).first();
-  if (!old) throw new HttpError(404, "メモが見つかりません");
-  if (old.revised) throw new HttpError(422, "入力に誤りがあります", [{ path: "body", message: "ほかの人が先にこのメモを直しました。画面を読み直してください" }]);
-  const note = validateNote({ ...body, source: old.source });
-  const now = nowIso();
-  const [inserted] = await db.batch([
-    insertNote(db, user, patientId, note, now, noteId),
-    auditStatement(db, user.id, "note.update", patientId, NOTE_LABEL[note.category]),
-  ]);
-  return (await notesOf(db, patientId)).find((n) => n.id === inserted.results[0].id);
-}
-
-// 今の内容のメモを新しい順に（まとめて登録したものは書いた順）。直したメモは history に直す前の内容（新しい順）を持つ
+// 今の内容のメモ（分類ごとに1つ、新しく書いた順）。中身が空の分類は返さない。
+// history は直す前の内容（新しい順）。前の作りで何件かあった分類は、古い順に1行ずつつないで1つにする
 export async function notesOf(db, patientId) {
   const { results } = await db.prepare(
-    `SELECT n.id, n.category, n.body, n.source, n.created_at, n.revises, u.display_name AS created_by
+    `SELECT n.id, n.category, n.body, n.source, n.created_at, n.revises, n.merged_into, u.display_name AS created_by
        FROM patient_notes n JOIN users u ON u.id = n.created_by
-      WHERE n.patient_id = ?1 ORDER BY n.created_at DESC, n.id -- 同時に登録した行は、書いた順
-`,
+      WHERE n.patient_id = ?1 ORDER BY n.created_at, n.id`,
   ).bind(patientId).all();
   const byId = new Map(results.map((n) => [n.id, n]));
   const revised = new Set(results.map((n) => n.revises).filter((id) => id !== null));
-  const json = (n) => ({ id: n.id, category: n.category, body: n.body, source: n.source, createdAt: n.created_at, createdBy: n.created_by });
-  return results.filter((n) => !revised.has(n.id)).map((n) => {
-    const history = [];
-    for (let p = n.revises; p !== null; p = byId.get(p).revises) history.push(json(byId.get(p)));
-    return { ...json(n), history };
-  });
+  const mergedInto = Map.groupBy(results.filter((n) => n.merged_into !== null), (n) => n.merged_into);
+  // その行より前の内容（直す前の行と、まとめた行。それぞれの前も）
+  const before = (n) => [n.revises === null ? null : byId.get(n.revises), ...(mergedInto.get(n.id) ?? [])]
+    .filter((p) => p !== null).flatMap((p) => [p, ...before(p)]);
+  const json = (n) => ({ body: n.body, createdAt: n.created_at, createdBy: n.created_by });
+  const current = Map.groupBy(results.filter((n) => !revised.has(n.id) && n.merged_into === null), (n) => n.category);
+  return [...current.values()].map((rows) => {
+    const newest = rows.at(-1);
+    return {
+      id: newest.id, category: newest.category, body: joinBodies(rows), source: newest.source, createdAt: newest.created_at, createdBy: newest.created_by,
+      history: rows.flatMap(before).sort((x, y) => y.created_at.localeCompare(x.created_at) || y.id - x.id).map(json),
+    };
+  }).filter((n) => n.body !== "").sort((x, y) => y.createdAt.localeCompare(x.createdAt) || y.id - x.id);
 }
 
 // 患者の指導記録を、処方ID → 記録の配列（新しい順）にして返す

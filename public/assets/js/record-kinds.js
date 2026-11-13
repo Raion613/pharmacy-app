@@ -30,5 +30,5 @@ export const SOAP = [
 
 export const LEFTOVER = { none: "残薬なし", some: "残薬あり", unchecked: "残薬未確認" };
 
-export const NOTE_MAX = 300;
+export const NOTE_MAX = 2000; // 分類ごとに1つの欄（何行でも書ける）
 export const SOAP_MAX = 1000;

@@ -128,7 +128,7 @@
 .inq-line {
   display: flex; align-items: baseline; gap: 10px; width: 100%; padding: 6px 10px; text-align: left;
   border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: 4px; background: #fff;
-  font: inherit; font-size: 13px; color: var(--text); cursor: pointer; animation: inquiry-in .2s ease-out;
+  font: inherit; font-size: 13px; color: var(--text); cursor: pointer; animation: inquiry-in .2s var(--ease-out);
 }
 .inq-line:hover, .inq-line:focus-visible { border-color: var(--accent); background: var(--accent-soft); }
 .inq-line[aria-invalid="true"] { border-color: var(--danger); border-left-color: var(--danger); }

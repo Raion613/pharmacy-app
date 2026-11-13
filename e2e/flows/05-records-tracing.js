@@ -49,7 +49,7 @@ await page.waitForSelector("#record-dialog:not([open])", { state: "attached" });
 await page.waitForSelector(".record.new");
 assert.match(await text(selectedCard), /服薬指導の会話（3秒・ファイル 指導_0917\.wav）[\s\S]*下書きから/);
 assert.match(await text('[data-category="concomitant"]'), /ドラッグストアで買った胃腸薬[\s\S]*服薬指導の会話より/);
-assert.match(await text(".toasts"), /患者メモ 1件も追加/);
+assert.match(await text(".toasts"), /患者メモに 1件書き足しました/);
 
 // 15. テンプレート：選んで写す
 step("指導記録のテンプレートを写す");

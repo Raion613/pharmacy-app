@@ -279,9 +279,9 @@ for (const p of PATIENTS) {
   const { id } = await createPatient(db, SATO, p);
   patientIds.set(p.name, id);
   await db.prepare("UPDATE patients SET created_at = ?1 WHERE id = ?2").bind(at(p.registeredOn, "01:00"), id).run();
-  for (const n of p.notes) {
-    const [note] = await createNotes(db, SATO, id, { notes: [n] });
-    await db.prepare("UPDATE patient_notes SET created_at = ?1 WHERE id = ?2").bind(at(n.on, "01:10"), note.id).run();
+  for (const [category, list] of Map.groupBy(p.notes, (n) => n.category)) { // 患者メモは分類ごとに1つ
+    const notes = await createNotes(db, SATO, id, { notes: list });
+    await db.prepare("UPDATE patient_notes SET created_at = ?1 WHERE id = ?2").bind(at(list.at(-1).on, "01:10"), notes.find((n) => n.category === category).id).run();
   }
   for (const v of p.visits) {
     const rx = await createPrescription(db, { id: v.by, pharmacy_id: 1 }, {

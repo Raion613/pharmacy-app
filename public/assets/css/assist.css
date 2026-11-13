@@ -56,7 +56,7 @@ dialog.assist-dialog { width: 1180px; }
 .line-list li { background: #f3fbf4; border: 1px solid #bfe3c8; border-radius: var(--radius); padding: 5px 8px; font-size: 12.5px; display: grid; gap: 2px; }
 .line-list .meta { font-size: 11px; color: var(--sub); }
 .line-list .btn { justify-self: end; }
-textarea.flash { animation: flash 1.1s ease-out; }
+textarea.flash { animation: flash 1.1s var(--ease-out); }
 
 /* 検査値の入力 */
 .lab-top { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; }
@@ -66,8 +66,8 @@ textarea.flash { animation: flash 1.1s ease-out; }
 .lab-input { display: flex; align-items: center; gap: 4px; }
 .lab-input .input { width: 100%; }
 .lab-input .unit { flex: none; font-size: 11px; color: var(--sub); white-space: nowrap; min-width: 5.5em; } /* 単位は縮めない（縮める側は入力欄） */
-.lab-input .input.flash { animation: flash 1.6s ease-out; }
-.labs.flash { animation: flash 1.6s ease-out; }
+.lab-input .input.flash { animation: flash 1.6s var(--ease-out); }
+.labs.flash { animation: flash 1.6s var(--ease-out); }
 
 @media (max-width: 1200px) {
   .assist-layout { grid-template-columns: minmax(0, 1fr) 320px; }

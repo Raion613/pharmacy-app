@@ -94,7 +94,7 @@
 
 <dialog id="note-dialog" aria-labelledby="note-dialog-title">
   <form id="note-form" novalidate>
-    <div class="panel-head" id="note-dialog-title">患者メモを追加</div>
+    <div class="panel-head" id="note-dialog-title">患者メモ</div>
     <div class="dialog-body">
       <div class="field">
         <span class="label" id="note-category-label">分類</span>
@@ -102,24 +102,16 @@
         <span class="error-text" data-error="category"></span>
       </div>
       <div class="field">
-        <span class="label" id="note-rows-label">内容<span class="hint" id="note-rows-hint">（1行に1件。<kbd>Enter</kbd>で次の行）</span></span>
-        <ol class="note-rows" id="note-rows" aria-labelledby="note-rows-label"></ol>
-        <button type="button" class="btn btn-small" id="note-add-row">＋ 行を足す</button>
+        <label class="label" for="note-body">内容</label>
+        <textarea class="input textarea" id="note-body" name="body" rows="10" maxlength="2000" placeholder="分類を選ぶと、その分類の今の内容が出ます"></textarea>
         <span class="error-text" data-error="body"></span>
+        <ul class="note-history" id="note-history" aria-label="前の内容"></ul>
       </div>
     </div>
     <div class="dialog-foot">
       <button type="button" class="btn" data-close>キャンセル <kbd>Esc</kbd></button>
-      <button type="submit" class="btn btn-primary">追加 <kbd>Ctrl+Enter</kbd></button>
+      <button type="submit" class="btn btn-primary">保存 <kbd>Ctrl+Enter</kbd></button>
     </div>
-  </form>
-</dialog>
-
-<dialog id="note-pop" class="note-pop" aria-label="患者メモを直す">
-  <form id="note-pop-form" novalidate>
-    <input class="input" name="body" maxlength="300" autocomplete="off" aria-label="メモの内容">
-    <span class="error-text" data-error="body"></span>
-    <ul class="note-pop-history" aria-label="直す前の内容"></ul>
   </form>
 </dialog>
 <dialog id="record-dialog" class="wide assist-dialog" aria-labelledby="record-dialog-title">
