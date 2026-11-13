@@ -12,7 +12,9 @@
     "db:references": "node scripts/import-references.js && wrangler d1 execute pharmacy --local --file=db/generated/references.sql",
     "db:seed": "node scripts/seed-demo.js && wrangler d1 execute pharmacy --local --file=db/generated/seed.sql",
     "db:reset": "npm run db:init && npm run db:import && npm run db:references && npm run db:seed",
-    "e2e": "node e2e/keyboard-flow.js",
+    "e2e": "node --no-warnings e2e/run.js",
+    "e2e:reset": "node scripts/seed-demo.js && node --no-warnings scripts/e2e-reset.js",
+    "e2e:server": "wrangler pages dev public --port 8789 --persist-to .wrangler/e2e-state",
     "e2e:master": "node e2e/master-import.js",
     "build": "node scripts/build-dist.js"
   },

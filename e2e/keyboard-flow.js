@@ -10,19 +10,22 @@ import { hotp, stepOf } from "../src/server/totp.js";
 const BASE = process.env.BASE_URL ?? "http://localhost:8788";
 const browser = await chromium.launch({ channel: "msedge", headless: true });
 const errors = [];
+let currentStep = ""; // いま流している手順（エラーに付ける）
 async function newPage({ toursSeen }) {
   const context = await browser.newContext({ locale: "ja-JP", timezoneId: "Asia/Tokyo", viewport: { width: 1366, height: 768 } });
+  // 初回だけの紹介の PV（login-intro.js）は見終わった状態にしておく。起動の錠剤の演出は毎回出る（入力は妨げない）
+  await context.addInitScript(() => localStorage.setItem("pv-seen", "1"));
   // 前半は業務の流れを確かめるので、チュートリアルは見終わった状態にしておく
   if (toursSeen) {
     await context.addInitScript(() => {
-      for (const k of ["login", "patients", "patient", "rx", "drugs", "logs", "master", "board", "inspect", "homecare", "tracing", "stats", "messages", "account"]) localStorage.setItem(`tour:${k}`, "3"); // tour.js の VERSION と揃える
+      for (const k of ["login", "home", "patients", "patient", "rx", "drugs", "logs", "master", "board", "inspect", "homecare", "tracing", "stats", "messages", "account"]) localStorage.setItem(`tour:${k}`, "3"); // tour.js の VERSION と揃える
     });
   }
   const p = await context.newPage();
-  p.on("pageerror", (e) => errors.push(e.message));
+  p.on("pageerror", (e) => errors.push(`${currentStep}：${e.message}`)); // どの手順で出たかを付けて集める
   p.on("dialog", (d) => d.accept()); // 保存していない入力があるときの「このページを離れますか」
   // 422（入力の誤り）と 401（多要素認証で違う6桁を入れる）は、確かめる手順で意図して出すので除く
-  p.on("console", (m) => { if (m.type() === "error" && !/status of (422|401)/.test(m.text())) errors.push(m.text()); });
+  p.on("console", (m) => { if (m.type() === "error" && !/status of (422|401)/.test(m.text())) errors.push(`${currentStep}：${m.text()}`); });
   return p;
 }
 let page = await newPage({ toursSeen: true });
@@ -55,7 +58,7 @@ const text = async (sel) => {
   await settled();
   return page.locator(sel).innerText();
 };
-const step = (name) => console.log(`- ${name}`);
+const step = (name) => { currentStep = name; console.log(`- ${name}`); };
 
 // 無音の WAV（録音ファイルの読み込みを試す。長さだけが使われる）
 function silentWav(seconds) {
@@ -124,7 +127,7 @@ await page.locator("#soap-plan").focus();
 await page.keyboard.press("Control+Enter");
 await page.waitForSelector("#record-dialog:not([open])", { state: "attached" });
 await page.waitForSelector(".record.new");
-assert.match(await text(selectedCard), /S\s*薬は飲めている[\s\S]*P\s*次回、家庭血圧の手帳を確認[\s\S]*残薬なし[\s\S]*手帳未確認[\s\S]*デモ 薬剤師/);
+assert.match(await text(selectedCard), /S\s*薬は飲めている[\s\S]*P\s*次回、家庭血圧の手帳を確認[\s\S]*残薬なし[\s\S]*デモ 薬剤師/);
 assert.doesNotMatch(await text(selectedCard), /指導記録 未記載/);
 // 前回の留意点は「いちばん新しい来局」の P のまま（古い来局に書き足しても替わらない）
 assert.match(await text("#last-plan"), /減煙を続けられるよう/);
@@ -184,15 +187,18 @@ assert.deepEqual(await focused(), { id: "", field: "drug", r: "0", i: "0", tag: 
 
 step("薬を2つ入れる");
 await page.keyboard.type("のるばすく錠５");
-await page.waitForSelector("#suggest li[aria-selected=true]");
-assert.match(await text("#suggest li[aria-selected=true]"), /ノルバスク錠５ｍｇ/);
+await page.waitForSelector("#suggest:not([hidden]) li[aria-selected=true]");
+assert.match(await text("#suggest:not([hidden]) li[aria-selected=true]"), /ノルバスク錠５ｍｇ[\s\S]*在庫 100錠/); // デモの在庫は全部 100 から
+// 薬の名前は、パとバの見分けやすい書体（M PLUS Rounded 1c）で描いている（書体が届いている）
+assert.ok(await page.evaluate(() => getComputedStyle(document.querySelector("#suggest .s-name")).fontFamily.startsWith('"M PLUS Rounded 1c"')
+  && document.fonts.check("700 14px 'M PLUS Rounded 1c'", "パバ")), "薬の名前が M PLUS Rounded 1c で描かれていない");
 await page.keyboard.press("Enter");
 assert.equal((await focused()).field, "qty");
 await page.keyboard.type("1");
 await page.keyboard.press("Enter");
 assert.deepEqual(await focused(), { id: "", field: "drug", r: "0", i: "1", tag: "INPUT" });
 await page.keyboard.type("2189015F2054"); // アトルバスタチン錠１０ｍｇ「サワイ」を薬価基準収載医薬品コードで
-await page.waitForSelector("#suggest li[aria-selected=true]");
+await page.waitForSelector("#suggest:not([hidden]) li[aria-selected=true]");
 await page.keyboard.press("Enter");
 await page.keyboard.type("1");
 await page.keyboard.press("Enter");
@@ -200,7 +206,7 @@ await page.keyboard.press("Enter");
 step("空欄で Enter → 用法 → 日数 → 次の剤");
 await page.keyboard.press("Enter");
 assert.equal((await focused()).field, "usage");
-await page.keyboard.type("1日1回朝食後");
+assert.equal(await page.inputValue("#usage-0"), "1日1回朝食後"); // 用法は1日量（1錠）から選ばれている（打たない）
 await page.keyboard.press("Enter");
 assert.equal((await focused()).field, "days");
 await page.keyboard.type("28");
@@ -225,15 +231,6 @@ await page.waitForFunction(() => document.querySelector("#total").textContent ==
 assert.match(await text("#revision-tag"), /2026\/04\/01（水）から薬価が変わる薬があります/);
 assert.match(await text('.rp-edit[data-r="0"] .rp-calc'), /27\.60円 → 3点 × 28日 = 84点/);
 
-// 6. 改定をまたいで比べる：比較日は自動で、選んだ薬の薬価が次に変わる日（2026-04-01）
-step("Alt+C で改定後と比べる");
-await page.keyboard.press("Alt+C");
-await page.waitForFunction(() => document.querySelector("#compare-diff").textContent !== "—");
-assert.equal(await page.inputValue("#compare-on"), "2026-04-01");
-assert.equal(await text("#compare-total"), "56点");
-assert.equal(await text("#compare-diff"), "+28点");
-assert.equal(await page.locator("tr.item.changed").count(), 2);
-
 // 6-2. 会計：保存する前に、調剤報酬の合計と窓口で受け取る額が出る
 step("会計：調剤技術料・薬学管理料・薬剤料と一部負担金");
 assert.equal(await text("#bill-total"), "281点");
@@ -242,21 +239,30 @@ assert.equal(await text("#bill-charge"), "840円");
 
 // 7. 用法を空にして保存 → サーバーの検証で止まり、用法の欄にフォーカスが戻る
 step("用法が空なら保存できない（サーバーの検証）");
-await page.fill("#usage-0", "");
-await page.locator("#usage-0").dispatchEvent("input");
+await page.selectOption("#usage-0", ""); // 「（選ぶ）」に戻す
 await page.keyboard.press("Control+Enter");
 await page.waitForSelector("#errors:not([hidden])");
 assert.match(await text("#error-list"), /Rp1：用法を入力してください/);
 assert.equal((await focused()).id, "usage-0");
 
 step("用法を戻して Ctrl+Enter で保存");
-await page.keyboard.type("1日1回朝食後");
+await page.keyboard.press("ArrowDown"); // 用法は選ぶだけ（↓で「1日1回朝食後」）
 await Promise.all([page.waitForURL(/\/patient\?id=1&saved=/), page.keyboard.press("Control+Enter")]);
 await page.waitForSelector('#timeline .visit-card.saved[aria-selected="true"]');
 assert.match(await text(selectedCard), /2026\/03\/31[\s\S]*薬剤料 84点/);
 // 3/31 は令和6年度の点数表：調剤基本料1 45＋連携強化 5＋後発医薬品調剤体制2 28＋薬剤調製料 24＋調剤管理料 50＋服薬管理指導料 45 ＋ 薬剤料 84 = 281点
 // （医療ＤＸ推進体制整備加算は3/19に算定済みで月1回、医療情報取得加算は2/19に算定済みで12月に1回）。3割で 843円 → 840円
 assert.match(await text(".toasts"), /処方を保存しました（合計 281点・窓口で 840円）/);
+
+// 7-2. 改定をまたいで比べる（薬歴の来局カードの計算の内訳）：比べる日付は自動で、薬の薬価が次に変わる日（2026-04-01）
+step("薬歴で Alt+C：保存した処方を改定後の薬価と比べる");
+await page.keyboard.press("Alt+C");
+await page.waitForFunction((sel) => document.querySelector(`${sel} .compare-diff`)?.textContent.includes("点"), selectedCard);
+assert.equal(await page.inputValue(`${selectedCard} [data-compare-date]`), "2026-04-01");
+assert.equal(await page.evaluate(() => document.activeElement.matches("[data-compare-date]")), true);
+assert.match(await text(`${selectedCard} .compare-table tfoot`), /薬剤料\s*84点\s*56点/);
+assert.match(await text(`${selectedCard} .compare-diff`), /2026\/04\/01（水）の薬価で計算すると\s*−28点/);
+assert.equal(await page.locator(`${selectedCard} .compare-table tr.changed`).count(), 2);
 
 // 8. 前回Do：選んだ処方を複写。薬価は今日の日付で引き直す
 step("処方入力で Alt+D：前回の処方を写す");
@@ -279,8 +285,19 @@ assert.match(logs, /患者情報を表示/);
 step("新規患者登録");
 await page.goto(`${BASE}/patients`);
 await page.waitForSelector("#patients tbody tr");
+// 打つたびに登録済みの患者を探す（ひらがなのカナでも当たる）。生年月日まで同じなら赤で示す
+await page.keyboard.press("Alt+N");
+await page.keyboard.press("Tab");
+await page.keyboard.type("あおき");
+await page.waitForFunction(() => /名前の近い人が1人/.test(document.querySelector("#same-head").textContent));
+assert.match(await text("#same-list"), /アオキ　マコト[\s\S]*青木　誠/);
+await page.fill("#p-birth", "1958-06-14");
+await page.waitForFunction(() => /生年月日も同じ 1人/.test(document.querySelector("#same-head").textContent));
+await page.keyboard.press("Escape");
+await page.waitForSelector("#patient-dialog:not([open])", { state: "attached" });
 await page.keyboard.press("Alt+N");
 await page.keyboard.type("試験　次郎");
+await page.waitForFunction(() => /この名前の人はいません/.test(document.querySelector("#same-head").textContent));
 await page.keyboard.press("Tab");
 await page.keyboard.type("しけん　じろう");
 await page.keyboard.press("Enter");
@@ -302,6 +319,21 @@ await page.keyboard.press("Enter");
 await page.waitForSelector(".history tr.current");
 assert.match(await text(".history tr.current"), /2026\/04\/01/);
 assert.match(await text(".history"), /−2\.90円/);
+// 在庫：ここまでに保存した処方で、ノルバスクは渡した分だけ減っている
+const norvasc = Number((await text(".drug-props")).match(/在庫 (\d+)錠/)[1]);
+assert.ok(norvasc < 100, `ノルバスクの在庫が減っていない：${norvasc}`);
+// 採用薬は、同じ成分の銘柄の中で一番上に出る。Alt+A で外す・付ける
+await page.keyboard.press("/");
+await page.keyboard.type("ろすばすたちん");
+await page.waitForFunction(() => /ロスバスタチン錠２．５ｍｇ「サワイ」/.test(document.querySelector("#drugs tbody tr")?.textContent ?? ""));
+assert.match(await text("#drugs tbody tr:first-child"), /採用/);
+await page.keyboard.press("ArrowDown");
+await page.waitForFunction(() => /ロスバスタチン錠２．５ｍｇ「サワイ」/.test(document.querySelector(".drug-title")?.textContent ?? ""));
+await page.keyboard.press("Alt+A");
+await page.waitForFunction(() => /採用薬にする/.test(document.querySelector("#adopt")?.textContent ?? ""));
+assert.doesNotMatch(await text("#drugs tbody tr:first-child"), /採用/);
+await page.keyboard.press("Alt+A");
+await page.waitForFunction(() => /採用薬から外す/.test(document.querySelector("#adopt")?.textContent ?? ""));
 
 // 11-2. 長期収載品の選定療養：（選）のコードの薬は、保険の薬剤料とは別に特別の料金が出る
 step("選定療養：薬歴に特別の料金、前回Do で入力中にも特別の料金");
@@ -314,18 +346,33 @@ await doFromPatient(7);
 await page.waitForFunction(() => document.querySelector("#bill-special").textContent === "154円");
 assert.equal(await text("#total"), "84点");
 assert.match(await text('tr.item[data-r="0"][data-i="0"] .drug-meta'), /選定療養（患者希望）[\s\S]*価格差 0\.15円\/錠/);
-// 11-2-2. 残薬調整：調剤した日数を減らし、Alt+Q で疑義照会を書くと、加算が会計に入る。Alt+H で処方箋の記載を別に書ける
-step("残薬調整（日数を減らす・Alt+Q で疑義照会）と、処方箋と違う薬（Alt+H）");
+// 11-2-2. 残薬調整：調剤した日数を減らし、Alt+Q で疑義照会の窓を開いて書くと、その剤の下に1行出て、加算が会計に入る。Alt+H で処方箋の記載を別に書ける
+step("残薬調整（日数を減らす・Alt+Q で疑義照会の窓）と、処方箋と違う薬（Alt+H）");
 await page.fill("#disp-days-0", "7");
 await page.locator("#disp-days-0").dispatchEvent("input");
 await page.waitForSelector("#days-change-0:not([hidden])");
-await page.keyboard.press("Alt+Q");
-await page.waitForSelector('#inquiries [data-qf="content"]');
-assert.equal(await page.evaluate(() => document.activeElement.dataset.qf), "content");
+await page.locator("#disp-days-0").focus();
+await page.keyboard.press("Alt+Q"); // カーソルのある剤（Rp1）について
+await page.waitForSelector("#inquiry-dialog[open]");
+await page.waitForFunction(() => document.activeElement.id === "inq-content");
+assert.match(await page.locator("#inq-target option:checked").textContent(), /^Rp1 全体/);
 await page.keyboard.type("ロキソニンが7日分残っている。14日分を7日分に減らしてよいか");
-await page.fill('#inquiries [data-qf="answer"]', "7日分で可");
-await page.locator('#inquiries [data-qf="answer"]').dispatchEvent("input");
+await page.keyboard.press("Tab");
+await page.keyboard.type("7日分で可");
+await page.keyboard.press("Control+Enter");
+await page.waitForSelector("#inquiry-dialog:not([open])", { state: "attached" });
+await page.waitForFunction(() => document.activeElement.id === "disp-days-0"); // 窓を閉じたら元の欄へ戻る
+const inqLine = '.rp-edit[data-r="0"] .inq-line';
+assert.match(await text(inqLine), /残薬調整[\s\S]*Rp1 全体[\s\S]*14日分を7日分に減らしてよいか[\s\S]*7日分で可[\s\S]*処方変更あり/);
 await page.waitForFunction(() => document.querySelector("#bill-lines").textContent.includes("調剤時残薬調整加算ニ"));
+// 行を押すと直せる：対象を剤の中の薬に変える
+await page.click(inqLine);
+await page.waitForSelector("#inquiry-dialog[open]");
+assert.equal(await text("#inquiry-title"), "疑義照会を直す");
+await page.selectOption("#inq-target", "0-0");
+await page.keyboard.press("Control+Enter");
+await page.waitForSelector("#inquiry-dialog:not([open])", { state: "attached" });
+assert.match(await text(inqLine), /ロキソニン錠６０ｍｇ（選）/);
 await page.locator('[data-field="drug"][data-r="0"][data-i="0"]').focus();
 await page.keyboard.press("Alt+H");
 await page.waitForSelector('.rx-row [data-field="rxName"]');
@@ -413,7 +460,36 @@ await page.waitForSelector("#record-dialog[open]");
 await page.selectOption("#template-select", { label: "残薬あり" });
 await page.click("#apply-template");
 assert.match(await page.inputValue("#soap-plan"), /お薬カレンダーの利用を提案/);
+// 今の内容をテンプレートに：名前はアプリの窓で聞く（ブラウザの prompt は使わない）
+await page.click("#save-template");
+await page.waitForSelector(".ask-dialog[open] input[name=text]");
+await page.keyboard.type("e2eの型");
+await page.keyboard.press("Enter");
+await page.waitForFunction(() => /テンプレート「e2eの型」を保存しました/.test(document.querySelector(".toasts")?.textContent ?? ""));
+await page.waitForSelector(".ask-dialog", { state: "detached" });
 await page.keyboard.press("Escape");
+
+// 保存していない入力がある処方入力から移るときは、アプリの窓で確かめる（ブラウザの confirm は使わない）
+step("処方入力：保存していない入力があるまま移ると確かめる");
+await page.goto(`${BASE}/rx?patient=1`);
+await page.waitForSelector('[data-field="drug"]:focus');
+await page.keyboard.type("のるはすく錠"); // 濁点を落としても候補に出る
+await page.waitForFunction(() => /ノルバスク錠/.test(document.querySelector("#suggest:not([hidden]) li[aria-selected=true]")?.textContent ?? ""));
+await page.keyboard.press("Enter");
+await page.keyboard.type("3");
+assert.equal(await page.inputValue("#usage-0"), "1日3回毎食後"); // 3錠 → 1日3回毎食後
+await page.keyboard.press("Alt+2");
+await page.waitForSelector(".ask-dialog[open]");
+assert.match(await text(".ask-dialog"), /保存していない入力があります[\s\S]*この画面に残る[\s\S]*移る（入力を消す）/);
+await page.keyboard.press("Escape");
+await page.waitForSelector(".ask-dialog", { state: "detached" });
+assert.match(page.url(), /\/rx\?patient=1$/);
+await page.keyboard.press("Alt+2");
+await page.waitForSelector(".ask-dialog[open]");
+await Promise.all([page.waitForURL(/\/patients$/, { waitUntil: "commit" }), page.keyboard.press("Enter")]);
+await page.waitForSelector("#patients tbody tr");
+await page.goto(`${BASE}/patient?id=3`); // 次の手順は遠藤さんの薬歴から
+await page.waitForSelector(selectedCard);
 
 // 16. トレーシングレポート：薬歴から写す → 保存 → 印刷の画面
 step("トレーシングレポート（Alt+T → Alt+W で薬歴から写す → 保存 → 印刷）");
@@ -453,7 +529,7 @@ step("受付状況：受付（Alt+U）→ 処方入力 → 監査 → 投薬 →
 await page.goto(`${BASE}/board`);
 await page.waitForFunction(() => document.activeElement?.id === "reception-q");
 await page.keyboard.type("うの");
-await page.waitForSelector('#reception-suggest li[aria-selected="true"]');
+await page.waitForSelector('#reception-suggest:not([hidden]) li[aria-selected="true"]');
 await page.keyboard.press("Enter");
 await page.waitForSelector(".col-received .board-card");
 assert.match(await text(".col-received .board-card"), /宇野　健太[\s\S]*受付 \d\d:\d\d[\s\S]*0分待ち/);
@@ -461,22 +537,25 @@ assert.match(await page.evaluate(() => document.activeElement.textContent), /処
 await viaOverlay("Enter", /^\/rx\?patient=5&reception=\d+$/);
 await page.waitForSelector('[data-field="drug"]');
 await page.keyboard.type("のるばすく錠５");
-await page.waitForSelector("#suggest li[aria-selected=true]");
+await page.waitForSelector("#suggest:not([hidden]) li[aria-selected=true]");
 await page.keyboard.press("Enter");
 await page.keyboard.type("1");
 await page.keyboard.press("Enter");
 await page.keyboard.press("Enter");
-await page.keyboard.type("1日1回朝食後");
 await page.keyboard.press("Enter");
 await page.keyboard.type("14");
 await Promise.all([page.waitForURL(/\/board$/), page.keyboard.press("Control+Enter")]);
 await page.waitForSelector(".col-entered .board-card");
-await viaOverlay(() => page.click(".col-entered .board-card .btn"), /^\/inspect\?id=/);
+await viaOverlay(() => page.click(".col-entered .board-card .btn-primary"), /^\/inspect\?id=/);
 await page.waitForFunction(() => document.activeElement?.id === "scan-input");
 assert.match(await text("#check-items"), /ノルバスク錠５ｍｇ[\s\S]*総量 14錠[\s\S]*まだ読んでいません/);
 assert.equal(await page.locator("#save").isDisabled(), true);
+// 監査の画面では負担割合・公費を変えられないので、帯は文字だけ
+assert.equal(await page.locator("#band button").count(), 0);
+// デモの「違う薬」は成分の違う薬（ノルバスク＝アムロジピンに対して、アムロジピンの別の銘柄を出さない）
+assert.doesNotMatch(await page.locator("#demo-wrong button:has-text('違う薬')").innerText(), /アムロジピン|ノルバスク/);
 // 違う薬の箱 → 赤。期限切れ → 赤。正しい箱 → チェック。読み取り機は文字と Enter を送る
-await page.click("#demo-scan button:has-text('違う薬の箱')");
+await page.click("#demo-scan button:has-text('違う薬')");
 await page.waitForSelector("#scan-log li.r-wrong");
 await page.click("#demo-scan button:has-text('期限切れ')");
 await page.waitForSelector("#scan-log li.r-expired");
@@ -490,8 +569,24 @@ await page.waitForFunction(() => document.querySelector("#scan-error").textConte
 await Promise.all([page.waitForURL(/\/board$/), page.keyboard.press("Control+Enter")]);
 await page.waitForSelector(".col-audited .board-card");
 assert.match(await text(".toasts"), /調剤監査を保存しました（合わない読み取り 2件も記録）/);
-// 投薬待ちの札には、お薬手帳（事務が出して薬剤師が渡す）と「投薬した」。会計待ちには領収証・明細書と「会計した」
-assert.match(await text(".col-audited .board-card .bc-actions"), /お薬手帳[\s\S]*投薬した/);
+// 投薬待ちの札：指導記録がまだなら「投薬した」は無く、「薬歴・指導記録」でこの来局を選んだ薬歴を開く（患者一覧から探さない）
+assert.match(await text(".col-audited .board-card .bc-actions"), /お薬手帳[\s\S]*薬歴・指導記録/);
+assert.equal(await page.locator(".col-audited .board-card [data-step]").count(), 0);
+await viaOverlay(() => page.click(".col-audited .board-card .btn-primary"), /^\/patient\?id=\d+&rx=[^&]+&reception=\d+$/);
+// 受付から開くと、いちばん新しい来局ではなく、その受付の来局が選ばれている
+await page.waitForSelector('.visit-card[aria-selected="true"]');
+await page.keyboard.press("Alt+K");
+await page.waitForSelector("#record-dialog[open]");
+const [ty, tm, td] = new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" }).split("-");
+assert.match(await text("#record-dialog-title"), new RegExp(`${ty}/${tm}/${td}`)); // 今日の来局
+await page.keyboard.type("飲み忘れなし");
+await page.locator('#record-form input[name="leftover"][value="none"]').check();
+await page.locator("#soap-subjective").focus();
+// 保存すると受付状況のその札へ戻り、「投薬した」にカーソルがある
+await Promise.all([page.waitForURL(/\/board\?focus=\d+$/), page.keyboard.press("Control+Enter")]);
+await page.waitForSelector(".col-audited .board-card [data-step=handed]");
+assert.match(await text(".col-audited .board-card .bc-actions"), /薬歴[\s\S]*お薬手帳[\s\S]*投薬した/);
+await page.waitForFunction(() => document.activeElement?.dataset.step === "handed");
 await page.click(".col-audited .board-card .btn-primary");
 await page.waitForSelector(".col-handed .board-card");
 assert.match(await text(".col-handed .board-card .bc-actions"), /領収証・明細書[\s\S]*会計した/);
@@ -499,6 +594,23 @@ assert.equal(await page.evaluate(() => document.activeElement.textContent), "会
 await page.keyboard.press("Enter");
 await page.waitForSelector(".col-paid .board-card");
 assert.match(await text(".col-paid .board-card"), /入力 \d\d:\d\d → 監査 \d\d:\d\d → 投薬 \d\d:\d\d → 会計 \d\d:\d\d/);
+assert.match(await text(".col-paid .board-card .bc-actions"), /薬歴[\s\S]*お薬手帳[\s\S]*領収証・明細書/); // 会計済みからも開き直せる
+// 会計の後でも処方を直せる：1日量を変えると、札は監査待ちに戻り、受け取った額との差が出る。直す前の内容は薬歴の来局カードに残る
+await viaOverlay(() => page.click(".col-paid .board-card a:has-text('処方を直す')"), /^\/rx\?patient=5&edit=[^&]+&reception=\d+$/);
+await page.waitForFunction(() => document.activeElement?.dataset.field === "qty");
+assert.match(await text("#do-note"), /処方を直しています/);
+assert.equal(await page.inputValue('[data-field="qty"]'), "1");
+await page.keyboard.press("Control+a");
+await page.keyboard.type("2");
+await Promise.all([page.waitForURL(/\/board$/), page.keyboard.press("Control+Enter")]);
+await page.waitForSelector(".col-entered .board-card .bc-settle");
+assert.match(await text(".toasts"), /処方を直しました[\s\S]*窓口で追加 [\d,]+円を受け取る[\s\S]*調剤監査からやり直し/);
+assert.match(await text(".col-entered .board-card .bc-settle"), /受け取り済み [\d,]+円 → 追加で [\d,]+円/);
+await page.goto(`${BASE}/patient?id=5`);
+await page.waitForSelector(".visit-card .vc-revisions");
+assert.match(await text(".visit-card .vc-revisions"), /訂正[\s\S]*ノルバスク錠５ｍｇ 1日量 1 → 2[\s\S]*窓口 [\d,]+円 → [\d,]+円/);
+await page.goto(`${BASE}/board`);
+await page.waitForSelector(".col-entered .board-card");
 
 // 18-2. 公費：帯の「公費」から受給者証を足す → 処方入力の会計に公費の行が出て、管理票の累計で月の上限まで止まる → 領収証と管理票
 step("公費：受給者証を足す → 会計で月の上限まで → 領収証・管理票。薬歴の引き継ぎのチェックリスト");
@@ -601,6 +713,34 @@ await page.waitForSelector(".chart svg");
 assert.equal(await page.locator(".chart").count(), 3);
 assert.match(await text("#table"), /2026年10月\s*4\s*[\d,]+円[\s\S]*\d+\.\d%/);
 
+// 回覧板：左上の「薬」（Alt+0）。まだ確認していない投稿に印。書く（種類は←→）→ Ctrl+Enter。確認したら印が消える
+step("回覧板：Alt+0 で開く → 申し送りを書く → 確認した → 左上の印が消える");
+await page.waitForSelector("#unread-dot:not([hidden])");
+await Promise.all([page.waitForURL(/\/home$/), page.keyboard.press("Alt+0")]);
+await page.waitForSelector("#feed .post");
+assert.equal(await page.locator(".sidebar a.mark").getAttribute("aria-current"), "page");
+assert.equal(await page.locator("#feed .post.unread").count(), 2); // 広報（本部）と、佐藤さんの相談
+assert.match(await text("#hello-sub"), /まだ確認していない回覧が 2件/);
+await page.locator("#compose-body").focus();
+await page.keyboard.type("午後の方へ：分包紙を補充しました");
+await page.keyboard.press("Tab");
+await page.keyboard.press("ArrowRight"); // 申し送り → 報告
+assert.equal(await page.locator('#compose-kinds [aria-checked="true"]').innerText(), "報告");
+await page.keyboard.press("Control+Enter");
+await page.waitForSelector("#feed .post.arrive");
+assert.match(await text("#feed .post:first-child"), /デモ 薬剤師[\s\S]*報告[\s\S]*午後の方へ：分包紙を補充しました[\s\S]*デモが確認[\s\S]*1\/2[\s\S]*確認済み/);
+assert.equal(await page.inputValue("#compose-body"), "");
+for (let i = 0; i < 2; i++) {
+  await page.locator("#feed .read-btn[data-read]").first().focus();
+  await page.keyboard.press("Enter");
+}
+await page.waitForSelector("#unread-dot[hidden]", { state: "attached" });
+assert.match(await text("#hello-sub"), /ぜんぶ確認済み/);
+await page.reload();
+await page.waitForSelector("#feed .post");
+assert.equal(await page.locator("#feed .post.unread").count(), 0, "確認したことが保存されている");
+assert.equal(await page.locator("#unread-dot").isHidden(), true);
+
 // 12. ログアウトしたら API も画面も見えない
 step("ログアウト");
 await page.click("#logout");
@@ -653,17 +793,17 @@ const nextStep = async (label) => {
 step("チュートリアル：ログイン画面で自動で出る・ボタン以外では進まない・戻る・Esc");
 await page.goto(`${BASE}/login`);
 await page.waitForSelector(".tour.open");
-assert.equal(await tourCount(), "1 / 3");
+assert.equal(await tourCount(), "1 / 4");
 assert.match(await text("#tour-title"), /ようこそ/);
 assert.equal(await page.locator(".tour-hint").count(), 0, "「どこをクリックしても」の案内は出さない");
 await page.mouse.click(30, 30);           // 暗い所をクリックしても
 await page.keyboard.press("ArrowRight");  // → を押しても
 await page.waitForTimeout(400);
-assert.equal(await tourCount(), "1 / 3", "ボタン以外で進んだ");
-await nextStep("2 / 3");
+assert.equal(await tourCount(), "1 / 4", "ボタン以外で進んだ");
+await nextStep("2 / 4");
 assert.ok(await holeCovers(".demo-note"), "穴がデモ用アカウントの枠を囲っていない");
 await page.click(".tour-prev");
-assert.equal(await tourCount(), "1 / 3");
+assert.equal(await tourCount(), "1 / 4");
 await page.keyboard.press("Escape");
 await waitTourClosed();
 await page.reload();
@@ -673,11 +813,23 @@ assert.equal(await tourOpen(), false, "一度見たら、もう自動では出�
 await page.click("#tour-button");
 await page.waitForSelector(".tour.open");
 // 「次へ」にフォーカスがあるので、Enter はそのボタンを押したことになる
-for (let i = 0; i < 3; i++) await page.keyboard.press("Enter");
+for (let i = 0; i < 4; i++) await page.keyboard.press("Enter");
 await waitTourClosed();
 assert.equal((await focused()).id, "tour-button", "閉じたらフォーカスを元の場所に戻す");
+// 起動の演出をもう一度：モーションから（錠剤が入力欄の印に収まる）・PV から（スキップすると錠剤の動きからログイン画面へ）
+await page.click("#replay-motion");
+await page.waitForSelector(".intro-sheet");
+await page.waitForFunction(() => !document.querySelector(".intro-sheet, .intro-tablet") && !document.documentElement.classList.contains("login-intro"));
+await page.waitForSelector("#replay-pv:not([disabled])"); // 流している間は押せない
+await page.click("#replay-pv");
+await page.waitForSelector(".pv-first iframe");
+await page.click(".pv-skip");
+await page.waitForSelector(".intro-sheet");
+await page.waitForFunction(() => !document.querySelector(".pv-first, .intro-sheet, .intro-tablet") && !document.documentElement.classList.contains("login-intro"));
 
 step("チュートリアル：患者一覧（表示中は画面のショートカットが効かない）");
+await page.goto(`${BASE}/login?next=%2Fpatients`); // ログインした後の最初の画面は受付状況なので、患者一覧を指定して入る
+await page.waitForFunction(() => !document.querySelector(".pv-first, .intro-sheet, .intro-tablet") && !document.documentElement.classList.contains("login-intro"));
 await page.fill("#login-id", "demo");
 await page.fill("#password", "pharmacy-demo");
 await Promise.all([page.waitForURL(/\/patients$/), page.click("#login-form button[type=submit]")]);
@@ -711,6 +863,7 @@ for (const [url, ready, firstTarget] of [
   ["/tracing?patient=3", "#t-adherence", "#fill"],
   ["/messages", "#threads li", ".threads"],
   ["/stats", ".chart svg", "#charts"],
+  ["/home", "#feed .post", "#compose"],
 ]) {
   await page.goto(`${BASE}${url}`);
   await page.waitForSelector(ready);
@@ -758,7 +911,8 @@ assert.equal(await page.locator("#timeline").evaluate((el) => el.classList.conta
 // 処方の推移の並べ方：初めは折り返し（表を分けても横にはみ出さない）。「横に送る」に切り替えられる
 await page.waitForSelector("#matrix-view.folded .matrix-part");
 assert.equal(await page.locator("#matrix-view").evaluate((el) => el.scrollWidth <= el.clientWidth + 1), true);
-await page.click('#matrix-shape [data-fold="0"]');
+const layoutSaved = () => page.waitForResponse((r) => r.url().includes("/api/layouts/") && r.request().method() === "PUT");
+await Promise.all([layoutSaved(), page.click('#matrix-shape [data-fold="0"]')]); // 押した時点で保存する。保存が届く前に読み直さない
 await page.waitForFunction(() => !document.querySelector("#matrix-view").classList.contains("folded"));
 await page.reload();
 await page.waitForSelector(selectedCard);
@@ -802,6 +956,19 @@ assert.equal(await inFrame.locator(".sidebar").isHidden(), true); // 窓の中�
 await page.keyboard.press("Escape");                               // 窓の中にフォーカスがあっても Esc で閉じる
 await page.waitForSelector("dialog.overlay:not([open])", { state: "attached" });
 assert.match(page.url(), /\/patient\?id=1$/);
+// 選んだ来局の領収証・お薬手帳・調剤監査も薬歴から開き直せる
+await page.click("#to-receipt");
+await page.waitForFunction(() => document.querySelector("#overlay-title").textContent.startsWith("領収証"));
+await page.click(".overlay-close");
+await page.waitForSelector("dialog.overlay:not([open])", { state: "attached" });
+await page.click("#to-handbook");
+await page.waitForFunction(() => document.querySelector("#overlay-title").textContent.startsWith("お薬手帳"));
+await page.click(".overlay-close");
+await page.waitForSelector("dialog.overlay:not([open])", { state: "attached" });
+await page.click("#to-inspect");
+await page.waitForFunction(() => document.querySelector("#overlay-title").textContent.startsWith("調剤監査"));
+await page.click(".overlay-close");
+await page.waitForSelector("dialog.overlay:not([open])", { state: "attached" });
 await page.click("#to-tracing");
 await page.waitForFunction(() => document.querySelector("#overlay-title").textContent === "トレーシングレポート");
 await page.click(".overlay-close");
@@ -848,7 +1015,7 @@ assert.equal((await page.request.get(`${BASE}/api/patients`)).status(), 401, "6�
 await page.fill("#mfa-code", setupCode); // 設定で使った数字は使い回せない
 await page.click("#mfa-form button");
 await page.waitForSelector("#mfa-error:not([hidden])");
-await Promise.all([page.waitForURL(/\/patients$/), (async () => { await page.fill("#mfa-code", await code(1)); await page.click("#mfa-form button"); })()]);
+await Promise.all([page.waitForURL(/\/board$/), (async () => { await page.fill("#mfa-code", await code(1)); await page.click("#mfa-form button"); })()]);
 // 無効にするには、さらに次の区切りの数字が要る（同じ数字は使えない）。次の30秒になるまで待つ
 await page.waitForTimeout(30000 - (Date.now() % 30000) + 500);
 await page.goto(`${BASE}/account`);
