@@ -76,12 +76,14 @@ await page.waitForSelector(".col-paid .board-card");
 assert.match(await text(".col-paid .board-card"), /入力 \d\d:\d\d → 監査 \d\d:\d\d → 投薬 \d\d:\d\d → 会計 \d\d:\d\d/);
 assert.match(await text(".col-paid .board-card .bc-actions"), /薬歴[\s\S]*お薬手帳[\s\S]*領収証・明細書/); // 会計済みからも開き直せる
 // 会計の後でも処方を直せる：1日量を変えると、札は監査待ちに戻り、受け取った額との差が出る。直す前の内容は薬歴の来局カードに残る
-await viaOverlay(() => page.click(".col-paid .board-card a:has-text('処方を直す')"), /^\/rx\?patient=5&edit=[^&]+&reception=\d+$/);
+await viaOverlay(() => page.click(".col-paid .board-card a:has-text('処方を確認')"), /^\/rx\?patient=5&edit=[^&]+&reception=\d+$/);
 await page.waitForFunction(() => document.activeElement?.dataset.field === "qty");
-assert.match(await text("#do-note"), /処方を直しています/);
+assert.match(await text("#do-note"), /変えると「直して保存」が押せます/);
 assert.equal(await page.inputValue('[data-field="qty"]'), "1");
+assert.equal(await page.locator("#save").isDisabled(), true); // 確かめるだけなら押せない
 await page.keyboard.press("Control+a");
 await page.keyboard.type("2");
+assert.equal(await page.locator("#save").isDisabled(), false); // 変えたら押せる
 await Promise.all([page.waitForURL(/\/board$/), page.keyboard.press("Control+Enter")]);
 await page.waitForSelector(".col-entered .board-card .bc-settle");
 assert.match(await text(".toasts"), /処方を直しました[\s\S]*窓口で追加 [\d,]+円を受け取る[\s\S]*調剤監査からやり直し/);
@@ -91,3 +93,21 @@ await page.waitForSelector(".visit-card .vc-revisions");
 assert.match(await text(".visit-card .vc-revisions"), /訂正[\s\S]*ノルバスク錠５ｍｇ 1日量 1 → 2[\s\S]*窓口 [\d,]+円 → [\d,]+円/);
 await page.goto(`${BASE}/board`);
 await page.waitForSelector(".col-entered .board-card");
+// 受付の記録を消す：2回確かめる。2回目でやめれば消えない
+const askOk = () => page.click("dialog.ask-dialog[open] button[type=submit]");
+const cardCount = () => page.locator(".board-card").count();
+const before = await cardCount();
+await page.click(".col-entered .board-card .bc-delete");
+await page.waitForSelector("dialog.ask-dialog[open]");
+assert.match(await text("dialog.ask-dialog[open]"), /受付を削除しますか[\s\S]*処方・調剤監査・指導記録/);
+await askOk();
+await page.waitForFunction(() => document.querySelector("dialog.ask-dialog[open] .panel-head")?.textContent.includes("2回目"));
+await page.click("dialog.ask-dialog[open] [data-cancel]");
+await page.waitForSelector("dialog.ask-dialog[open]", { state: "detached" });
+assert.equal(await cardCount(), before);
+await page.click(".col-entered .board-card .bc-delete");
+await askOk();
+await page.waitForFunction(() => document.querySelector("dialog.ask-dialog[open] .panel-head")?.textContent.includes("2回目"));
+await askOk();
+await page.waitForFunction((n) => document.querySelectorAll(".board-card").length === n - 1, before);
+assert.match(await text(".toasts"), /受付を削除しました/);

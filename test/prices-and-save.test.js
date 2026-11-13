@@ -5,6 +5,7 @@ import { openD1 } from "../src/dev/sqlite-d1.js";
 import { pricesAt } from "../src/server/prices.js";
 import { createPrescription, validatePrescription, revisePrescription, prescriptionsOf } from "../src/server/prescriptions.js";
 import { HttpError } from "../src/server/http.js";
+import { deleteReception } from "../src/server/reception.js";
 import { getPatient, updateHandbookKind } from "../src/server/patients.js";
 import { compareRx } from "../src/server/rx-compare.js";
 import { previewPrescription } from "../src/server/rx-preview.js";
@@ -315,4 +316,25 @@ test("処方を直す：中身を差し替え、直す前を残す。在庫は�
   const r2 = await revisePrescription(db, user, saved.id, { ...body, handbook: "electronic", rps: [rp("1日1回朝食後", 14, [["610000001", "2"]])] });
   assert.equal(r2.receivedYen, r.receivedYen);
   assert.match(r2.summary.join("／"), /お薬手帳 紙 → 電子版[\s\S]*削除 1g単位の散/);
+});
+
+test("受付の記録を消す：処方・監査・指導記録・訂正の記録まで消し、在庫を戻す。消したことは閲覧記録に残る", async () => {
+  db.exec("INSERT INTO drug_stock VALUES (1, '610000001', 100000, '2026-11-13T00:00:00Z')");
+  db.exec("INSERT INTO receptions (id, patient_id, received_at, created_by) VALUES (1, 1, '2026-06-15T00:00:00Z', 1)");
+  const body = rxBody({ prescribedOn: "2026-06-15", dispensedOn: "2026-06-15", receptionId: 1 });
+  const saved = await createPrescription(db, user, body);
+  await revisePrescription(db, user, saved.id, { ...body, rps: [rp("1日1回朝食後", 14, [["610000001", "2"]])] });
+  db.exec(`INSERT INTO inspections VALUES ('i1', '${saved.id}', '2026-06-15T01:00:00Z', 1)`);
+  db.exec(`INSERT INTO inspection_scans (inspection_id, line_no, gtin, drug_code, expiry, lot, result) VALUES ('i1', 1, '14987114335002', '610000001', NULL, NULL, 'match')`);
+  db.exec(`INSERT INTO guidance_records (prescription_id, patient_id, subjective, objective, assessment, plan, leftover, drafted, created_at, created_by)
+           VALUES ('${saved.id}', 1, '変わりない', '', '', '', 'none', 0, '2026-06-15T01:00:00Z', 1)`);
+  db.exec("INSERT INTO reception_steps VALUES (1, 'audited', '2026-06-15T01:00:00Z', 1)");
+  assert.equal((await db.prepare("SELECT qty_milli FROM drug_stock").first()).qty_milli, 72000);
+
+  await deleteReception(db, user, 1);
+  for (const t of ["receptions", "reception_steps", "prescriptions", "prescription_rps", "prescription_items", "prescription_fees",
+    "prescription_revisions", "inspections", "inspection_scans", "guidance_records"]) assert.equal(await count(t), 0, t);
+  assert.equal((await db.prepare("SELECT qty_milli FROM drug_stock").first()).qty_milli, 100000); // 渡した分を戻す
+  assert.match((await db.prepare("SELECT detail FROM access_logs WHERE action = 'reception.delete'").first()).detail, /受付を削除（調剤日 2026-06-15 の処方/);
+  await assert.rejects(deleteReception(db, user, 1), (e) => e.status === 404);
 });

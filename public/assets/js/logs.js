@@ -33,6 +33,7 @@ export default async function mount() {
     "homecare.schedule": ["訪問を予定", "act-create"],
     "homecare.visit": ["訪問を記録", "act-create"],
     "reception.create": ["処方箋を受付", "act-create"],
+    "reception.delete": ["受付を削除", "act-create"],
     "reception.step": ["業務を進めた", "act-create"],
     "inspection.create": ["調剤監査を保存", "act-create"],
     "line.receive": ["つながる薬局で受信", "act-create"],

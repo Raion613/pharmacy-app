@@ -22,7 +22,7 @@ export default async function mount() {
   const editId = params.get("edit"); // 保存した処方を直すとき
   const receptionId = params.get("reception") === null ? null : Number(params.get("reception")); // 受付状況の画面から入力したとき
 
-  const screenTitle = editId ? "処方を直す" : "処方入力";
+  const screenTitle = editId ? "処方を確認" : "処方入力";
   renderShell({ page: "patients", title: screenTitle, crumbs: [{ label: "患者一覧", href: "/patients" }, { label: screenTitle }] });
 
   const { patient, notes, prescriptions, memo } = await api(`/api/patients/${patientId}?purpose=rx`);
@@ -139,10 +139,11 @@ export default async function mount() {
     });
     for (const k of revisingRx.kohi) state.kohiUse.set(k.id, { use: true, prior: String(k.priorMonthYen ?? 0) });
     const note = $("#do-note");
-    note.textContent = `${formatDate(revisingRx.dispensedOn)}の処方を直しています（直す前の内容は履歴に残ります）`;
+    note.textContent = `${formatDate(revisingRx.dispensedOn)}の処方（変えると「直して保存」が押せます。直す前の内容は履歴に残ります）`;
     note.hidden = false;
     $("#do-last").remove();
     $("#save").textContent = "直して保存";
+    $("#save").disabled = true; // 確かめるだけなら押せない。どこかを変えたら押せる
   }
 
   prescribedInput.value = state.prescribedOn;
@@ -801,6 +802,7 @@ export default async function mount() {
 
   function markDirty() {
     state.dirty = true;
+    if (revisingRx && !state.saving) $("#save").disabled = false;
   }
 
   rpsEl.addEventListener("input", (e) => {
@@ -1282,7 +1284,7 @@ export default async function mount() {
       title: "保存",
       body: `<p><kbd>Ctrl</kbd>+<kbd>Enter</kbd> でどこからでも保存できます。入力の誤りは右側に一覧で出て、その欄にカーソルが移ります。</p>
       <p>保存すると薬歴の画面に戻ります。続けて、その来局の指導記録（<kbd>Alt</kbd>+<kbd>K</kbd>）を書けます。</p>
-      <p>保存した後で間違いに気づいたら、受付状況の札か薬歴の来局の<strong>「処方を直す」</strong>で、この画面に保存した中身を入れ直して直せます（会計の後でも）。直す前の内容は消えずに残ります。</p>`,
+      <p>保存した後で間違いに気づいたら、受付状況の札か薬歴の来局の<strong>「処方を確認」</strong>で、保存した中身をこの画面で見られます。どこかを変えると「直して保存」が押せます（会計の後でも）。直す前の内容は消えずに残ります。</p>`,
     },
   ]);
   autoStartTour();

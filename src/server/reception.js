@@ -93,3 +93,42 @@ export async function receptionsOn(db, pharmacyId, date) {
     steps: Object.fromEntries((byReception.get(r.id) ?? []).map((s) => [s.step, { at: s.at, by: s.by }])),
   }));
 }
+
+// 受付の記録を消す（受け付けた処方箋と、そこから入力した処方・監査・指導記録・会話・引き継ぎの確認・訂正の記録まで）。
+// 間違えて受け付けた・別の患者で入力した、を取り消すため。画面では2回確かめてから呼ぶ。
+// 在庫は、渡した量を戻す。トレーシングレポートは医師に送った文書なので消さず、元にした来局とのつながりだけを外す。
+// 何を消したかは閲覧記録に残る
+export async function deleteReception(db, user, receptionId) {
+  const r = await db.prepare(
+    `SELECT r.patient_id, r.received_at, p.id AS rx_id, p.dispensed_on FROM receptions r LEFT JOIN prescriptions p ON p.reception_id = r.id WHERE r.id = ?1`,
+  ).bind(receptionId).first();
+  if (!r) throw new HttpError(404, "受付が見つかりません");
+  const rx = r.rx_id;
+  const statements = [];
+  if (rx !== null) {
+    const given = await db.prepare(
+      `SELECT i.drug_code, SUM(i.daily_qty_milli * p.days) AS milli FROM prescription_items i JOIN prescription_rps p ON p.id = i.rp_id
+        WHERE p.prescription_id = ?1 GROUP BY i.drug_code`,
+    ).bind(rx).all();
+    const inspections = "SELECT id FROM inspections WHERE prescription_id = ?1";
+    statements.push(
+      ...given.results.map((g) => db.prepare("UPDATE drug_stock SET qty_milli = qty_milli + ?1, updated_at = ?2 WHERE pharmacy_id = ?3 AND drug_code = ?4")
+        .bind(g.milli, nowIso(), user.pharmacy_id, g.drug_code)),
+      db.prepare(`DELETE FROM inspection_scans WHERE inspection_id IN (${inspections})`).bind(rx),
+      db.prepare(`DELETE FROM inspection_visual_checks WHERE inspection_id IN (${inspections})`).bind(rx),
+      db.prepare("DELETE FROM prescription_items WHERE rp_id IN (SELECT id FROM prescription_rps WHERE prescription_id = ?1)").bind(rx),
+      ...["inspections", "guidance_records", "conversations", "handover_checks", "prescription_kohi", "prescription_fees", "inquiries",
+        "prescription_rps", "prescription_revisions"].map((t) => db.prepare(`DELETE FROM ${t} WHERE prescription_id = ?1`).bind(rx)),
+      db.prepare("UPDATE tracing_reports SET prescription_id = NULL WHERE prescription_id = ?1").bind(rx),
+      db.prepare("DELETE FROM prescriptions WHERE id = ?1").bind(rx),
+    );
+  }
+  const jst = new Date(Date.parse(r.received_at) + 9 * 3600000).toISOString();
+  statements.push(
+    db.prepare("DELETE FROM reception_steps WHERE reception_id = ?1").bind(receptionId),
+    db.prepare("DELETE FROM receptions WHERE id = ?1").bind(receptionId),
+    auditStatement(db, user.id, "reception.delete", r.patient_id,
+      `${jst.slice(0, 10)} ${jst.slice(11, 16)} の受付を削除${rx === null ? "" : `（調剤日 ${r.dispensed_on} の処方と、その監査・指導記録も削除）`}`),
+  );
+  await db.batch(statements);
+}

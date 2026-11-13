@@ -229,7 +229,7 @@ export async function revisePrescription(db, user, prescriptionId, body) {
   const givenAfter = givenOf(bill.rps);
   const contentChanged = givenBefore.size !== givenAfter.size || [...givenAfter].some(([code, milli]) => givenBefore.get(code) !== milli);
   const summary = revisionSummary(before, rx, bill, beforePay, afterPay);
-  if (summary.length === 0) throw new HttpError(422, "直す前と同じです。変えたところがありません");
+  if (summary.length === 0) throw new HttpError(422, "直す前と同じです", [{ path: "rps", message: "直す前と同じです。変えたところがありません" }]);
 
   // 戻す段階：薬・量が変われば監査から。額だけが変われば会計から
   const reopen = contentChanged ? ["audited", "handed", "paid"].filter((s) => stepAt[s]) : stepAt.paid && afterPay !== receivedYen ? ["paid"] : [];

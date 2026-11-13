@@ -4,7 +4,7 @@
 //   投薬・会計 … この画面のボタンで足す。投薬は、札の「薬歴・指導記録」から開いた薬歴でこの来局の指導記録を書いてから
 // 待ち時間は、受付から投薬までの時間（投薬が済んでいなければ今まで）。
 // 前の日に受け付けて会計まで済んでいない受付も「前日から」で出す（二重受付の防止で受け付け直せないので、見えないと続きができない）。
-import { renderShell, api, ApiError, escapeHtml, today, toast, debounce, listNavigator } from "./app.js";
+import { renderShell, api, ApiError, escapeHtml, today, toast, debounce, listNavigator, askConfirm } from "./app.js";
 import { icon } from "./icons.js";
 import { setTour, autoStartTour, tourActive } from "./tour.js";
 import "./overlay.js"; // data-overlay のリンクは重なる窓で開く
@@ -77,7 +77,7 @@ export default async function mount() {
       paid: `<a class="btn btn-small" data-overlay href="${recordHref(r)}">薬歴</a><a class="btn btn-small" data-overlay href="/handbook?id=${r.prescriptionId}">お薬手帳</a><a class="btn btn-small" data-overlay href="/receipt?id=${r.prescriptionId}">領収証・明細書</a>`,
     }[stage];
     // 入力の後はどの段階でも処方を直せる（直す前の内容は残る。薬が変われば監査から、額が変われば会計からやり直し）
-    const revise = r.prescriptionId === null ? "" : `<a class="btn btn-small btn-ghost" data-overlay href="/rx?patient=${r.patientId}&edit=${r.prescriptionId}&reception=${r.id}">処方を直す</a>`;
+    const revise = r.prescriptionId === null ? "" : `<a class="btn btn-small btn-ghost" data-overlay href="/rx?patient=${r.patientId}&edit=${r.prescriptionId}&reception=${r.id}">処方を確認</a>`;
     // 会計の後で直して、まだ精算していない：受け取った額との差
     const diff = r.receivedYen === null || r.steps.paid ? 0 : r.payYen - r.receivedYen;
     const settle = r.receivedYen === null || r.steps.paid ? ""
@@ -85,7 +85,7 @@ export default async function mount() {
     const steps = ["entered", "audited", "handed", "paid"].filter((s) => r.steps[s])
       .map((s) => `${{ entered: "入力", audited: "監査", handed: "投薬", paid: "会計" }[s]} ${hhmm(r.steps[s].at)}`).join(" → ");
     return `<article class="board-card ${long ? "long" : ""}" data-id="${r.id}">
-    <div class="bc-head"><a href="/patient?id=${r.patientId}" data-overlay class="bc-name">${escapeHtml(r.patient.name)}</a><span class="bc-no">${escapeHtml(r.patient.patientNo)}</span></div>
+    <div class="bc-head"><a href="/patient?id=${r.patientId}" data-overlay class="bc-name">${escapeHtml(r.patient.name)}</a><span class="bc-no">${escapeHtml(r.patient.patientNo)}</span><button type="button" class="bc-delete" data-delete="${r.id}" title="この受付の記録を削除（処方・監査・指導記録も）">削除</button></div>
     <div class="bc-time">${r.carriedOver
       ? `<span>受付 ${dayOf(r.receivedAt)} ${hhmm(r.receivedAt)}</span><span class="tag tag-warn" title="前の日に受け付けて、会計まで済んでいない受付">前日から</span>`
       : `<span>受付 ${hhmm(r.receivedAt)}</span><span class="bc-wait num" title="受付から${r.steps.handed ? "投薬まで" : "今まで"}">${wait}分${r.steps.handed ? "" : "待ち"}</span>`}</div>
@@ -94,6 +94,29 @@ export default async function mount() {
     ${action || revise ? `<div class="bc-actions">${revise}${action}</div>` : ""}
   </article>`;
   }
+
+  // 受付の記録を消す：間違えて受け付けた・別の患者で入力した、を取り消す。元に戻せないので2回確かめる
+  boardEl.addEventListener("click", async (e) => {
+    const b = e.target.closest("[data-delete]");
+    if (!b) return;
+    const r = receptions.find((x) => x.id === Number(b.dataset.delete));
+    const what = r.prescriptionId === null ? "受付" : "受付と、そこから入力した処方・調剤監査・指導記録・会話の記録";
+    const first = await askConfirm({
+      title: `${r.patient.name}さんの受付を削除しますか`,
+      body: `${what}を削除します。在庫は渡した分を戻します。`,
+      ok: "削除へ進む",
+    });
+    if (!first) return;
+    const second = await askConfirm({
+      title: "本当に削除しますか（2回目の確認）",
+      body: `${r.patient.name}（${r.patient.patientNo}）の受付を削除します。削除すると元に戻せません。削除したことは閲覧記録に残ります。`,
+      ok: "削除する",
+    });
+    if (!second) return;
+    await api(`/api/receptions/${r.id}`, { method: "DELETE", body: {} });
+    toast(`${r.patient.name}さんの受付を削除しました`);
+    await load();
+  });
 
   boardEl.addEventListener("click", async (e) => {
     const b = e.target.closest("[data-step]");
@@ -219,7 +242,8 @@ export default async function mount() {
         <li><b>会計待ち</b>：領収証・明細書を出し、受け取ったら「会計した」</li>
         <li><b>会計済み</b>：薬歴・お薬手帳・領収証・明細書を開き直せます（再発行）</li>
       </ul>
-      <p>入力の後はどの列でも<strong>「処方を直す」</strong>で処方を直せます（会計の後でも）。薬・量が変われば監査待ちに、窓口の額が変われば会計待ちに戻り、受け取った額との差が札に出ます。</p>
+      <p>入力の後はどの列でも<strong>「処方を確認」</strong>で処方を見て、直せます（会計の後でも）。薬・量が変われば監査待ちに、窓口の額が変われば会計待ちに戻り、受け取った額との差が札に出ます。</p>
+      <p>間違えて受け付けたときは、札の右上の<strong>「削除」</strong>で受付の記録を消せます（入力した処方・監査・指導記録も消えます）。2回確かめてから消します。</p>
       <p>受付から${LONG_WAIT_MIN}分以上お待たせしている患者さんの札は<strong>赤</strong>になります。</p>`,
     },
     {
