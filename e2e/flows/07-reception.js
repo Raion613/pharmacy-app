@@ -76,15 +76,23 @@ await page.waitForSelector(".col-paid .board-card");
 assert.match(await text(".col-paid .board-card"), /入力 \d\d:\d\d → 監査 \d\d:\d\d → 投薬 \d\d:\d\d → 会計 \d\d:\d\d/);
 assert.match(await text(".col-paid .board-card .bc-actions"), /薬歴[\s\S]*お薬手帳[\s\S]*領収証・明細書/); // 会計済みからも開き直せる
 // 会計の後でも処方を直せる：1日量を変えると、札は監査待ちに戻り、受け取った額との差が出る。直す前の内容は薬歴の来局カードに残る
-await viaOverlay(() => page.click(".col-paid .board-card a:has-text('処方を確認')"), /^\/rx\?patient=5&edit=[^&]+&reception=\d+$/);
-await page.waitForFunction(() => document.activeElement?.dataset.field === "qty");
-assert.match(await text("#do-note"), /変えると「直して保存」が押せます/);
-assert.equal(await page.inputValue('[data-field="qty"]'), "1");
-assert.equal(await page.locator("#save").isDisabled(), true); // 確かめるだけなら押せない
-await page.keyboard.press("Control+a");
-await page.keyboard.type("2");
-assert.equal(await page.locator("#save").isDisabled(), false); // 変えたら押せる
-await Promise.all([page.waitForURL(/\/board$/), page.keyboard.press("Control+Enter")]);
+// 窓の中のまま操作する：直して保存を押すと、窓が閉じて受付状況に戻る
+await page.click(".col-paid .board-card a:has-text('処方を確認')");
+await page.waitForSelector("dialog.overlay[open] iframe.ready");
+const rxFrame = page.frameLocator("dialog.overlay[open] iframe");
+const saveBtn = rxFrame.locator("#save");
+await rxFrame.locator('[data-field="qty"]:focus').waitFor();
+assert.match(await rxFrame.locator("#do-note").innerText(), /変えると「直して保存」が押せます/);
+assert.equal(await rxFrame.locator('[data-field="qty"]').inputValue(), "1");
+assert.equal(await saveBtn.isDisabled(), true); // 確かめるだけなら押せない
+const paint = () => saveBtn.evaluate((b) => getComputedStyle(b).backgroundColor);
+const disabledPaint = await paint();
+await rxFrame.locator('[data-field="qty"]').fill("2");
+assert.equal(await saveBtn.isDisabled(), false); // 変えたら押せる
+assert.notEqual(await paint(), disabledPaint, "押せない時と押せる時で色が同じ"); // 押せない時は青で塗らない
+await saveBtn.click();
+await page.waitForSelector("dialog.overlay[open]", { state: "detached" });
+assert.match(page.url(), /\/board$/);
 await page.waitForSelector(".col-entered .board-card .bc-settle");
 assert.match(await text(".toasts"), /処方を直しました[\s\S]*窓口で追加 [\d,]+円を受け取る[\s\S]*調剤監査からやり直し/);
 assert.match(await text(".col-entered .board-card .bc-settle"), /受け取り済み [\d,]+円 → 追加で [\d,]+円/);

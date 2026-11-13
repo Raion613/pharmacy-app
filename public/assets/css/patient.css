@@ -243,7 +243,7 @@ dialog.wide { width: 780px; }
 @container (max-width: 700px) { .timeline:not(.band) .visit-card[aria-selected="true"] { grid-column: auto; } }
 
 /* メモ帳：書いたままの改行で出す。押すと書ける */
-.memo-body { white-space: pre-wrap; cursor: text; } /* 触れても色を変えない（ほかの入力欄と同じ白のまま） */
+.memo-body { white-space: pre-wrap; }
 .memo-dialog .textarea { width: 100%; }
 
 /* 処方の推移の折り返し：幅に入る来局ずつの表を、新しい表を上にして縦に並べる */
@@ -277,5 +277,7 @@ button.hc:hover, button.hc:focus-visible { border-color: var(--accent); }
 .pt-grid.editing .visit-bar { pointer-events: none; }
 
 /* 押すと入力が開く箱 */
-.pbox.box-input { cursor: pointer; }
-.pt-grid.editing .pbox.box-input { cursor: inherit; }
+/* 注意点・次回・その他は分類の行だけが押せる（行の外の余白は押しても開かない）。検査値・体重とメモ帳は中身の全体が押せて、触れると注意点の行と同じ色になる */
+.pbox:is([data-box="labs"], [data-box="memo"]) .pbox-body { cursor: pointer; transition: background-color .15s var(--ease-fade); }
+.pt-grid:not(.editing) .pbox:is([data-box="labs"], [data-box="memo"]) .pbox-body:hover { background: var(--accent-soft); }
+.pt-grid.editing .pbox .pbox-body { cursor: inherit; }

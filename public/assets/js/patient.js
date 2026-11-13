@@ -1038,7 +1038,7 @@ export default async function mount() {
     });
     form.querySelector("[data-close]").addEventListener("click", () => form.closest("dialog").close());
   }
-  // 箱を押すと、その箱の入力が開く。患者メモの箱は、押した所の分類（疾患の行なら疾患）にチェックが入った状態で開く（配置を変えている間は開かない）
+  // 患者メモの箱は、分類の行を押すとその分類にチェックが入った状態で窓が開く（行の外の余白では開かない）。検査値・体重とメモ帳は中身のどこを押しても開く（配置を変えている間は開かない）
   const BOX_INPUT = {
     cautions: (category) => openNoteDialog("cautions", category),
     next: (category) => openNoteDialog("next", category),
@@ -1049,8 +1049,10 @@ export default async function mount() {
   const ptGrid = document.querySelector("#pt-grid");
   ptGrid.addEventListener("click", (e) => {
     if (ptGrid.classList.contains("editing") || e.target.closest("button, a, input, select, textarea")) return;
-    const box = e.target.closest(".pbox[data-box]");
-    if (box && BOX_INPUT[box.dataset.box]) BOX_INPUT[box.dataset.box](e.target.closest("[data-note-row]")?.dataset.category);
+    const row = e.target.closest("[data-note-row]");
+    if (row) return BOX_INPUT[row.closest(".pbox[data-box]").dataset.box](row.dataset.category);
+    const body = e.target.closest(".pbox:is([data-box=labs], [data-box=memo]) .pbox-body");
+    if (body) BOX_INPUT[body.closest(".pbox").dataset.box]();
   });
   // 分類の行で Enter：その分類で開く
   ptGrid.addEventListener("keydown", (e) => {
@@ -1058,7 +1060,6 @@ export default async function mount() {
     e.preventDefault();
     BOX_INPUT[e.target.closest(".pbox[data-box]").dataset.box](e.target.dataset.category);
   });
-  for (const key of Object.keys(BOX_INPUT)) ptGrid.querySelector(`.pbox[data-box="${key}"]`).classList.add("box-input");
 
   // ---------- メモ帳 ----------
   const memoPad = setupMemoPad({ patientId: patient.id, memo, onSaved: renderMemo });

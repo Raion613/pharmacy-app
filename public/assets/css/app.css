@@ -154,6 +154,8 @@ kbd {
 .actionbar .btn:hover { background: #586067; }
 .actionbar .btn-primary { background: var(--accent); border-color: #2a9fd3; min-width: 120px; }
 .actionbar .btn-primary:hover { background: #0b8fc9; }
+/* 押せない主ボタンは塗らない（青のままだと押せるように見える） */
+.actionbar .btn-primary[disabled], .actionbar .btn-primary[disabled]:hover { background: #4b5157; border-color: #5e666d; color: #8f989f; cursor: default; }
 /* ボタンの中のショートカットは、ボタンの名前より目立たせない */
 .btn kbd, .panel .btn kbd, dialog .btn kbd {
   min-width: 0; margin: 0 0 0 2px; padding: 0; border: 0; background: none; color: inherit; opacity: .55; font-size: 11px;

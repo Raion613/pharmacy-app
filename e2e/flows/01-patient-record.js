@@ -85,8 +85,15 @@ assert.match(await text("#cautions"), /アレルギー[\s\S]*ペニシリン系�
 assert.match(await text('[data-category="allergy"]'), /ペニシリン系で発疹（本人申告）\n卵[\s\S]*デモ 薬剤師/);
 assert.equal(await page.locator('[data-category="allergy"] .note-text').count(), 1);
 
-step("箱を押すと、その箱の入力が開く（次に確認すること → 申し送り）");
-await page.click('[data-box="next"] .pbox-head');
+step("注意点の表の下の余白や箱の見出しを押しても窓は開かない。分類の行（申し送り）を押すと開く");
+const cautionsBody = await page.locator("#cautions").boundingBox();
+const cautionsTable = await page.locator("#cautions table").boundingBox();
+assert.ok(cautionsBody.y + cautionsBody.height - (cautionsTable.y + cautionsTable.height) > 8, "注意点の表の下に余白がある前提");
+await page.mouse.click(cautionsBody.x + cautionsBody.width / 2, cautionsBody.y + cautionsBody.height - 4);
+await page.click('[data-box="cautions"] .pbox-head');
+await page.waitForTimeout(300);
+assert.equal(await page.locator("#note-dialog[open]").count(), 0);
+await page.click('[data-category="handover"] h3');
 await page.waitForSelector("#note-dialog[open]");
 assert.equal(await text("#note-dialog-title"), "患者メモ（申し送り）");
 assert.deepEqual(await page.$$eval('#note-categories input[name="category"]', (rs) => rs.map((r) => [r.value, r.checked])), [["handover", true]]);
