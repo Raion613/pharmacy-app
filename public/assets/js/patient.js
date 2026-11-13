@@ -105,7 +105,6 @@ export default async function mount() {
   const matrixView = document.querySelector("#matrix-view");
   // 操作の帯のうち、選んでいる来局に対して働くボタン
   const visitButtons = ["#to-tracing", "#to-revise", "#to-inspect", "#to-handbook", "#to-receipt"].map((s) => document.querySelector(s));
-  const visitLabel = document.querySelector("#visit-label");
   let selectedIndex = -1;
 
   // ---------- 処方の比較 ----------
@@ -152,18 +151,17 @@ export default async function mount() {
 
   // ---------- この来局の引き継ぎ（チェックリスト） ----------
   // 全ての患者に、毎回同じことを確かめる。前回の P・処方の変化がある来局だけ、その項目を出す。
-  // S・O・A と次回の P は、指導記録を書くと付く。それ以外は薬剤師が押して付ける（押すたびに記録が残る）
+  // 全部、薬剤師が押して付ける（押すたびに記録が残る）
   const handoverEl = document.querySelector("#handover");
   function handoverItems(i) {
     const rx = prescriptions[i];
-    const record = rx.records[0];
     const items = [];
     if (latestRecordFrom(i + 1)?.record.plan) items.push({ key: "plan", label: "前回の P に応えた" });
     items.push({ key: "cautions", label: "アレルギー・併用薬を照らした" });
     if (changesOf(i).some((c) => ["add", "stop", "mod"].includes(c.kind))) items.push({ key: "change", label: "処方が変わった理由を聞いた" });
-    items.push({ key: "soa", label: "S・O・A を書いた", auto: true, done: Boolean(record && (record.subjective || record.objective || record.assessment)) });
-    items.push({ key: "nextp", label: "次回の P を書いた", auto: true, done: Boolean(record?.plan) });
-    for (const it of items) if (!it.auto) it.done = rx.checks[it.key]?.checked ?? false;
+    items.push({ key: "soa", label: "S・O・A を書いた" });
+    items.push({ key: "nextp", label: "次回の P を書いた" });
+    for (const it of items) it.done = rx.checks[it.key]?.checked ?? false;
     return items;
   }
   function renderHandover() {
@@ -173,9 +171,7 @@ export default async function mount() {
     }
     const items = handoverItems(selectedIndex);
     const done = items.filter((it) => it.done).length;
-    handoverEl.innerHTML = `<span class="hc-count ${done === items.length ? "all" : ""}">引き継ぎ ${done}/${items.length}</span>${items.map((it) => it.auto
-    ? `<span class="hc auto ${it.done ? "done" : ""}" title="指導記録を書くと付きます">${it.done ? "✓" : "・"} ${it.label}</span>`
-    : `<button type="button" class="hc ${it.done ? "done" : ""}" data-check="${it.key}" aria-pressed="${it.done}">${it.done ? "✓" : "・"} ${it.label}</button>`).join("")}`;
+    handoverEl.innerHTML = `<span class="hc-count ${done === items.length ? "all" : ""}">引き継ぎ ${done}/${items.length}</span>${items.map((it) => `<button type="button" class="hc ${it.done ? "done" : ""}" data-check="${it.key}" aria-pressed="${it.done}">${it.done ? "✓" : "・"} ${it.label}</button>`).join("")}`;
   }
   handoverEl.addEventListener("click", async (e) => {
     const b = e.target.closest("[data-check]");
@@ -471,7 +467,6 @@ export default async function mount() {
   function select(i, scroll = true) {
     selectedIndex = i;
     suggestionsFor(i);
-    visitLabel.textContent = `選んだ来局 ${formatDate(prescriptions[i].dispensedOn)}`;
     for (const b of visitButtons) b.disabled = false;
     renderHandover();
     for (const card of timeline.querySelectorAll(".visit-card")) {
@@ -1080,7 +1075,9 @@ export default async function mount() {
   const selected = () => prescriptions[selectedIndex];
   const openNewRx = () => openOverlay(`/rx?patient=${patient.id}`);
   const openTracing = () => openOverlay(tracingHref(selected()));
-  document.querySelector("#new-rx").addEventListener("click", openNewRx);
+  const newRx = document.querySelector("#new-rx");
+  newRx.innerHTML = icon("plus", 20);
+  newRx.addEventListener("click", openNewRx);
   document.querySelector("#to-tracing").addEventListener("click", openTracing);
   // 済んだ来局の見直し・再発行（出すのは受付状況の各段階から。受付状況は前日より前の会計済みを出さないので、ここから全部の来局に届く）
   // 保存した処方を直す（会計の後でも。直す前の内容は履歴に残る）
@@ -1225,8 +1222,7 @@ export default async function mount() {
       title: "この来局の引き継ぎ",
       body: `<p>経過で選んでいる来局について、毎回同じことを確かめる<strong>チェックリスト</strong>です。</p>
       <ul>
-        <li>押して付ける：前回の P に応えた（前回の P があるとき）・アレルギー・併用薬を照らした・処方が変わった理由を聞いた（変わったとき）</li>
-        <li>指導記録を書くと付く：S・O・A を書いた・次回の P を書いた</li>
+        <li>前回の P に応えた（前回の P があるとき）・アレルギー・併用薬を照らした・処方が変わった理由を聞いた（変わったとき）・S・O・A を書いた・次回の P を書いた。どれも押して付けます</li>
       </ul>
       <p>右に<b>トレーシングレポート</b> <kbd>Alt</kbd>+<kbd>T</kbd>。<b>処方を確認</b> <kbd>Alt</kbd>+<kbd>U</kbd> で、選んだ来局の処方を見て、会計の後でも直せます（直す前の内容は来局カードに「訂正」として残ります。薬・量が変われば調剤監査から、窓口の額が変われば会計からやり直し）。選んだ来局の<b>調剤監査・お薬手帳・領収証・明細書</b>もここから開き直せます（領収証の再発行、済んだ監査の記録の確認）。前回の処方を写すのは処方入力の画面（<kbd>Alt</kbd>+<kbd>D</kbd>）からです。</p>`,
     },

@@ -546,7 +546,7 @@ export async function prescriptionsOf(db, patientId) {
 }
 
 // 引き継ぎの確認を付ける・外す（行を足す）
-export const HANDOVER_ITEMS = { plan: "前回の申し送り（P）に応えた", cautions: "アレルギー・副作用歴・併用薬を照らした", change: "処方が変わった理由を聞いた" };
+export const HANDOVER_ITEMS = { plan: "前回の申し送り（P）に応えた", cautions: "アレルギー・副作用歴・併用薬を照らした", change: "処方が変わった理由を聞いた", soa: "S・O・A を書いた", nextp: "次回の P を書いた" };
 export async function checkHandover(db, user, prescriptionId, body) {
   if (!Object.hasOwn(HANDOVER_ITEMS, body.item ?? "") || typeof body.checked !== "boolean") {
     throw new HttpError(422, "入力に誤りがあります", [{ path: "item", message: "確認の項目が不正です" }]);

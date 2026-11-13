@@ -403,7 +403,7 @@ CREATE INDEX idx_prescription_revisions_rx ON prescription_revisions(prescriptio
 CREATE TABLE handover_checks (
   id              INTEGER PRIMARY KEY,
   prescription_id TEXT NOT NULL REFERENCES prescriptions(id),
-  item            TEXT NOT NULL CHECK (item IN ('plan', 'cautions', 'change')),
+  item            TEXT NOT NULL CHECK (item IN ('plan', 'cautions', 'change', 'soa', 'nextp')),
   checked         INTEGER NOT NULL CHECK (checked IN (0, 1)),
   at              TEXT NOT NULL,
   user_id         INTEGER NOT NULL REFERENCES users(id)

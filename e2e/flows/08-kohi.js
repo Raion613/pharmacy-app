@@ -37,11 +37,14 @@ assert.match(await text("#bill-charge"), /^50円$/);
 await Promise.all([page.waitForURL(/\/patient\?id=2/), page.keyboard.press("Control+Enter")]);
 await page.waitForSelector(selectedCard);
 assert.match(await text(selectedCard), /窓口 50円/);
-// 引き継ぎのチェックリスト：押して付ける項目と、指導記録を書くと付く項目
+// 引き継ぎのチェックリスト：どの項目も押して付ける
 assert.match(await text("#handover"), /引き継ぎ 0\/\d/);
 await page.click('#handover [data-check="cautions"]');
 await page.waitForSelector('#handover [data-check="cautions"][aria-pressed="true"]');
 assert.match(await text("#handover"), /引き継ぎ 1\/\d/);
+await page.click('#handover [data-check="soa"]');
+await page.waitForSelector('#handover [data-check="soa"][aria-pressed="true"]');
+assert.match(await text("#handover"), /引き継ぎ 2\/\d/);
 const rxId2 = await page.evaluate(async () => (await (await fetch("/api/patients/2")).json()).prescriptions[0].id);
 await page.goto(`${BASE}/receipt?id=${rxId2}`);
 await page.waitForSelector(".kanrihyo");

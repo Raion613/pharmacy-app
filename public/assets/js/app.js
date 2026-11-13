@@ -469,7 +469,8 @@ export function debounce(fn, ms) {
   let t;
   return (...args) => {
     clearTimeout(t);
-    t = setTimeout(() => fn(...args), ms);
+    const gen = pageGen;
+    t = setTimeout(() => { if (gen === pageGen) fn(...args); }, ms); // 待つ間に画面を移ったら動かさない（消えた欄に書きに行く）
   };
 }
 

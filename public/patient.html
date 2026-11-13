@@ -22,7 +22,7 @@
     <button type="button" class="btn btn-quiet" id="layout-reset" hidden>初期の配置</button>
     <button type="button" class="btn btn-quiet" id="to-logs">閲覧記録</button>
     <span class="spacer"></span>
-    <button type="button" class="btn btn-primary" id="new-rx">新規処方 <kbd>Alt+N</kbd></button>
+    <button type="button" class="btn btn-primary btn-icon" id="new-rx" title="新規処方（Alt+N）" aria-label="新規処方"></button>
   </div>
   <main class="pt-grid" id="pt-grid">
     <section class="pbox" data-box="patient">
@@ -74,7 +74,6 @@
         </div>
       </div>
       <div class="visit-bar" id="visit-bar">
-        <span class="visit-label" id="visit-label">選んだ来局</span>
         <div class="handover" id="handover" aria-label="この来局の引き継ぎ"></div>
         <span class="spacer"></span>
         <button type="button" class="btn" id="to-revise" title="選んだ来局の処方を見る・直す（会計の後でも。直す前の内容は残ります）">処方を確認 <kbd>Alt+U</kbd></button>

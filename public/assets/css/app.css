@@ -147,6 +147,7 @@ kbd {
 @media (prefers-reduced-motion: reduce) { .btn, .btn:active { transform: none; transition: background-color .12s var(--ease-fade); } }
 .btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 700; }
 .btn-primary:hover { background: var(--accent-strong); }
+.btn-icon { width: 32px; padding: 0; }
 .btn-primary[disabled] { background: #8aa9b8; border-color: #8aa9b8; cursor: default; }
 .btn-ghost { border-color: transparent; background: transparent; color: var(--accent); }
 .btn-ghost:hover { background: var(--accent-soft); }

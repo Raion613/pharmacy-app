@@ -258,7 +258,6 @@ dialog.wide { width: 780px; }
 /* 経過の見出しと、選んだ来局への操作の帯。スクロールしても経過の箱の上に残る */
 .history-sticky { position: sticky; top: -10px; z-index: 3; background: #fff; border-radius: var(--radius) var(--radius) 0 0; }
 .visit-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px 10px; background: var(--accent-soft); border-bottom: 1px solid var(--accent-line); }
-.visit-bar .visit-label { font-weight: 700; color: var(--accent-strong); margin-right: 4px; white-space: nowrap; }
 .visit-bar .btn { height: 30px; padding: 0 10px; font-size: 13px; }
 /* この来局の引き継ぎ：付いた項目は塗り、まだの項目は白。指導記録で付く項目は押せない */
 .handover { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
@@ -268,8 +267,6 @@ dialog.wide { width: 780px; }
 button.hc { cursor: pointer; }
 button.hc:hover, button.hc:focus-visible { border-color: var(--accent); }
 .hc.done { background: var(--accent); border-color: var(--accent); color: #fff; }
-.hc.auto { border-style: dashed; color: var(--sub); }
-.hc.auto.done { border-style: solid; background: var(--accent-soft); color: var(--accent-strong); border-color: var(--accent-line); }
 .visit-bar .btn[disabled] { opacity: .45; cursor: default; }
 /* 処方を直した記録 */
 .vc-revisions { list-style: none; margin: 0; padding: 4px 12px; display: grid; gap: 2px; font-size: 12px; border-bottom: 1px solid var(--border); }
