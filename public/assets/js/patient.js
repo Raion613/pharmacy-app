@@ -1076,7 +1076,7 @@ export default async function mount() {
   const openNewRx = () => openOverlay(`/rx?patient=${patient.id}`);
   const openTracing = () => openOverlay(tracingHref(selected()));
   const newRx = document.querySelector("#new-rx");
-  newRx.innerHTML = icon("plus", 20);
+  newRx.insertAdjacentHTML("afterbegin", icon("plus", 16));
   newRx.addEventListener("click", openNewRx);
   document.querySelector("#to-tracing").addEventListener("click", openTracing);
   // 済んだ来局の見直し・再発行（出すのは受付状況の各段階から。受付状況は前日より前の会計済みを出さないので、ここから全部の来局に届く）
