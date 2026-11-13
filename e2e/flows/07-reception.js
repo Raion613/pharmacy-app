@@ -62,8 +62,18 @@ assert.match(await text("#record-dialog-title"), new RegExp(`${ty}/${tm}/${td}`)
 await page.keyboard.type("飲み忘れなし");
 await page.locator('#record-form input[name="leftover"][value="none"]').check();
 await page.locator("#soap-subjective").focus();
-// 保存すると受付状況のその札へ戻り、「投薬した」にカーソルがある
-await Promise.all([page.waitForURL(/\/board\?focus=\d+$/), page.keyboard.press("Control+Enter")]);
+// 保存するとカーソルが下の操作バーの引き継ぎへ。Enter で付けるたびに次の項目、全部付くと右下の「確定」
+await page.keyboard.press("Control+Enter");
+await page.waitForFunction(() => document.activeElement?.dataset.check !== undefined);
+assert.equal(await page.locator("#handover-done").isDisabled(), true);
+const checkCount = await page.locator("#handover [data-check]").count();
+for (let k = 0; k < checkCount; k++) {
+  await page.keyboard.press("Enter");
+  await page.waitForSelector(`#handover [data-check][aria-pressed="true"] >> nth=${k}`);
+}
+await page.waitForFunction(() => document.activeElement?.id === "handover-done");
+// 確定で受付状況のその札へ戻り、「投薬した」にカーソルがある
+await Promise.all([page.waitForURL(/\/board\?focus=\d+$/), page.keyboard.press("Enter")]);
 await page.waitForSelector(".col-audited .board-card [data-step=handed]");
 assert.match(await text(".col-audited .board-card .bc-actions"), /薬歴[\s\S]*お薬手帳[\s\S]*投薬した/);
 await page.waitForFunction(() => document.activeElement?.dataset.step === "handed");
@@ -92,7 +102,7 @@ assert.equal(await saveBtn.isDisabled(), false); // 変えたら押せる
 assert.notEqual(await paint(), disabledPaint, "押せない時と押せる時で色が同じ"); // 押せない時は青で塗らない
 await saveBtn.click();
 await page.waitForSelector("dialog.overlay[open]", { state: "detached" });
-assert.match(page.url(), /\/board$/);
+await page.waitForURL(/\/board$/); // 窓を閉じた後、画面を開き直すところで URL が置き換わる
 await page.waitForSelector(".col-entered .board-card .bc-settle");
 assert.match(await text(".toasts"), /処方を直しました[\s\S]*窓口で追加 [\d,]+円を受け取る[\s\S]*調剤監査からやり直し/);
 assert.match(await text(".col-entered .board-card .bc-settle"), /受け取り済み [\d,]+円 → 追加で [\d,]+円/);

@@ -278,3 +278,9 @@ button.hc:hover, button.hc:focus-visible { border-color: var(--accent); }
 .pbox:is([data-box="labs"], [data-box="memo"]) .pbox-body { cursor: pointer; transition: background-color .15s var(--ease-fade); }
 .pt-grid:not(.editing) .pbox:is([data-box="labs"], [data-box="memo"]) .pbox-body:hover { background: var(--accent-soft); }
 .pt-grid.editing .pbox .pbox-body { cursor: inherit; }
+/* 画面の下の操作バーに置いた引き継ぎのチェック（濃い帯の上） */
+.handover-bar .hc-count { color: #dfe4e8; }
+.handover-bar .hc-count.all { color: #fff; }
+.handover-bar .hc { background: transparent; border-color: #6c747b; color: #dfe4e8; }
+.handover-bar button.hc:hover, .handover-bar button.hc:focus-visible { border-color: #fff; color: #fff; }
+.handover-bar .hc.done { background: var(--accent); border-color: var(--accent); color: #fff; }

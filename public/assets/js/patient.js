@@ -164,13 +164,16 @@ export default async function mount() {
     for (const it of items) it.done = rx.checks[it.key]?.checked ?? false;
     return items;
   }
+  // 右下の「確定」：受付状況の札から開いた来局で、全部付いたら押せる。押すとその札へ戻る
+  const handoverBar = document.querySelector("#handover-bar");
+  const handoverDone = document.querySelector("#handover-done");
+  handoverDone.hidden = !receptionId;
   function renderHandover() {
-    if (selectedIndex < 0) {
-      handoverEl.innerHTML = "";
-      return;
-    }
+    handoverBar.hidden = selectedIndex < 0;
+    if (selectedIndex < 0) return;
     const items = handoverItems(selectedIndex);
     const done = items.filter((it) => it.done).length;
+    handoverDone.disabled = done !== items.length || prescriptions[selectedIndex].id !== visitId;
     handoverEl.innerHTML = `<span class="hc-count ${done === items.length ? "all" : ""}">引き継ぎ ${done}/${items.length}</span>${items.map((it) => `<button type="button" class="hc ${it.done ? "done" : ""}" data-check="${it.key}" aria-pressed="${it.done}">${it.done ? "✓" : "・"} ${it.label}</button>`).join("")}`;
   }
   handoverEl.addEventListener("click", async (e) => {
@@ -180,8 +183,18 @@ export default async function mount() {
     const checked = b.getAttribute("aria-pressed") !== "true";
     rx.checks[b.dataset.check] = await api(`/api/prescriptions/${rx.id}/checks`, { method: "POST", body: { item: b.dataset.check, checked } });
     renderHandover();
-    handoverEl.querySelector(`[data-check="${b.dataset.check}"]`).focus();
+    // 付けたら次の付いていない項目へ。全部付いたら「確定」へ
+    const next = handoverEl.querySelector('[data-check][aria-pressed="false"]');
+    (checked && next ? next : checked && !handoverDone.hidden && !handoverDone.disabled ? handoverDone : handoverEl.querySelector(`[data-check="${b.dataset.check}"]`)).focus();
   });
+  handoverDone.addEventListener("click", () => {
+    toastNext("引き継ぎを確定しました");
+    leave(`/board?focus=${receptionId}`, { refresh: true });
+  });
+  // 指導記録を保存した後：カーソルを引き継ぎの付いていない項目（全部付いていれば確定）へ
+  function focusHandover() {
+    (handoverEl.querySelector('[data-check][aria-pressed="false"]') ?? handoverDone).focus();
+  }
 
   function changesHtml(changes) {
     return changes.map((c) => `<span class="change ${c.kind}">${CHANGE_LABEL[c.kind] ? `<b>${CHANGE_LABEL[c.kind]}</b>` : ""}${
@@ -920,16 +933,12 @@ export default async function mount() {
         renderBand();
       }
       recordDialog.close();
-      if (receptionId && rx.id === visitId) {
-        toastNext("指導記録を保存しました");
-        leave(`/board?focus=${receptionId}`, { refresh: true });
-        return;
-      }
       renderTimeline();
       renderSummary();
       select(i);
       timeline.querySelector(`.record[data-id="${record.id}"]`).classList.add("new");
-      timeline.focus({ preventScroll: true });
+      if (receptionId && rx.id === visitId) focusHandover();
+      else timeline.focus({ preventScroll: true });
       toast(`指導記録を保存しました${picked.length ? `（患者メモに ${picked.length}件書き足しました）` : ""}`);
     });
   });
@@ -1144,7 +1153,8 @@ export default async function mount() {
         <div><b>いちばん上</b>戻る（患者一覧へ）・画面の名前・患者の氏名</div>
         <div><b>青い帯</b>右端に新規処方。左に閲覧記録と配置を変える</div>
         <div><b>箱</b>患者・注意点・次に確認すること・今の処方・メモ帳・検査値、処方の推移、経過。書き足すときは箱を押す</div>
-        <div><b>経過の帯</b>選んだ来局の引き継ぎのチェックリストと、指導記録・トレーシングレポート</div>
+        <div><b>経過の帯</b>選んだ来局の処方の確認・調剤監査・お薬手帳・領収証・トレーシングレポート</div>
+        <div><b>いちばん下</b>選んだ来局の引き継ぎのチェックと、右下の確定</div>
       </div>`,
     },
     {
@@ -1218,13 +1228,18 @@ export default async function mount() {
       <p>処方入力や領収証などは、この画面の上に<strong>重なる窓</strong>で開きます。<kbd>Esc</kbd>・右上の ×・ブラウザの「戻る」のどれでも閉じて、この画面の同じ場所に戻ります。</p>`,
     },
     {
-      target: "#visit-bar",
+      target: "#handover-bar",
       title: "この来局の引き継ぎ",
-      body: `<p>経過で選んでいる来局について、毎回同じことを確かめる<strong>チェックリスト</strong>です。</p>
+      body: `<p>経過で選んでいる来局について、毎回同じことを確かめる<strong>チェック</strong>です。</p>
       <ul>
         <li>前回の P に応えた（前回の P があるとき）・アレルギー・併用薬を照らした・処方が変わった理由を聞いた（変わったとき）・S・O・A を書いた・次回の P を書いた。どれも押して付けます</li>
       </ul>
-      <p>右に<b>トレーシングレポート</b> <kbd>Alt</kbd>+<kbd>T</kbd>。<b>処方を確認</b> <kbd>Alt</kbd>+<kbd>U</kbd> で、選んだ来局の処方を見て、会計の後でも直せます（直す前の内容は来局カードに「訂正」として残ります。薬・量が変われば調剤監査から、窓口の額が変われば会計からやり直し）。選んだ来局の<b>調剤監査・お薬手帳・領収証・明細書</b>もここから開き直せます（領収証の再発行、済んだ監査の記録の確認）。前回の処方を写すのは処方入力の画面（<kbd>Alt</kbd>+<kbd>D</kbd>）からです。</p>`,
+      <p>受付状況の札から開いたときは、全部付けると右下の<strong>確定</strong>が押せます。押すと受付状況のその札へ戻ります。</p>`,
+    },
+    {
+      target: "#visit-bar",
+      title: "選んだ来局の操作",
+      body: `<p><b>トレーシングレポート</b> <kbd>Alt</kbd>+<kbd>T</kbd>。<b>処方を確認</b> <kbd>Alt</kbd>+<kbd>U</kbd> で、選んだ来局の処方を見て、会計の後でも直せます（直す前の内容は来局カードに「訂正」として残ります。薬・量が変われば調剤監査から、窓口の額が変われば会計からやり直し）。選んだ来局の<b>調剤監査・お薬手帳・領収証・明細書</b>もここから開き直せます（領収証の再発行、済んだ監査の記録の確認）。前回の処方を写すのは処方入力の画面（<kbd>Alt</kbd>+<kbd>D</kbd>）からです。</p>`,
     },
 
 
