@@ -5,16 +5,18 @@
 // 報告書は処方医宛。ケアマネジャーがいる患者には、写しの宛先を添える（介護保険の居宅療養管理指導では情報提供先になる）。
 import { api, escapeHtml, formatDate, birthText, SEX } from "./app.js";
 
-const q = new URLSearchParams(location.search);
-const sheet = document.querySelector("#sheet");
-const kind = q.get("kind");
-const multiline = (s) => escapeHtml(s).replaceAll("\n", "<br>");
+// 画面を開くたびに router.js が呼ぶ（画面は中身だけを差し替えるので、画面の処理はこの関数の中に置く）
+export default async function mount() {
+  const q = new URLSearchParams(location.search);
+  const sheet = document.querySelector("#sheet");
+  const kind = q.get("kind");
+  const multiline = (s) => escapeHtml(s).replaceAll("\n", "<br>");
 
-if (kind === "plan") {
-  const d = await api(`/api/homecare/patients/${q.get("patient")}`);
-  const p = d.plans[0];
-  document.querySelector("#print-title").textContent = "薬学的管理指導計画書";
-  sheet.innerHTML = `<section class="home-sheet">
+  if (kind === "plan") {
+    const d = await api(`/api/homecare/patients/${q.get("patient")}`);
+    const p = d.plans[0];
+    document.querySelector("#print-title").textContent = "薬学的管理指導計画書";
+    sheet.innerHTML = `<section class="home-sheet">
     <h1>薬学的管理指導計画書</h1>
     <table>
       <tr><th>患者</th><td>${escapeHtml(d.patient.name)}（${escapeHtml(d.patient.kana)}）${birthText(d.patient.birthDate)}・${SEX[d.patient.sex]}</td><th>作成日</th><td>${formatDate(p.madeOn)}</td></tr>
@@ -28,14 +30,14 @@ if (kind === "plan") {
       <tr><th>実施すべき指導の内容</th></tr><tr><td>${multiline(p.guidance)}</td></tr>
     </table>
   </section>`;
-} else {
-  const path = kind === "report"
-    ? `/api/homecare/reports?schedule=${q.get("schedule")}`
-    : `/api/homecare/reports?month=${q.get("month")}&facility=${q.get("facility")}`;
-  const { reports, pharmacy } = await api(path);
-  document.querySelector("#print-title").textContent = "訪問薬剤管理指導 報告書";
-  document.querySelector("#print-count").textContent = `${reports.length}件`;
-  sheet.innerHTML = reports.length ? reports.map((r) => `<section class="home-sheet">
+  } else {
+    const path = kind === "report"
+      ? `/api/homecare/reports?schedule=${q.get("schedule")}`
+      : `/api/homecare/reports?month=${q.get("month")}&facility=${q.get("facility")}`;
+    const { reports, pharmacy } = await api(path);
+    document.querySelector("#print-title").textContent = "訪問薬剤管理指導 報告書";
+    document.querySelector("#print-count").textContent = `${reports.length}件`;
+    sheet.innerHTML = reports.length ? reports.map((r) => `<section class="home-sheet">
     <p class="meta to">${escapeHtml(r.institution)}　${escapeHtml(r.doctor)}　先生　御侍史${r.careManager ? `<br><small>写し：介護支援専門員 ${escapeHtml(r.careManager)} 様</small>` : ""}</p>
     <h1>訪問薬剤管理指導 報告書</h1>
     <table>
@@ -46,6 +48,7 @@ if (kind === "plan") {
       ${r.record.shared ? `<tr><th>他職種と共有した内容</th></tr><tr><td>${multiline(r.record.shared)}</td></tr>` : ""}</table>
     <div class="issuer"><div>${escapeHtml(pharmacy.name)}<br>${escapeHtml(pharmacy.address)}<br>電話 ${escapeHtml(pharmacy.phone)}</div></div>
   </section>`).join("") : '<section><p class="empty">この条件で記録した訪問はありません。</p></section>';
-}
+  }
 
-document.querySelector("#print").addEventListener("click", () => window.print());
+  document.querySelector("#print").addEventListener("click", () => window.print());
+}

@@ -9,7 +9,8 @@
 <link rel="stylesheet" href="/assets/css/app.css">
 <link rel="stylesheet" href="/assets/css/tour.css">
 <link rel="stylesheet" href="/assets/css/features.css">
-<script type="module" src="/assets/js/inspect.js"></script>
+<link rel="modulepreload" href="/assets/js/inspect.js">
+<script type="module" src="/assets/js/router.js" data-page="/assets/js/inspect.js"></script>
 </head>
 <body class="app">
 <nav class="sidebar"></nav>
@@ -31,7 +32,9 @@
           <span class="error-text" id="scan-error"></span>
         </div>
         <div class="demo-scan" id="demo-scan">
-          <span class="hint">デモ：</span>
+          <div class="demo-title">デモ：読み取り機の代わりに、箱のバーコードの中身を入れて読む</div>
+          <div class="demo-row"><span class="hint">処方の薬</span><span id="demo-same"></span></div>
+          <div class="demo-row"><span class="hint">間違い</span><span id="demo-wrong"></span></div>
         </div>
         <ol class="scan-log" id="scan-log"></ol>
         <section class="past" id="past" hidden></section>
@@ -39,9 +42,7 @@
     </section>
   </main>
   <footer class="actionbar">
-    <div class="keys"><span>読み取り機は <kbd>Enter</kbd> まで送ってきます</span><span><kbd>Ctrl</kbd>+<kbd>Enter</kbd>監査を保存</span></div>
     <span class="spacer"></span>
-    <a class="btn" id="back">戻る</a>
     <button type="button" class="btn btn-primary" id="save" disabled>監査を保存 <kbd>Ctrl+Enter</kbd></button>
   </footer>
 </div>

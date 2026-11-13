@@ -65,6 +65,9 @@ export function validatePrescription(body, today = todayJst()) {
       if (shortReason.length > 200) err(`${p}.shortReason`, "理由は200文字までです");
       if (shortReason && q.kind !== "leftover") err(`${p}.shortReason`, "6日分以下の残薬調整の理由は、残薬調整の照会にだけ書けます");
       inquiries.push({
+        id: Number.isInteger(q.id) ? q.id : null, // 直すとき：前からある照会（記録した日時と人を残す）
+        rpNo: q.rpNo ?? null,
+        drugCode: q.drugCode ?? null,
         kind: q.kind,
         content: text(q.content, `${p}.content`, "問い合わせた内容", 400),
         answer: text(q.answer, `${p}.answer`, "処方医の回答", 400),
@@ -73,7 +76,8 @@ export function validatePrescription(body, today = todayJst()) {
       });
     });
   }
-  const changedBy = (kind) => inquiries.some((q) => q.changed && (kind === null || q.kind === kind));
+  // 処方が変わった照会。rpNo を渡すと、その剤についての照会（か処方全体の照会）だけ
+  const changedBy = (kind, rpNo = null) => inquiries.some((q) => q.changed && (kind === null || q.kind === kind) && (rpNo === null || q.rpNo === null || q.rpNo === rpNo));
 
   const rps = [];
   if (!Array.isArray(body.rps) || body.rps.length === 0) err("rps", "薬が1つも入力されていません");
@@ -96,7 +100,7 @@ export function validatePrescription(body, today = todayJst()) {
         if (days > rxDays) err(`${p}.days`, "処方箋の日数より多くは調剤できません");
         else if (days < rxDays && !DAYS_CHANGES.includes(daysChange)) err(`${p}.daysChange`, "日数を減らした根拠（照会・処方箋の指示）を選んでください");
         else if (days === rxDays && daysChange !== null) err(`${p}.daysChange`, "日数を変えていないのに、変えた根拠が入っています");
-        else if (daysChange === "inquiry" && !changedBy("leftover")) err(`${p}.daysChange`, "残薬調整の疑義照会（処方の変更あり）を入力してください");
+        else if (daysChange === "inquiry" && !changedBy("leftover", i + 1)) err(`${p}.daysChange`, "この剤の残薬調整の疑義照会（処方の変更あり）を入力してください");
       }
 
       const items = [];
@@ -116,7 +120,7 @@ export function validatePrescription(body, today = todayJst()) {
           let rx = null;
           if (it.rx !== null && it.rx !== undefined) {
             if (!CHANGE_REASONS.includes(it.rx.reason)) err(`${q}.rx.reason`, "処方箋と違う理由を選んでください");
-            else if (it.rx.reason === "inquiry" && !changedBy(null)) err(`${q}.rx.reason`, "処方が変わった疑義照会を入力してください");
+            else if (it.rx.reason === "inquiry" && !changedBy(null, i + 1)) err(`${q}.rx.reason`, "処方が変わった疑義照会を入力してください");
             rx = {
               name: text(it.rx.name, `${q}.rx.name`, "処方箋に書かれた薬", 100),
               dailyQtyMilli: quantity(it.rx.dailyQty, `${q}.rx.dailyQty`, err),
@@ -129,6 +133,17 @@ export function validatePrescription(body, today = todayJst()) {
       rps.push({ usage, days, rxDays, daysChange, items });
     });
   }
+
+  // 照会の対象（剤・薬）が、送られた処方の中にあるか
+  inquiries.forEach((q, n) => {
+    if (q.rpNo === null) {
+      if (q.drugCode !== null) err(`inquiries.${n}.target`, "薬を指すときは剤も指してください");
+      return;
+    }
+    const rp = Number.isInteger(q.rpNo) ? rps[q.rpNo - 1] : undefined;
+    if (!rp) err(`inquiries.${n}.target`, "照会の対象の剤がありません");
+    else if (q.drugCode !== null && !rp.items.some((it) => it.drugCode === q.drugCode)) err(`inquiries.${n}.target`, `照会の対象の薬が Rp${q.rpNo} にありません`);
+  });
 
   if (errors.length > 0) throw new HttpError(422, "入力に誤りがあります", errors);
   return { patientId: body.patientId, prescribedOn, dispensedOn, handbook: body.handbook, rps, inquiries, receptionId, kohi: body.kohi };
@@ -167,14 +182,120 @@ export async function createPrescription(db, user, body) {
        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)`,
     ).bind(id, rx.patientId, rx.prescribedOn, rx.dispensedOn, rx.handbook, bill.drugPoints, bill.totalPoints, bill.burdenPercent,
       bill.copayYen, bill.special?.yen ?? null, bill.special?.method ?? null, rx.receptionId, now, user.id, bill.burdenReason),
-    ...bill.kohi.steps.map((s, i) => db.prepare(
-      "INSERT INTO prescription_kohi (prescription_id, order_no, kohi_id, prior_month_yen, pay_yen) VALUES (?1, ?2, ?3, ?4, ?5)",
-    ).bind(id, i + 1, s.id, s.priorMonthYen, s.payYen)),
+    handbookStatement(db, rx),
+    ...childStatements(db, id, rx, bill, user, now),
+    // 在庫から、渡した量（1日量 × 調剤した日数）を引く
+    ...stockStatements(db, user, now, givenOf(bill.rps)),
   ];
   // 受付から入力したときは、業務の進み具合に「入力済み」を足す
   if (rx.receptionId !== null) {
     statements.push(db.prepare("INSERT INTO reception_steps (reception_id, step, at, user_id) VALUES (?1, 'entered', ?2, ?3)").bind(rx.receptionId, now, user.id));
   }
+  statements.push(auditStatement(db, user.id, "prescription.create", rx.patientId,
+    `調剤日 ${rx.dispensedOn} / 合計 ${bill.totalPoints}点（薬剤料 ${bill.drugPoints}点）/ 一部負担金 ${bill.copayYen}円${
+      bill.kohi.steps.length ? ` / 公費の後 ${bill.kohi.patientPayYen}円` : ""}${bill.special ? ` / 特別の料金 ${bill.special.yen}円` : ""}`));
+
+  await db.batch(statements);
+  return {
+    id, drugPoints: bill.drugPoints, totalPoints: bill.totalPoints, copayYen: bill.copayYen, patientPayYen: bill.kohi.patientPayYen,
+    specialFeeYen: bill.special?.yen ?? null,
+  };
+}
+
+// 保存した処方を直す（会計の後でも）。処方の ID はそのまま、中身を今の入力に差し替え、直す前の処方を prescription_revisions に丸ごと残す。
+//   渡す薬・量が変わったら、受付の段階を「入力済み」に戻す（監査から やり直す。前の監査の記録は残る）
+//   会計の後で窓口の額が変わったら、会計済みを外す（受け取った額との差を、追加で受け取るか返す）
+//   在庫は、直す前に渡した量を戻し、直した後の量を引く。受付・患者は変えられない
+export async function revisePrescription(db, user, prescriptionId, body) {
+  const row = await db.prepare("SELECT patient_id, reception_id FROM prescriptions WHERE id = ?1").bind(prescriptionId).first();
+  if (!row) throw new HttpError(404, "処方が見つかりません");
+  if (body.patientId !== row.patient_id) throw new HttpError(422, "入力に誤りがあります", [{ path: "patientId", message: "この処方の患者ではありません" }]);
+  const rx = validatePrescription({ ...body, receptionId: row.reception_id });
+  const before = (await prescriptionsOf(db, row.patient_id)).find((p) => p.id === prescriptionId);
+  const bill = await billPrescription(db, rx, prescriptionId);
+
+  const [steps, lastRevision, oldInquiries] = await db.batch([
+    db.prepare("SELECT step, at FROM reception_steps WHERE reception_id = ?1").bind(row.reception_id),
+    db.prepare("SELECT received_yen FROM prescription_revisions WHERE prescription_id = ?1 ORDER BY id DESC LIMIT 1").bind(prescriptionId),
+    db.prepare("SELECT * FROM inquiries WHERE prescription_id = ?1").bind(prescriptionId),
+  ]);
+  const stepAt = Object.fromEntries(steps.results.map((s) => [s.step, s.at]));
+  const beforePay = before.patientPayYen + (before.specialFeeYen ?? 0);
+  const afterPay = bill.kohi.patientPayYen + (bill.special?.yen ?? 0);
+  // 窓口でもう受け取っている額：会計済みなら直す前の額。会計済みを外した後でまだ受け取っていなければ、前の訂正のときの額のまま
+  const receivedYen = stepAt.paid ? beforePay : (lastRevision.results[0]?.received_yen ?? null);
+
+  const givenBefore = givenOf(before.rps.map((rp) => ({ days: rp.days, items: rp.items })));
+  const givenAfter = givenOf(bill.rps);
+  const contentChanged = givenBefore.size !== givenAfter.size || [...givenAfter].some(([code, milli]) => givenBefore.get(code) !== milli);
+  const summary = revisionSummary(before, rx, bill, beforePay, afterPay);
+  if (summary.length === 0) throw new HttpError(422, "直す前と同じです。変えたところがありません");
+
+  // 戻す段階：薬・量が変われば監査から。額だけが変われば会計から
+  const reopen = contentChanged ? ["audited", "handed", "paid"].filter((s) => stepAt[s]) : stepAt.paid && afterPay !== receivedYen ? ["paid"] : [];
+
+  // 照会は、直していない行（同じ ID で中身も同じ）なら、最初に記録した日時と人を残す
+  const oldById = new Map(oldInquiries.results.map((q) => [q.id, q]));
+  const keepInquiry = (q) => {
+    const o = q.id === null ? undefined : oldById.get(q.id);
+    const same = o && o.kind === q.kind && o.content === q.content && o.answer === q.answer && (o.changed === 1) === q.changed
+      && o.short_reason === q.shortReason && o.rp_no === q.rpNo && o.drug_code === q.drugCode;
+    return same ? { id: o.id, createdAt: o.created_at, createdBy: o.created_by } : null;
+  };
+
+  const now = nowIso();
+  const net = new Map(givenAfter);
+  for (const [code, milli] of givenBefore) net.set(code, (net.get(code) ?? 0) - milli);
+  const { records: _r, conversations: _c, checks: _k, revisions: _v, ...snapshot } = before;
+  const statements = [
+    db.prepare(
+      `INSERT INTO prescription_revisions (prescription_id, before_json, summary, content_changed, received_yen, created_at, created_by)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)`,
+    ).bind(prescriptionId, JSON.stringify({ prescription: snapshot, steps: stepAt }), summary.join("／"), contentChanged ? 1 : 0, receivedYen, now, user.id),
+    db.prepare("DELETE FROM prescription_items WHERE rp_id IN (SELECT id FROM prescription_rps WHERE prescription_id = ?1)").bind(prescriptionId),
+    ...["prescription_rps", "prescription_fees", "prescription_kohi", "inquiries"].map((t) => db.prepare(`DELETE FROM ${t} WHERE prescription_id = ?1`).bind(prescriptionId)),
+    db.prepare(
+      `UPDATE prescriptions SET prescribed_on = ?2, dispensed_on = ?3, handbook = ?4, drug_points = ?5, total_points = ?6, burden_percent = ?7,
+              burden_reason = ?8, copay_yen = ?9, special_fee_yen = ?10, special_fee_method = ?11 WHERE id = ?1`,
+    ).bind(prescriptionId, rx.prescribedOn, rx.dispensedOn, rx.handbook, bill.drugPoints, bill.totalPoints, bill.burdenPercent,
+      bill.burdenReason, bill.copayYen, bill.special?.yen ?? null, bill.special?.method ?? null),
+    handbookStatement(db, rx),
+    ...childStatements(db, prescriptionId, rx, bill, user, now, keepInquiry),
+    ...stockStatements(db, user, now, net),
+    ...reopen.map((s) => db.prepare("DELETE FROM reception_steps WHERE reception_id = ?1 AND step = ?2").bind(row.reception_id, s)),
+    auditStatement(db, user.id, "prescription.revise", rx.patientId, `調剤日 ${rx.dispensedOn} の処方を直した：${summary.join("／")}`),
+  ];
+  await db.batch(statements);
+  return {
+    id: prescriptionId, totalPoints: bill.totalPoints, patientPayYen: bill.kohi.patientPayYen, specialFeeYen: bill.special?.yen ?? null,
+    payYen: afterPay, receivedYen, contentChanged, reopened: reopen, summary,
+  };
+}
+
+// 渡す薬ごとの総量（1日量 × 調剤した日数）。同じ薬が2つの剤にあれば足す
+function givenOf(rps) {
+  const map = new Map();
+  for (const rp of rps) for (const it of rp.items) map.set(it.drugCode, (map.get(it.drugCode) ?? 0) + it.dailyQtyMilli * rp.days);
+  return map;
+}
+
+// 在庫から引く（マイナスの量なら戻す）。在庫を記録していない薬（行が無い）はそのまま
+function stockStatements(db, user, now, given) {
+  return [...given].filter(([, milli]) => milli !== 0).map(([code, milli]) =>
+    db.prepare("UPDATE drug_stock SET qty_milli = qty_milli - ?1, updated_at = ?2 WHERE pharmacy_id = ?3 AND drug_code = ?4").bind(milli, now, user.pharmacy_id, code));
+}
+
+// 患者のお薬手帳の形態：紙・電子版を出されたらそれにする。「提示なし」は忘れただけのこともあるので、まだ聞いていないときだけ「持っていない」にする
+function handbookStatement(db, rx) {
+  return db.prepare("UPDATE patients SET handbook_kind = CASE WHEN ?1 <> 'none' THEN ?1 ELSE COALESCE(handbook_kind, 'none') END WHERE id = ?2")
+    .bind(rx.handbook, rx.patientId);
+}
+
+// 剤・薬・疑義照会・算定項目・公費の行（新しく保存するときと、直すときで同じ）
+function childStatements(db, id, rx, bill, user, now, keepInquiry = () => null) {
+  const statements = bill.kohi.steps.map((s, i) => db.prepare(
+    "INSERT INTO prescription_kohi (prescription_id, order_no, kohi_id, prior_month_yen, pay_yen) VALUES (?1, ?2, ?3, ?4, ?5)",
+  ).bind(id, i + 1, s.id, s.priorMonthYen, s.payYen));
   bill.rps.forEach((rp, i) => {
     const rpId = crypto.randomUUID();
     statements.push(
@@ -194,29 +315,60 @@ export async function createPrescription(db, user, body) {
     });
   });
   for (const q of rx.inquiries) {
+    const kept = keepInquiry(q);
     statements.push(db.prepare(
-      `INSERT INTO inquiries (prescription_id, kind, content, answer, changed, short_reason, created_at, created_by)
-       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)`,
-    ).bind(id, q.kind, q.content, q.answer, q.changed ? 1 : 0, q.shortReason, now, user.id));
+      `INSERT INTO inquiries (id, prescription_id, kind, content, answer, changed, short_reason, created_at, created_by, rp_no, drug_code)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)`,
+    ).bind(kept?.id ?? null, id, q.kind, q.content, q.answer, q.changed ? 1 : 0, q.shortReason, kept?.createdAt ?? now, kept?.createdBy ?? user.id, q.rpNo, q.drugCode));
   }
   bill.fees.lines.forEach((l, i) => {
     statements.push(db.prepare(
       `INSERT INTO prescription_fees (prescription_id, line_no, section, code, name, points, count) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)`,
     ).bind(id, i + 1, l.section, l.code, l.name, l.points, l.count));
   });
-  statements.push(auditStatement(db, user.id, "prescription.create", rx.patientId,
-    `調剤日 ${rx.dispensedOn} / 合計 ${bill.totalPoints}点（薬剤料 ${bill.drugPoints}点）/ 一部負担金 ${bill.copayYen}円${
-      bill.kohi.steps.length ? ` / 公費の後 ${bill.kohi.patientPayYen}円` : ""}${bill.special ? ` / 特別の料金 ${bill.special.yen}円` : ""}`));
-
-  await db.batch(statements);
-  return {
-    id, drugPoints: bill.drugPoints, totalPoints: bill.totalPoints, copayYen: bill.copayYen, patientPayYen: bill.kohi.patientPayYen,
-    specialFeeYen: bill.special?.yen ?? null,
-  };
+  return statements;
 }
 
-// 調剤日時点の薬価・点数表で、薬剤料・調剤報酬・一部負担金・特別の料金を出す
-async function billPrescription(db, rx) {
+// 直す前と後で何が変わったか（画面と閲覧記録に出す文）
+function revisionSummary(before, rx, bill, beforePay, afterPay) {
+  const out = [];
+  const HANDBOOK_TEXT = { paper: "紙", electronic: "電子版", none: "提示なし" };
+  if (before.prescribedOn !== rx.prescribedOn) out.push(`処方日 ${before.prescribedOn} → ${rx.prescribedOn}`);
+  if (before.dispensedOn !== rx.dispensedOn) out.push(`調剤日 ${before.dispensedOn} → ${rx.dispensedOn}`);
+  if (before.handbook !== rx.handbook) out.push(`お薬手帳 ${HANDBOOK_TEXT[before.handbook]} → ${HANDBOOK_TEXT[rx.handbook]}`);
+  const lines = (rps) => new Map(rps.flatMap((rp) => rp.items.map((it) => [`${it.drugCode}`, { name: it.name, qty: it.dailyQtyMilli, days: rp.days, usage: rp.usage }])));
+  const a = lines(before.rps);
+  const b = lines(bill.rps);
+  const qty = (m) => (m / 1000).toString();
+  for (const [code, x] of b) {
+    const o = a.get(code);
+    if (!o) out.push(`追加 ${x.name} 1日${qty(x.qty)}・${x.days}日分`);
+    else {
+      const d = [];
+      if (o.qty !== x.qty) d.push(`1日量 ${qty(o.qty)} → ${qty(x.qty)}`);
+      if (o.days !== x.days) d.push(`日数 ${o.days} → ${x.days}`);
+      if (o.usage !== x.usage) d.push(`用法 ${o.usage} → ${x.usage}`);
+      if (d.length) out.push(`${x.name} ${d.join("・")}`);
+    }
+  }
+  for (const [code, o] of a) if (!b.has(code)) out.push(`削除 ${o.name}`);
+  const sameRx = (x, y) => (x?.name ?? null) === (y?.name ?? null) && (x?.dailyQtyMilli ?? null) === (y?.dailyQtyMilli ?? null) && (x?.reason ?? null) === (y?.reason ?? null);
+  const rxOf = (rps) => new Map(rps.flatMap((rp) => rp.items.map((it) => [it.drugCode, it.rx])));
+  const ra = rxOf(before.rps);
+  if ([...rxOf(bill.rps)].some(([code, r]) => ra.has(code) && !sameRx(ra.get(code), r))) out.push("処方箋の記載との違い");
+  const rpDays = (rps) => rps.map((rp) => `${rp.rxDays}/${rp.daysChange}`).join(",");
+  if (rpDays(before.rps) !== rpDays(bill.rps)) out.push("処方箋の日数・減らした根拠");
+  const inq = (qs) => JSON.stringify(qs.map((q) => [q.kind, q.content, q.answer, q.changed, q.shortReason ?? null, q.rpNo, q.drugCode]));
+  if (inq(before.inquiries) !== inq(rx.inquiries)) out.push("疑義照会");
+  const kohi = (ks) => JSON.stringify(ks.map((k) => [k.id, k.priorMonthYen]));
+  if (kohi(before.kohi) !== kohi(bill.kohi.steps)) out.push("公費");
+  if (out.length > 0 && beforePay !== afterPay) out.push(`窓口 ${beforePay.toLocaleString()}円 → ${afterPay.toLocaleString()}円`);
+  return out;
+}
+
+// 調剤日時点の薬価・点数表で、薬剤料・調剤報酬・一部負担金・特別の料金を出す。
+// excludePrescriptionId：直している処方。自分自身を「前の来局」「もう算定した項目」に数えない
+async function billPrescription(db, rx, excludePrescriptionId = null) {
   const prices = await pricesAt(db, rx.rps.flatMap((rp) => rp.items.map((it) => it.drugCode)), rx.dispensedOn);
   const errors = [];
   const rps = rx.rps.map((rp, i) => ({
@@ -227,14 +379,14 @@ async function billPrescription(db, rx) {
       else if (drug.status !== "ok") {
         errors.push({ path: `rps.${i}.items.${j}.drugCode`, message: `${drug.name}：${STATUS_MESSAGE[drug.status]}` });
       }
-      return { ...it, priceSen: drug?.priceSen, diffSen: drug?.diffSen ?? null, narcotic: drug?.narcotic };
+      return { ...it, name: drug?.name, priceSen: drug?.priceSen, diffSen: drug?.diffSen ?? null, narcotic: drug?.narcotic };
     }),
   }));
   if (errors.length > 0) throw new HttpError(422, "調剤日時点で使えない薬があります", errors);
 
   let context;
   try {
-    context = await feeContext(db, rx.patientId, rx.dispensedOn);
+    context = await feeContext(db, rx.patientId, rx.dispensedOn, { excludePrescriptionId });
   } catch (e) {
     if (!(e instanceof RangeError)) throw e;
     throw new HttpError(422, "調剤日の算定の規則がありません", [{ path: "dispensedOn", message: e.message }]);
@@ -275,7 +427,7 @@ async function billPrescription(db, rx) {
 
 // 患者の薬歴（処方の一覧、新しい順）。剤と薬・疑義照会・算定項目まで入れて返す。
 export async function prescriptionsOf(db, patientId) {
-  const [rxs, rps, items, inquiries, fees, kohi, checks] = await db.batch([
+  const [rxs, rps, items, inquiries, fees, kohi, checks, revisions] = await db.batch([
     db.prepare(
       `SELECT p.*, u.display_name AS created_by_name
          FROM prescriptions p JOIN users u ON u.id = p.created_by
@@ -310,7 +462,12 @@ export async function prescriptionsOf(db, patientId) {
       `SELECT c.*, u.display_name FROM handover_checks c JOIN prescriptions p ON p.id = c.prescription_id JOIN users u ON u.id = c.user_id
         WHERE p.patient_id = ?1 ORDER BY c.id`,
     ).bind(patientId),
+    db.prepare(
+      `SELECT v.id, v.prescription_id, v.summary, v.content_changed, v.received_yen, v.created_at, u.display_name FROM prescription_revisions v
+         JOIN prescriptions p ON p.id = v.prescription_id JOIN users u ON u.id = v.created_by WHERE p.patient_id = ?1 ORDER BY v.id`,
+    ).bind(patientId),
   ]);
+  const revisionsByRx = Map.groupBy(revisions.results, (v) => v.prescription_id);
   // 引き継ぎの確認：項目ごとに最後の行
   const checksByRx = new Map();
   for (const c of checks.results) {
@@ -347,10 +504,15 @@ export async function prescriptionsOf(db, patientId) {
     createdAt: rx.created_at,
     createdBy: rx.created_by_name,
     receptionId: rx.reception_id,
+    // 直した記録（古い順）。receivedYen は直した時点で窓口でもう受け取っていた額
+    revisions: (revisionsByRx.get(rx.id) ?? []).map((v) => ({
+      at: v.created_at, by: v.display_name, summary: v.summary, contentChanged: v.content_changed === 1, receivedYen: v.received_yen,
+    })),
     checks: checksByRx.get(rx.id) ?? {},
     records: records.get(rx.id) ?? [], // 指導記録がまだ無い来局は空
     conversations: conversations.get(rx.id) ?? [],
     inquiries: (inquiriesByRx.get(rx.id) ?? []).map((q) => ({
+      id: q.id, rpNo: q.rp_no, drugCode: q.drug_code,
       kind: q.kind, content: q.content, answer: q.answer, changed: q.changed === 1, shortReason: q.short_reason,
       createdAt: q.created_at, createdBy: q.created_by_name,
     })),

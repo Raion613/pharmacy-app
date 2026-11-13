@@ -1,4 +1,4 @@
-// 処方入力の途中の計算（薬剤料・比較日の点数・会計・小児の分量）。画面は入力を送り、結果だけを受け取って表示する。
+// 処方入力の途中の計算（薬剤料・会計・小児の分量）。画面は入力を送り、結果だけを受け取って表示する。
 // 計算の規則（src/rules/）は画面に配らない。保存時は prescriptions.js が同じ規則で計算し直す。
 import { calcRp, dailyCost, formatYen, specialFee } from "../rules/yakuzairyo.js";
 import { calcFees, copayYen } from "../rules/chozai-fee.js";
@@ -16,13 +16,12 @@ import { HANDBOOK, INQUIRY_KINDS, DAYS_CHANGES } from "./prescriptions.js";
 const MAX_RPS = 20;
 const MAX_ITEMS_PER_RP = 15;
 
-// body：{ patientId, dispensedOn, compareOn, handbook, pending, inquiries: [{ kind, changed, shortReason }], kohi: [{ kohiId, priorMonthYen }],
+// body：{ patientId, dispensedOn, handbook, pending, inquiries: [{ kind, changed, shortReason }], kohi: [{ kohiId, priorMonthYen }],
 //         rps: [{ r, usage, days, rxDays, daysChange, complete, items: [{ i, drugCode, dailyQtyMilli }] }] }
 //   complete：その剤の薬・1日量・日数が揃っている（剤の点数を出す）。items は1日量まで入った薬だけ
 export async function previewPrescription(db, body) {
   const bad = (m) => { throw new HttpError(400, m); };
   if (!isDate(body.dispensedOn)) bad("調剤日が不正です");
-  if (body.compareOn !== null && !isDate(body.compareOn)) bad("比べる日付が不正です");
   if (!HANDBOOK.includes(body.handbook)) bad("お薬手帳の提示が不正です");
   if (!Array.isArray(body.rps) || body.rps.length > MAX_RPS) bad("剤の形が不正です");
   if (!Array.isArray(body.inquiries) || body.inquiries.some((q) => !INQUIRY_KINDS.includes(q.kind) || typeof q.changed !== "boolean")) bad("疑義照会の形が不正です");
@@ -37,7 +36,6 @@ export async function previewPrescription(db, body) {
 
   const codes = body.rps.flatMap((rp) => rp.items.map((it) => it.drugCode));
   const prices = await pricesAt(db, codes, body.dispensedOn);
-  const comparePrices = body.compareOn === null ? null : await pricesAt(db, codes, body.compareOn);
   const okPrice = (map, code) => (map.get(code)?.status === "ok" ? map.get(code) : null);
 
   const items = [];
@@ -53,25 +51,17 @@ export async function previewPrescription(db, body) {
       return { priceSen: d.priceSen, dailyQtyMilli: it.dailyQtyMilli, diffSen: d.diffSen, narcotic: d.narcotic };
     });
     const result = calcRp({ items: calcs, days: rp.days });
-    let comparePoints = null;
-    if (comparePrices && rp.items.every((it) => okPrice(comparePrices, it.drugCode))) {
-      comparePoints = calcRp({ items: rp.items.map((it) => ({ priceSen: comparePrices.get(it.drugCode).priceSen, dailyQtyMilli: it.dailyQtyMilli })), days: rp.days }).points;
-    }
     rps.push({
       r: rp.r, days: rp.days, rxDays: rp.rxDays, daysChange: rp.days < rp.rxDays ? rp.daysChange : null, calcs,
-      result: { dailyYen: result.dailyYen, pointsPerDay: result.pointsPerDay, days: result.days, points: result.points }, comparePoints,
+      result: { dailyYen: result.dailyYen, pointsPerDay: result.pointsPerDay, days: result.days, points: result.points },
     });
   }
   const drugPoints = rps.reduce((s, x) => s + x.result.points, 0);
 
   return {
     items,
-    rps: rps.map(({ r, result, comparePoints }) => ({ r, ...result, comparePoints })),
+    rps: rps.map(({ r, result }) => ({ r, ...result })),
     drugPoints,
-    compare: comparePrices === null || rps.length === 0 ? null : {
-      usable: rps.every((x) => x.comparePoints !== null),
-      oldPoints: rps.every((x) => x.comparePoints !== null) ? rps.reduce((s, x) => s + x.comparePoints, 0) : null,
-    },
     bill: body.pending || rps.length === 0 ? null : await bill(db, body, rps, drugPoints),
     pediatric: await pediatric(db, body, prices),
   };
@@ -80,7 +70,8 @@ export async function previewPrescription(db, body) {
 async function bill(db, body, rps, drugPoints) {
   let ctx;
   try {
-    ctx = await feeContext(db, body.patientId, body.dispensedOn);
+    // 直している処方（revising）は、自分自身を前の来局・算定済みの項目に数えない
+    ctx = await feeContext(db, body.patientId, body.dispensedOn, { excludePrescriptionId: typeof body.revising === "string" ? body.revising : null });
   } catch (e) {
     if (!(e instanceof RangeError)) throw e;
     return { error: e.message };

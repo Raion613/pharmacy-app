@@ -78,7 +78,7 @@ test("会話の文字起こし → 下書きから指導記録。会話から拾
   const c = await createConversation(db, user, "rx-1", { source: "file", fileName: "指導.webm", durationSec: 95 });
   assert.match(c.transcript, /ノルバスク錠５ｍｇとアトルバスタチン/);
   const rec = await createRecord(db, user, "rx-1", {
-    subjective: "胃がもたれる", objective: "", assessment: "", plan: "", leftover: "some", notebook: "used", conversationId: c.id, drafted: true,
+    subjective: "胃がもたれる", objective: "", assessment: "", plan: "", leftover: "some", conversationId: c.id, drafted: true,
   });
   assert.equal(rec.drafted, true);
   // 別の来局の会話は付けられない
@@ -86,7 +86,7 @@ test("会話の文字起こし → 下書きから指導記録。会話から拾
            VALUES ('rx-2', 1, '2026-10-15', '2026-10-15', 'paper', 1, 1, 10, 0, '2026-10-15T01:00:00Z', 1);
            INSERT INTO prescription_rps (id, prescription_id, rp_no, usage, rx_days, days, daily_yen, points_per_day, points) VALUES ('rp-2', 'rx-2', 1, '1日1回', 7, 7, '10.80', 1, 7);
            INSERT INTO prescription_items (rp_id, line_no, drug_code, daily_qty_milli, price_sen) VALUES ('rp-2', 1, '612170710', 1000, 1080);`);
-  assert.deepEqual(await pathsOf(createRecord(db, user, "rx-2", { plan: "x", leftover: "none", notebook: "used", conversationId: c.id })), ["conversationId"]);
+  assert.deepEqual(await pathsOf(createRecord(db, user, "rx-2", { plan: "x", leftover: "none", conversationId: c.id })), ["conversationId"]);
   const [rx] = (await prescriptionsOf(db, 1)).filter((x) => x.id === "rx-1");
   assert.equal(rx.conversations[0].id, c.id);
   assert.equal(rx.records[0].conversationId, c.id);
@@ -170,6 +170,11 @@ test("受付 → 入力 → 監査 → 投薬 → 会計。段階は順番どお
   const [ins] = await inspectionsOf(db, "rx-1");
   assert.deepEqual(ins.scans.map((s) => s.result), ["wrong", "match", "match"]);
 
+  // 投薬は、この来局の指導記録を書いてから
+  await assert.rejects(addStep(db, user, r.id, "handed"), /指導記録がまだありません/);
+  assert.equal((await receptionsOn(db, 1, todayJst()))[0].records, 0);
+  await createRecord(db, user, "rx-1", { subjective: "変わりない", leftover: "none" });
+  assert.equal((await receptionsOn(db, 1, todayJst()))[0].records, 1);
   await addStep(db, user, r.id, "handed");
   await addStep(db, user, r.id, "paid");
   await assert.rejects(addStep(db, user, r.id, "paid"), /もう済んでいます/);
@@ -178,6 +183,18 @@ test("受付 → 入力 → 監査 → 投薬 → 会計。段階は順番どお
   assert.deepEqual(Object.keys(row.steps).sort(), ["audited", "entered", "handed", "paid"]);
   assert.equal(row.prescriptionId, "rx-1");
   await createReception(db, user, { patientId: 1 }); // 会計が済めば次を受け付けられる
+});
+
+test("前の日の会計まで済んでいない受付は、後の日の受付状況にも「前日から」で出る。会計が済めば出ない", async () => {
+  const { id } = await db.prepare("INSERT INTO receptions (patient_id, received_at, created_by) VALUES (2, '2020-01-01T03:00:00Z', 1) RETURNING id").first();
+  const find = async (date) => (await receptionsOn(db, 1, date)).find((r) => r.id === id);
+  assert.equal((await find("2020-01-01")).carriedOver, false);
+  assert.equal((await find(todayJst())).carriedOver, true);
+  assert.equal(await find("2019-12-31"), undefined); // 受け付ける前の日には出ない
+  await assert.rejects(createReception(db, user, { patientId: 2 }), (e) => /1\/1 12:00 の受付が、まだ会計まで済んでいません/.test(e.details[0].message));
+  db.exec(`INSERT INTO reception_steps VALUES (${id}, 'paid', '2020-01-01T04:00:00Z', 1)`);
+  assert.equal(await find(todayJst()), undefined);
+  assert.equal((await find("2020-01-01")).carriedOver, false); // 受け付けた日にはそのまま出る
 });
 
 test("月ごとの集計：処方箋単価と後発医薬品の使用割合（数量ベース）", async () => {

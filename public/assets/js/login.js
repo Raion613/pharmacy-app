@@ -2,6 +2,10 @@ import { api, ApiError } from "./app.js";
 import { setTour, startTour, autoStartTour, tourActive } from "./tour.js";
 import { icon } from "./icons.js";
 
+// ログイン画面は router.js を通さない（ログインの前は他の画面の部品を配らない）。画面は最初から出そろっている
+document.documentElement.classList.add("page-ready");
+document.documentElement.dataset.shown = "1";
+
 const form = document.querySelector("#login-form");
 const error = document.querySelector("#login-error");
 
@@ -33,7 +37,7 @@ form.addEventListener("submit", async (e) => {
 // 別サイトへ飛ばされないよう、戻り先は自サイト内のパスだけを受け付ける
 function goNext() {
   const next = new URLSearchParams(location.search).get("next");
-  location.href = next && next.startsWith("/") && !next.startsWith("//") ? next : "/patients";
+  location.href = next && next.startsWith("/") && !next.startsWith("//") ? next : "/board";
 }
 
 const mfaForm = document.querySelector("#mfa-form");
@@ -52,11 +56,25 @@ mfaForm.addEventListener("submit", async (e) => {
   }
 });
 
+// 欄の錠剤の印：入力した欄は青になり、両方入るとログインのボタンの錠剤も白く埋まる
+function updatePills() {
+  const id = form.loginId.value.trim() !== "", pw = form.password.value !== "";
+  document.querySelector("#pill-id").classList.toggle("on", id);
+  document.querySelector("#pill-pw").classList.toggle("on", pw);
+  document.querySelector("#pill-go").classList.toggle("on", id && pw);
+}
+form.addEventListener("input", updatePills);
+
 document.querySelector("#fill-demo").addEventListener("click", () => {
   form.loginId.value = "demo";
   form.password.value = "pharmacy-demo";
+  updatePills();
   form.querySelector("button[type=submit]").focus();
 });
+
+// 起動の演出をもう一度（login-intro.js の replayIntro）
+document.querySelector("#replay-pv").addEventListener("click", () => { if (!tourActive()) window.replayIntro("pv"); });
+document.querySelector("#replay-motion").addEventListener("click", () => { if (!tourActive()) window.replayIntro("motion"); });
 
 const tourButton = document.querySelector("#tour-button");
 tourButton.insertAdjacentHTML("afterbegin", icon("help", 14));
@@ -78,10 +96,17 @@ setTour("login", [
     body: "<p>ログインID <code>demo</code>、パスワード <code>pharmacy-demo</code> で入れます。<strong>「入力欄に入れる」</strong>を押すと、両方の欄に入ります。</p>",
   },
   {
+    target: ".replay",
+    title: "起動の演出をもう一度",
+    body: "<p><strong>PV から</strong>は紹介の動画（約10秒）からログイン画面までを、<strong>モーションから</strong>は起動のたびに出る錠剤の動きだけを流します。</p>",
+  },
+  {
     target: "#login-form",
     title: "ログイン",
     body: `<p>ログインすると患者一覧に移ります。</p>
       <p>ログインしていない間は、患者の情報は一切表示されません（サーバーが返しません）。</p>`,
   },
 ]);
+// 起動の演出（login-intro.js）を出したときは、終わって画面が落ち着いてから少し待って出す
+if (await window.loginIntroDone) await new Promise((resolve) => setTimeout(resolve, 700));
 autoStartTour();

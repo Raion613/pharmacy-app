@@ -3,8 +3,10 @@ import { test, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import { openD1 } from "../src/dev/sqlite-d1.js";
 import { pricesAt } from "../src/server/prices.js";
-import { createPrescription, validatePrescription } from "../src/server/prescriptions.js";
+import { createPrescription, validatePrescription, revisePrescription, prescriptionsOf } from "../src/server/prescriptions.js";
 import { HttpError } from "../src/server/http.js";
+import { getPatient, updateHandbookKind } from "../src/server/patients.js";
+import { compareRx } from "../src/server/rx-compare.js";
 import { previewPrescription } from "../src/server/rx-preview.js";
 import { loadMasterFile, MASTER_FILES } from "../src/dev/load-master.js";
 
@@ -120,6 +122,73 @@ test("保存すると処方・剤・明細・アクセスログが揃って入�
   assert.equal((await db.prepare("SELECT drug_points FROM prescriptions").first()).drug_points, 35);
 });
 
+test("保存すると、渡した量（1日量 × 調剤した日数）を自分の薬局の在庫から引く。在庫を記録していない薬はそのまま", async () => {
+  db.exec("INSERT INTO drug_stock VALUES (1, '610000001', 100000, '2026-11-13T00:00:00Z'), (2, '610000001', 100000, '2026-11-13T00:00:00Z')");
+  await createPrescription(db, user, {
+    patientId: 1, prescribedOn: "2026-06-15", dispensedOn: "2026-06-15", handbook: "paper", inquiries: [],
+    rps: [{ usage: "1日2回", rxDays: 14, days: 7, daysChange: "instruction", items: [{ drugCode: "610000001", dailyQty: "2" }, { drugCode: "610000005", dailyQty: "1.5" }] }],
+  });
+  const stock = async (ph, code) => (await db.prepare("SELECT qty_milli FROM drug_stock WHERE pharmacy_id = ?1 AND drug_code = ?2").bind(ph, code).first())?.qty_milli;
+  assert.equal(await stock(1, "610000001"), 86000); // 100 − 2錠 × 7日（処方箋は14日分でも、渡したのは7日分）
+  assert.equal(await stock(2, "610000001"), 100000); // ほかの薬局の在庫は変わらない
+  assert.equal(await stock(1, "610000005"), undefined); // 在庫を記録していない薬は行を作らない
+});
+
+test("改定をまたいで比べる：保存した処方を別の日付の薬価で計算し直す。日付を省くと、次に薬価が変わる日か、直前に変わった日の前日", async () => {
+  const saved = await createPrescription(db, user, rxBody({
+    prescribedOn: "2026-06-01", dispensedOn: "2026-06-01",
+    rps: [rp("1日1回朝食後", 14, [["610000001", "1"], ["670000006", "2"]])],
+  }));
+  const c = await compareRx(db, saved.id, "2026-03-31");
+  assert.equal(c.date, "2026-03-31");
+  assert.equal(c.drugPoints, saved.drugPoints);
+  assert.equal(c.compareDrugPoints, null); // （選）のコードは 3/31 にはまだ無い
+  assert.equal(c.rps[0].items[1].compareStatus, "before");
+  const auto = await compareRx(db, saved.id, null);
+  assert.ok(auto.date < "2026-06-01" || auto.date > "2026-06-01");
+  await assert.rejects(compareRx(db, saved.id, "2026-13-01"), HttpError);
+});
+
+test("疑義照会は、どの剤・どの薬についてかを持つ。送った処方に無い剤・薬は指せない", async () => {
+  const body = (inquiry) => ({
+    patientId: 1, prescribedOn: "2026-06-15", dispensedOn: "2026-06-15", handbook: "paper",
+    rps: [{ usage: "1日2回", rxDays: 14, days: 7, daysChange: "inquiry", items: [{ drugCode: "610000001", dailyQty: "2" }] },
+      { usage: "1日1回", rxDays: 14, days: 14, daysChange: null, items: [{ drugCode: "610000005", dailyQty: "1" }] }],
+    inquiries: [{ kind: "leftover", content: "7日分残っている", answer: "7日分で可", changed: true, ...inquiry }],
+  });
+  const paths = (inquiry) => {
+    try {
+      validatePrescription(body(inquiry));
+      return [];
+    } catch (e) {
+      return e.details.map((d) => d.path);
+    }
+  };
+  assert.deepEqual(paths({ rpNo: 1, drugCode: "610000001" }), []);
+  assert.deepEqual(paths({ rpNo: 3 }), ["rps.0.daysChange", "inquiries.0.target"]); // 無い剤を指す照会は、Rp1 を減らした根拠にもならない
+  assert.deepEqual(paths({ rpNo: 1, drugCode: "610000005" }), ["inquiries.0.target"]);
+  assert.deepEqual(paths({ rpNo: null, drugCode: "610000001" }), ["inquiries.0.target"]);
+  assert.deepEqual(paths({ rpNo: 2 }), ["rps.0.daysChange"]); // Rp1 を減らした根拠の照会が、Rp2 のものになっている
+  const saved = await createPrescription(db, user, body({ rpNo: 1, drugCode: "610000001" }));
+  assert.deepEqual({ ...(await db.prepare("SELECT rp_no, drug_code FROM inquiries WHERE prescription_id = ?1").bind(saved.id).first()) }, { rp_no: 1, drug_code: "610000001" });
+});
+
+test("お薬手帳の形態は患者に残る：出された手帳に合わせ、「提示なし」では前の形態を消さない。薬歴から選び直せる", async () => {
+  const save = (handbook, on) => createPrescription(db, user, {
+    patientId: 1, prescribedOn: on, dispensedOn: on, handbook, inquiries: [],
+    rps: [{ usage: "1日2回", rxDays: 7, days: 7, daysChange: null, items: [{ drugCode: "610000001", dailyQty: "2" }] }],
+  });
+  assert.equal((await getPatient(db, 1)).handbookKind, null); // まだ聞いていない
+  await save("electronic", "2026-06-15");
+  assert.equal((await getPatient(db, 1)).handbookKind, "electronic");
+  await save("none", "2026-06-29"); // 今日は忘れただけ
+  assert.equal((await getPatient(db, 1)).handbookKind, "electronic");
+  await save("paper", "2026-07-13");
+  assert.equal((await getPatient(db, 1)).handbookKind, "paper");
+  assert.equal((await updateHandbookKind(db, user, 1, { handbookKind: "none" })).handbookKind, "none");
+  await assert.rejects(updateHandbookKind(db, user, 1, { handbookKind: "app" }), HttpError);
+});
+
 test("明細の途中で失敗したら、処方も剤も1行も残らない", async () => {
   // batch に渡される文の、最後から2番目（＝明細の途中）に必ず失敗する文を差し込む
   const failing = {
@@ -192,13 +261,13 @@ test("選定療養の薬を保存すると、保険の点数は（選）の価�
 });
 
 // 処方入力の途中の計算（画面に配らずサーバーで出す）と、保存時の計算が同じになること
-test("途中の計算と保存時の計算が一致する（改定前と比べた点数・選定療養の特別の料金も出る）", async () => {
+test("途中の計算と保存時の計算が一致する（選定療養の特別の料金も出る）", async () => {
   const body = rxBody({
     prescribedOn: "2026-06-01", dispensedOn: "2026-06-01",
     rps: [rp("1日1回朝食後", 14, [["610000001", "1"], ["670000006", "2"]])],
   });
   const preview = await previewPrescription(db, {
-    patientId: 1, dispensedOn: body.dispensedOn, compareOn: "2026-03-31", handbook: body.handbook, pending: false, inquiries: [], kohi: [],
+    patientId: 1, dispensedOn: body.dispensedOn, handbook: body.handbook, pending: false, inquiries: [], kohi: [],
     rps: [{ r: 0, usage: "1日1回朝食後", complete: true, days: 14, rxDays: 14, daysChange: null,
       items: [{ i: 0, drugCode: "610000001", dailyQtyMilli: 1000 }, { i: 1, drugCode: "670000006", dailyQtyMilli: 2000 }] }],
   });
@@ -209,6 +278,41 @@ test("途中の計算と保存時の計算が一致する（改定前と比べ�
   assert.equal(preview.bill.specialYen, saved.specialFeeYen);
   assert.equal(preview.bill.chargeYen, saved.patientPayYen + saved.specialFeeYen);
   assert.deepEqual(preview.items.map((x) => x.costYen), ["15.30", "149.30"]);
-  assert.equal(preview.compare.usable, false); // （選）のコードは 3/31 にはまだ無い
   assert.equal(preview.pediatric, null);       // 66歳
+});
+
+test("処方を直す：中身を差し替え、直す前を残す。在庫は差の分。会計の後なら受け取った額を残し、監査からやり直す", async () => {
+  db.exec("INSERT INTO drug_stock VALUES (1, '610000001', 100000, '2026-11-13T00:00:00Z'), (1, '610000005', 100000, '2026-11-13T00:00:00Z')");
+  db.exec("INSERT INTO receptions (id, patient_id, received_at, created_by) VALUES (1, 1, '2026-06-15T00:00:00Z', 1)");
+  const body = rxBody({ prescribedOn: "2026-06-15", dispensedOn: "2026-06-15", receptionId: 1 });
+  const saved = await createPrescription(db, user, body);
+  for (const s of ["audited", "handed", "paid"]) db.exec(`INSERT INTO reception_steps VALUES (1, '${s}', '2026-06-15T01:00:00Z', 1)`);
+  const stock = async (code) => (await db.prepare("SELECT qty_milli FROM drug_stock WHERE pharmacy_id = 1 AND drug_code = ?1").bind(code).first()).qty_milli;
+  assert.equal(await stock("610000001"), 86000);
+
+  // 同じ内容のままでは直さない
+  await assert.rejects(revisePrescription(db, user, saved.id, body), (e) => e.status === 422);
+  // 別の患者の処方として送っても直さない
+  await assert.rejects(revisePrescription(db, user, saved.id, { ...body, patientId: 2 }), (e) => e.status === 422);
+
+  const r = await revisePrescription(db, user, saved.id, { ...body, rps: [rp("1日1回朝食後", 14, [["610000001", "2"]]), rp("1日3回毎食後", 7, [["610000005", "1.5"]])] });
+  assert.equal(r.contentChanged, true);
+  assert.deepEqual(r.reopened, ["audited", "handed", "paid"]);       // 薬が変わったので監査から
+  assert.ok(r.receivedYen > 0 && r.payYen > r.receivedYen);          // 受け取っていた額と、直した後の額
+  assert.equal(await stock("610000001"), 72000);                     // 戻して（+14）引き直す（−28）
+  assert.equal(await stock("610000005"), 89500);
+  assert.equal(await count("prescriptions"), 1);                     // ID はそのまま
+  assert.equal(await count("prescription_items"), 2);
+  assert.deepEqual((await db.prepare("SELECT step FROM reception_steps").all()).results.map((s) => s.step), ["entered"]);
+  const v = await db.prepare("SELECT before_json, summary, received_yen FROM prescription_revisions").first();
+  assert.equal(JSON.parse(v.before_json).prescription.rps[0].items[0].dailyQtyMilli, 1000); // 直す前の中身が残る
+  assert.match(v.summary, /1日量 1 → 2[\s\S]*追加 1g単位の散/);
+  const [rx] = await prescriptionsOf(db, 1);
+  assert.equal(rx.revisions.length, 1);
+  assert.equal(rx.revisions[0].receivedYen, r.receivedYen);
+
+  // 会計を外した後、まだ受け取っていないうちにもう一度直しても、受け取った額は最初のまま
+  const r2 = await revisePrescription(db, user, saved.id, { ...body, handbook: "electronic", rps: [rp("1日1回朝食後", 14, [["610000001", "2"]])] });
+  assert.equal(r2.receivedYen, r.receivedYen);
+  assert.match(r2.summary.join("／"), /お薬手帳 紙 → 電子版[\s\S]*削除 1g単位の散/);
 });

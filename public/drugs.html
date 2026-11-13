@@ -9,7 +9,8 @@
 <link rel="stylesheet" href="/assets/css/app.css">
 <link rel="stylesheet" href="/assets/css/tour.css">
 <link rel="stylesheet" href="/assets/css/drugs.css">
-<script type="module" src="/assets/js/drugs.js"></script>
+<link rel="modulepreload" href="/assets/js/drugs.js">
+<script type="module" src="/assets/js/router.js" data-page="/assets/js/drugs.js"></script>
 </head>
 <body class="app">
 <nav class="sidebar"></nav>
@@ -40,7 +41,6 @@
     </section>
   </main>
   <footer class="actionbar">
-    <div class="keys"><span><kbd>↑</kbd><kbd>↓</kbd>選択</span><span><kbd>/</kbd>検索欄へ</span></div>
     <span class="spacer"></span>
     <span id="revisions"></span>
   </footer>

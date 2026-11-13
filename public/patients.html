@@ -9,7 +9,8 @@
 <link rel="stylesheet" href="/assets/css/app.css">
 <link rel="stylesheet" href="/assets/css/tour.css">
 <link rel="stylesheet" href="/assets/css/patients.css">
-<script type="module" src="/assets/js/patients.js"></script>
+<link rel="modulepreload" href="/assets/js/patients.js">
+<script type="module" src="/assets/js/router.js" data-page="/assets/js/patients.js"></script>
 </head>
 <body class="app">
 <nav class="sidebar"></nav>
@@ -38,9 +39,6 @@
       </div>
     </section>
   </main>
-  <footer class="actionbar">
-    <div class="keys"><span><kbd>↑</kbd><kbd>↓</kbd>選択</span><span><kbd>Enter</kbd>開く</span><span><kbd>/</kbd>検索欄へ</span><span><kbd>Alt</kbd>+<kbd>N</kbd>新規患者登録</span></div>
-  </footer>
 </div>
 
 <dialog id="patient-dialog" aria-labelledby="patient-dialog-title">
@@ -81,6 +79,10 @@
         <span class="hint" id="p-burden-hint">生年月日を入れると、その年齢でありうる割合だけ選べます</span>
         <span class="error-text" data-error="burdenPercent"></span>
       </div>
+      <section class="same-patients" id="same-patients" aria-live="polite" hidden>
+        <div class="same-head" id="same-head"></div>
+        <ul class="same-list" id="same-list"></ul>
+      </section>
     </div>
     <div class="dialog-foot">
       <button type="button" class="btn" id="cancel-patient">キャンセル <kbd>Esc</kbd></button>

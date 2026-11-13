@@ -1,5 +1,5 @@
 // 医薬品コード → 包装のバーコード（GTIN）。調剤監査の画面の「デモ用」のボタンが、手元に薬の箱が無くても読み取りを試せるように使う。
-// other=1 のときは、指定した薬以外の包装を1つ返す（取り違えを試すため）
+// other=1 のときは、指定した薬と成分の違う薬（薬価基準収載医薬品コードの先頭7桁＝薬効分類＋成分が違う）の包装を1つ返す（取り違えを試すため）
 import { json, HttpError } from "../../src/server/http.js";
 
 export async function onRequestGet({ request, env }) {
@@ -16,8 +16,7 @@ export async function onRequestGet({ request, env }) {
   const other = q.get("other") === "1"
     ? await env.DB.prepare(
       `SELECT p.gtin, p.drug_code, p.package, d.name FROM drug_packages p JOIN drugs d ON d.code = p.drug_code
-        WHERE p.drug_code NOT IN (SELECT value FROM json_each(?1))
-          AND p.drug_code NOT IN (SELECT pair_code FROM drugs WHERE code IN (SELECT value FROM json_each(?1)) AND pair_code IS NOT NULL)
+        WHERE substr(d.yj_code, 1, 7) NOT IN (SELECT substr(yj_code, 1, 7) FROM drugs WHERE code IN (SELECT value FROM json_each(?1)))
         ORDER BY p.gtin LIMIT 1`,
     ).bind(list).first()
     : null;

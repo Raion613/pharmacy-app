@@ -10,7 +10,8 @@
 <link rel="stylesheet" href="/assets/css/tour.css">
 <link rel="stylesheet" href="/assets/css/patient.css">
 <link rel="stylesheet" href="/assets/css/rx.css">
-<script type="module" src="/assets/js/rx.js"></script>
+<link rel="modulepreload" href="/assets/js/rx.js">
+<script type="module" src="/assets/js/router.js" data-page="/assets/js/rx.js"></script>
 </head>
 <body class="app">
 <nav class="sidebar"></nav>
@@ -41,15 +42,15 @@
         <span class="error-text" id="date-error"></span>
         <span class="spacer"></span>
         <span class="hint" id="do-note" hidden></span>
-        <button type="button" class="btn btn-small" id="do-last">前回の処方を写す <kbd>Alt+D</kbd></button>
+        <button type="button" class="btn btn-small" id="do-last" title="Alt+D">前回の処方を写す</button>
       </div>
       <div class="rps" id="rps"></div>
       <div class="add-rp-row">
-        <button type="button" class="btn" id="add-rp">剤を追加 <kbd>Alt+R</kbd></button>
+        <button type="button" class="btn" id="add-rp" title="Alt+R">剤を追加</button>
       </div>
-      <section class="inquiries" id="inquiries-box">
-        <div class="inq-head"><b>疑義照会</b><span class="spacer"></span><button type="button" class="btn btn-small" id="add-inquiry">照会を追加 <kbd>Alt+Q</kbd></button></div>
-        <div id="inquiries"></div>
+      <section class="rx-inquiries" id="rx-inquiries" hidden>
+        <h2>処方全体の疑義照会</h2>
+        <div class="inq-lines" data-target="all"></div>
       </section>
     </section>
 
@@ -80,21 +81,6 @@
           <p class="hint" id="bill-note"></p>
         </div>
 
-        <div class="compare">
-          <button type="button" class="btn" id="compare-toggle" aria-pressed="false">改定をまたいで比べる <kbd>Alt+C</kbd></button>
-          <div class="compare-body" id="compare-body" hidden>
-            <div class="date-field">
-              <label for="compare-on">比べる日付</label>
-              <input class="input" type="date" max="9999-12-31" id="compare-on">
-            </div>
-            <dl class="compare-result">
-              <div><dt id="compare-label">比較日</dt><dd class="num" id="compare-total">—</dd></div>
-              <div><dt>調剤日</dt><dd class="num" id="compare-current">—</dd></div>
-              <div class="diff"><dt>差</dt><dd class="num" id="compare-diff">—</dd></div>
-            </dl>
-          </div>
-        </div>
-
         <section class="peds" id="peds" hidden>
           <div class="peds-head">小児の分量<span class="hint" id="peds-weight"></span></div>
           <div class="peds-weight-form" id="peds-weight-form">
@@ -113,30 +99,42 @@
     </aside>
   </main>
   <footer class="actionbar">
-    <div class="keys">
-      <span><kbd>Enter</kbd>次へ／候補を確定</span>
-      <span><kbd>↑</kbd><kbd>↓</kbd>候補</span>
-      <span>空欄で<kbd>Enter</kbd>用法・日数へ</span>
-      <span><kbd>Ctrl</kbd>+<kbd>Del</kbd>行を削除</span>
-      <span><kbd>Alt</kbd>+<kbd>H</kbd>処方箋と違う</span>
-      <span><kbd>Alt</kbd>+<kbd>Q</kbd>疑義照会</span>
-    </div>
     <span class="spacer"></span>
-    <button type="button" class="btn" id="edit-memo">メモ帳 <kbd>Alt+E</kbd></button>
-    <a class="btn" id="back">薬歴へ戻る</a>
-    <button type="button" class="btn btn-primary" id="save">保存 <kbd>Ctrl+Enter</kbd></button>
+    <button type="button" class="btn" id="edit-memo" title="Alt+E">メモ帳</button>
+    <button type="button" class="btn btn-primary" id="save" title="Ctrl+Enter">保存</button>
   </footer>
 </div>
 
-<datalist id="usages">
-  <option value="1日1回朝食後"></option>
-  <option value="1日1回夕食後"></option>
-  <option value="1日1回就寝前"></option>
-  <option value="1日2回朝夕食後"></option>
-  <option value="1日3回毎食後"></option>
-  <option value="1日3回毎食前"></option>
-  <option value="1日3回毎食間"></option>
-</datalist>
 <ul class="suggest" id="suggest" role="listbox" hidden></ul>
+<dialog id="inquiry-dialog" class="inquiry-dialog" aria-labelledby="inquiry-title">
+  <form id="inquiry-form" novalidate>
+    <div class="panel-head" id="inquiry-title">疑義照会</div>
+    <div class="dialog-body">
+      <div class="field"><label for="inq-target">どの薬について</label><select class="input" id="inq-target" name="target"></select></div>
+      <div class="field"><label for="inq-kind">種類</label>
+        <select class="input" id="inq-kind" name="kind">
+          <option value="leftover">残薬調整</option>
+          <option value="adverse">重複投薬・相互作用など</option>
+        </select></div>
+      <div class="field"><label for="inq-content">問い合わせた内容</label>
+        <textarea class="input" id="inq-content" name="content" rows="3" maxlength="400" placeholder="例：ロスバスタチン錠が7日分残っている。28日分を21日分に減らしてよいか"></textarea></div>
+      <div class="field"><label for="inq-answer">処方医の回答</label>
+        <textarea class="input" id="inq-answer" name="answer" rows="2" maxlength="400" placeholder="例：21日分で可"></textarea></div>
+      <div class="field"><label for="inq-changed">回答で処方が</label>
+        <select class="input" id="inq-changed" name="changed">
+          <option value="1">変わった</option>
+          <option value="0">変わらなかった</option>
+        </select></div>
+      <div class="field" id="inq-short-field"><label for="inq-short">6日分以下に減らした理由</label>
+        <input class="input" id="inq-short" name="shortReason" maxlength="200" placeholder="残薬調整で6日分以下にしたときだけ（明細書に書く）"></div>
+    </div>
+    <div class="dialog-foot">
+      <button type="button" class="btn btn-ghost" id="inq-remove">この照会を消す</button>
+      <span class="spacer"></span>
+      <button type="button" class="btn" data-close title="Esc">やめる</button>
+      <button type="submit" class="btn btn-primary" title="Ctrl+Enter">記録する</button>
+    </div>
+  </form>
+</dialog>
 </body>
 </html>

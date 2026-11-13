@@ -9,7 +9,8 @@
 <link rel="stylesheet" href="/assets/css/app.css">
 <link rel="stylesheet" href="/assets/css/tour.css">
 <link rel="stylesheet" href="/assets/css/features.css">
-<script type="module" src="/assets/js/board.js"></script>
+<link rel="modulepreload" href="/assets/js/board.js">
+<script type="module" src="/assets/js/router.js" data-page="/assets/js/board.js"></script>
 </head>
 <body class="app">
 <nav class="sidebar"></nav>
@@ -34,9 +35,6 @@
     </section>
     <section class="board" id="board" aria-label="業務の進み具合"></section>
   </main>
-  <footer class="actionbar">
-    <div class="keys"><span><kbd>Alt</kbd>+<kbd>U</kbd>受付の欄へ</span><span><kbd>Tab</kbd>で札のボタンへ</span><span>30秒ごとに読み直します</span></div>
-  </footer>
 </div>
 </body>
 </html>

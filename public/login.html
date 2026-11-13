@@ -7,6 +7,7 @@
 <title>ログイン | 薬剤料計算・薬歴</title>
 <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="/assets/css/app.css">
+<script src="/assets/js/login-intro.js"></script>
 <link rel="stylesheet" href="/assets/css/tour.css">
 <link rel="stylesheet" href="/assets/css/login.css">
 <script type="module" src="/assets/js/login.js"></script>
@@ -24,15 +25,15 @@
   <form id="login-form" class="panel" novalidate>
     <div class="panel-body login-fields">
       <div class="field">
-        <label for="login-id">ログインID</label>
+        <label for="login-id"><i class="pill" id="pill-id" aria-hidden="true"></i>ログインID</label>
         <input class="input" id="login-id" name="loginId" autocomplete="username" required autofocus>
       </div>
       <div class="field">
-        <label for="password">パスワード</label>
+        <label for="password"><i class="pill" id="pill-pw" aria-hidden="true"></i>パスワード</label>
         <input class="input" id="password" name="password" type="password" autocomplete="current-password" required>
       </div>
       <p class="error-text" id="login-error" role="alert" hidden></p>
-      <button class="btn btn-primary" type="submit">ログイン</button>
+      <button class="btn btn-primary" type="submit"><i class="pill" id="pill-go" aria-hidden="true"></i>ログイン</button>
     </div>
   </form>
   <form id="mfa-form" class="panel" novalidate hidden>
@@ -50,6 +51,11 @@
     <h2>デモ用アカウント</h2>
     <p>ログインID <code>demo</code> ／ パスワード <code>pharmacy-demo</code></p>
     <button type="button" class="btn btn-ghost" id="fill-demo">入力欄に入れる</button>
+  </section>
+  <section class="replay">
+    <span>起動の演出をもう一度</span>
+    <button type="button" class="btn btn-ghost" id="replay-pv">PV から</button>
+    <button type="button" class="btn btn-ghost" id="replay-motion">モーションから</button>
   </section>
 </main>
 </body>

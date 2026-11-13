@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta name="robots" content="noindex, nofollow, noarchive, noai, noimageai">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>回覧板</title>
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="/assets/css/app.css">
+<link rel="stylesheet" href="/assets/css/tour.css">
+<link rel="stylesheet" href="/assets/css/home.css">
+<link rel="modulepreload" href="/assets/js/home.js">
+<script type="module" src="/assets/js/router.js" data-page="/assets/js/home.js"></script>
+</head>
+<body class="app">
+<nav class="sidebar"></nav>
+<div class="main">
+  <header class="topbar"></header>
+  <nav class="crumbs"></nav>
+  <main class="content home">
+    <div class="feed-col">
+      <header class="hello">
+        <p class="hello-date" id="hello-date"></p>
+        <h2 class="hello-title" id="hello-title"></h2>
+        <p class="hello-sub" id="hello-sub"></p>
+      </header>
+
+      <form class="compose" id="compose" autocomplete="off">
+        <div class="avatar me" id="compose-avatar" aria-hidden="true"></div>
+        <div class="compose-main">
+          <textarea id="compose-body" rows="2" maxlength="1000" placeholder="薬局のみんなに伝えること（患者のことは薬歴の申し送りへ）" aria-label="回覧板に書くこと"></textarea>
+          <div class="compose-foot">
+            <div class="kinds" role="radiogroup" aria-label="種類" id="compose-kinds"></div>
+            <span class="spacer"></span>
+            <span class="count" id="compose-count"></span>
+            <button type="submit" class="post-btn" id="compose-post" title="投稿（Ctrl+Enter）" disabled>投稿</button>
+          </div>
+          <p class="error-text" id="compose-error" hidden></p>
+        </div>
+      </form>
+
+      <ol class="feed" id="feed" aria-label="回覧板の投稿（新しい順）"></ol>
+    </div>
+  </main>
+</div>
+</body>
+</html>

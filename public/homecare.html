@@ -10,7 +10,8 @@
 <link rel="stylesheet" href="/assets/css/tour.css">
 <link rel="stylesheet" href="/assets/css/patient.css">
 <link rel="stylesheet" href="/assets/css/features.css">
-<script type="module" src="/assets/js/homecare.js"></script>
+<link rel="modulepreload" href="/assets/js/homecare.js">
+<script type="module" src="/assets/js/router.js" data-page="/assets/js/homecare.js"></script>
 </head>
 <body class="app">
 <nav class="sidebar"></nav>
@@ -38,9 +39,6 @@
       <div class="calendar" id="calendar"></div>
     </section>
   </main>
-  <footer class="actionbar">
-    <div class="keys"><span><kbd>Alt</kbd>+<kbd>V</kbd>訪問を予定</span><span><kbd>Alt</kbd>+<kbd>←</kbd><kbd>→</kbd>月を移る</span><span>予定を選ぶと記録を書けます</span></div>
-  </footer>
 </div>
 
 <dialog id="facility-dialog" aria-labelledby="facility-title">

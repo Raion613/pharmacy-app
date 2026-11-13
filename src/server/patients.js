@@ -1,5 +1,5 @@
 import { HttpError, isDate, todayJst, nowIso } from "./http.js";
-import { normalizeKana, isKatakana, searchKey } from "../../public/assets/js/text.js";
+import { normalizeKana, isKatakana, searchKey, VOICED_KATAKANA } from "../../public/assets/js/text.js";
 import { burdenChoices, burdenProblem, burdenText, BURDEN_REASONS } from "../rules/burden.js";
 import { auditStatement } from "./audit.js";
 import { kohiOf } from "./kohi.js";
@@ -50,6 +50,21 @@ export async function updateBurden(db, user, patientId, body, today = todayJst()
   return getPatient(db, patientId);
 }
 
+// お薬手帳の形態を変える（電子版に替えた・持たなくなった）。処方の保存でも更新される（prescriptions.js）
+export const HANDBOOK_KINDS = { paper: "紙", electronic: "電子版", none: "持っていない" };
+export async function updateHandbookKind(db, user, patientId, body) {
+  const p = await getPatient(db, patientId);
+  if (!Object.hasOwn(HANDBOOK_KINDS, body.handbookKind ?? "")) {
+    throw new HttpError(422, "入力に誤りがあります", [{ path: "handbookKind", message: "お薬手帳の形態を選んでください" }]);
+  }
+  const before = p.handbookKind === null ? "未確認" : HANDBOOK_KINDS[p.handbookKind];
+  await db.batch([
+    db.prepare("UPDATE patients SET handbook_kind = ?1 WHERE id = ?2").bind(body.handbookKind, patientId),
+    auditStatement(db, user.id, "patient.handbook", patientId, `${before} → ${HANDBOOK_KINDS[body.handbookKind]}`),
+  ]);
+  return getPatient(db, patientId);
+}
+
 export function validatePatient(body, today = todayJst()) {
   const errors = [];
   const name = String(body.name ?? "").trim().replace(/\s+/g, "　");
@@ -93,7 +108,7 @@ export async function createPatient(db, user, body) {
 
 // 一覧・詳細で共通の列。注意の分類は、アレルギー歴・副作用歴のメモ（今の内容）がある分類（カンマ区切り）
 const PATIENT_SELECT = `
-  SELECT pa.id, pa.patient_no, pa.name, pa.kana, pa.birth_date, pa.sex, pa.burden_percent, pa.burden_reason, pa.burden_until, pa.burden_checked_on,
+  SELECT pa.id, pa.patient_no, pa.name, pa.kana, pa.birth_date, pa.sex, pa.burden_percent, pa.burden_reason, pa.burden_until, pa.burden_checked_on, pa.handbook_kind,
          (SELECT MAX(dispensed_on) FROM prescriptions WHERE patient_id = pa.id) AS last_dispensed_on,
          (SELECT group_concat(DISTINCT n.category) FROM patient_notes n
            WHERE n.patient_id = pa.id AND n.category IN ('allergy', 'adverse')
@@ -101,6 +116,9 @@ const PATIENT_SELECT = `
     FROM patients pa`;
 
 // 自分の薬局の患者を、患者番号（前方一致）、カナ（部分一致）、氏名（部分一致）で探す。空なら最近来局した順。
+// DB のカナ・氏名の濁点・半濁点を外す SQL（検索の言葉は searchKey で外してあるので、両方を同じ形にして比べる）
+const unvoiced = (col) => VOICED_KATAKANA.reduce((sql, [v, base]) => `REPLACE(${sql}, '${v}', '${base}')`, col);
+
 export async function searchPatients(db, pharmacyId, q) {
   const text = String(q ?? "").trim();
   let stmt;
@@ -113,7 +131,8 @@ export async function searchPatients(db, pharmacyId, q) {
         `${PATIENT_SELECT}
           WHERE pa.pharmacy_id = ?4
             AND (pa.patient_no LIKE ?1 || '%'
-             OR REPLACE(pa.kana, '　', '') LIKE '%' || ?2 || '%'
+             OR ${unvoiced("REPLACE(pa.kana, '　', '')")} LIKE '%' || ?2 || '%'
+             OR ${unvoiced("REPLACE(pa.name, '　', '')")} LIKE '%' || ?2 || '%'
              OR REPLACE(pa.name, '　', '') LIKE '%' || ?3 || '%')
           ORDER BY pa.kana LIMIT 50`,
       )
@@ -142,6 +161,7 @@ function toPatientJson(row) {
     burdenReason: row.burden_reason,
     burdenUntil: row.burden_until,
     burdenCheckedOn: row.burden_checked_on,
+    handbookKind: row.handbook_kind,
     lastDispensedOn: row.last_dispensed_on,
     alertCategories: row.alert_categories === null ? [] : row.alert_categories.split(","),
   };

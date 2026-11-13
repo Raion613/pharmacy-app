@@ -12,10 +12,18 @@ export async function createReception(db, user, body) {
   if (!patient) throw new HttpError(404, "患者が見つかりません");
   // 会計まで済んでいない受付が残っている患者は、重ねて受け付けない（二重受付の防止）
   const open = await db.prepare(
-    `SELECT r.id FROM receptions r WHERE r.patient_id = ?1
+    `SELECT r.id, r.received_at FROM receptions r WHERE r.patient_id = ?1
         AND NOT EXISTS (SELECT 1 FROM reception_steps s WHERE s.reception_id = r.id AND s.step = 'paid')`,
   ).bind(body.patientId).first();
-  if (open) throw new HttpError(422, "入力に誤りがあります", [{ path: "patientId", message: "この患者は会計が済んでいない受付があります" }]);
+  if (open) {
+    // いつの受付かを言う（日本時間）。前の日の受付も、会計まで済んでいなければ受付状況に「前日から」で出ている
+    const jst = new Date(Date.parse(open.received_at) + 9 * 3600000).toISOString();
+    const day = `${Number(jst.slice(5, 7))}/${Number(jst.slice(8, 10))}`;
+    throw new HttpError(422, "入力に誤りがあります", [{
+      path: "patientId",
+      message: `${day} ${jst.slice(11, 16)} の受付が、まだ会計まで済んでいません。受付状況のその受付から続けてください`,
+    }]);
+  }
   const now = nowIso();
   const [inserted] = await db.batch([
     db.prepare("INSERT INTO receptions (patient_id, received_at, created_by) VALUES (?1, ?2, ?3) RETURNING id").bind(body.patientId, now, user.id),
@@ -32,6 +40,13 @@ export async function addStep(db, user, receptionId, step) {
   const done = new Set(results.map((x) => x.step));
   if (done.has(step)) throw new HttpError(422, "この段階はもう済んでいます");
   if (!done.has(MANUAL_STEPS[step])) throw new HttpError(422, `${STEP_LABEL[MANUAL_STEPS[step]]}が済んでいません`);
+  // 投薬は、薬歴でこの来局の指導記録を書いてから（服薬管理指導料の要件。書かずに会計まで流れないように）
+  if (step === "handed") {
+    const record = await db.prepare(
+      "SELECT 1 FROM guidance_records g JOIN prescriptions p ON p.id = g.prescription_id WHERE p.reception_id = ?1 LIMIT 1",
+    ).bind(receptionId).first();
+    if (!record) throw new HttpError(422, "この来局の指導記録がまだありません。薬歴で指導記録を書いてください");
+  }
   await db.batch([
     db.prepare("INSERT INTO reception_steps (reception_id, step, at, user_id) VALUES (?1, ?2, ?3, ?4)").bind(receptionId, step, nowIso(), user.id),
     auditStatement(db, user.id, "reception.step", r.patient_id, STEP_LABEL[step]),
@@ -39,6 +54,10 @@ export async function addStep(db, user, receptionId, step) {
 }
 
 export const STEP_LABEL = { entered: "入力", audited: "監査", handed: "投薬", paid: "会計" };
+
+// その日の受付と、それより前に受け付けて会計まで済んでいない受付（前日から持ち越した分。二重受付の防止で新しく受け付けられないので、見えないと続きができない）
+const IN_DAY = `(r.received_at >= ?1 AND r.received_at < ?2
+  OR r.received_at < ?1 AND NOT EXISTS (SELECT 1 FROM reception_steps x WHERE x.reception_id = r.id AND x.step = 'paid'))`;
 
 // 自分の薬局の、その日（日本時間）の受付の一覧。古い順
 export async function receptionsOn(db, pharmacyId, date) {
@@ -49,22 +68,28 @@ export async function receptionsOn(db, pharmacyId, date) {
   const [receptions, steps] = await db.batch([
     db.prepare(
       `SELECT r.id, r.patient_id, r.received_at, pa.name, pa.kana, pa.patient_no, p.id AS prescription_id,
-              (SELECT COUNT(*) FROM inspections i WHERE i.prescription_id = p.id) AS inspections
+              (SELECT COUNT(*) FROM inspections i WHERE i.prescription_id = p.id) AS inspections,
+              (SELECT COUNT(*) FROM guidance_records g WHERE g.prescription_id = p.id) AS records,
+              -- 処方を直したとき：直した時点で窓口でもう受け取っていた額（最後の訂正）と、今の窓口の額
+              (SELECT v.received_yen FROM prescription_revisions v WHERE v.prescription_id = p.id ORDER BY v.id DESC LIMIT 1) AS received_yen,
+              COALESCE((SELECT k.pay_yen FROM prescription_kohi k WHERE k.prescription_id = p.id ORDER BY k.order_no DESC LIMIT 1), p.copay_yen)
+                + COALESCE(p.special_fee_yen, 0) AS pay_yen
          FROM receptions r JOIN patients pa ON pa.id = r.patient_id
          LEFT JOIN prescriptions p ON p.reception_id = r.id
-        WHERE pa.pharmacy_id = ?3 AND r.received_at >= ?1 AND r.received_at < ?2 ORDER BY r.received_at`,
+        WHERE pa.pharmacy_id = ?3 AND ${IN_DAY} ORDER BY r.received_at`,
     ).bind(from, to, pharmacyId),
     db.prepare(
       `SELECT s.reception_id, s.step, s.at, u.display_name AS by FROM reception_steps s JOIN receptions r ON r.id = s.reception_id
          JOIN patients pa ON pa.id = r.patient_id
-         JOIN users u ON u.id = s.user_id WHERE pa.pharmacy_id = ?3 AND r.received_at >= ?1 AND r.received_at < ?2`,
+         JOIN users u ON u.id = s.user_id WHERE pa.pharmacy_id = ?3 AND ${IN_DAY}`,
     ).bind(from, to, pharmacyId),
   ]);
   const byReception = Map.groupBy(steps.results, (s) => s.reception_id);
   return receptions.results.map((r) => ({
-    id: r.id, patientId: r.patient_id, receivedAt: r.received_at,
+    id: r.id, patientId: r.patient_id, receivedAt: r.received_at, carriedOver: r.received_at < from,
     patient: { name: r.name, kana: r.kana, patientNo: r.patient_no },
-    prescriptionId: r.prescription_id, inspections: r.inspections,
+    prescriptionId: r.prescription_id, inspections: r.inspections, records: r.records,
+    receivedYen: r.received_yen, payYen: r.pay_yen,
     steps: Object.fromEntries((byReception.get(r.id) ?? []).map((s) => [s.step, { at: s.at, by: s.by }])),
   }));
 }

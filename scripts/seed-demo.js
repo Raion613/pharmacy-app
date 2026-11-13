@@ -49,8 +49,8 @@ const biofermin = (days) => ({ usage: "1日3回毎食後", days, items: [item(D.
 
 // 患者・メモ・指導記録はすべて架空。来局日は令和8年4月の薬価改定をまたぎ、途中で薬の追加・中止・日数の変更が起きるようにしてある。
 // 記録の内容は、処方している薬と矛盾しないようにした（例：マグミットの高齢者には腎機能と Mg 値の確認）。
-const soap = (s, o, a, p, leftover = "none", notebook = "used") =>
-  ({ subjective: s, objective: o, assessment: a, plan: p, leftover, notebook });
+const soap = (s, o, a, p, leftover = "none") =>
+  ({ subjective: s, objective: o, assessment: a, plan: p, leftover });
 
 const PATIENTS = [
   {
@@ -113,7 +113,7 @@ const PATIENTS = [
         record: soap("のどが痛く、熱が38度ある",
           "抗菌薬の処方なし。セフェム系の発疹歴は処方医も把握済み（問診票で確認）",
           "解熱鎮痛薬と胃粘膜保護薬の組み合わせで問題なし",
-          "空腹時を避けて飲む。3日たっても熱が下がらなければ再受診", "none", "not_used"),
+          "空腹時を避けて飲む。3日たっても熱が下がらなければ再受診", "none"),
       },
       {
         on: "2026-10-08", by: 2, rps: [
@@ -122,7 +122,7 @@ const PATIENTS = [
         record: soap("頭痛がひどい日だけ飲みたい",
           "カロナール1回2錠。3月に出たロキソニンが3錠残っている",
           "ロキソニンとの重複服用に注意が必要",
-          "カロナールを飲んでいる間はロキソニンを飲まない。残薬は次回持参を依頼", "some", "not_used"),
+          "カロナールを飲んでいる間はロキソニンを飲まない。残薬は次回持参を依頼", "some"),
       },
     ],
   },
@@ -155,6 +155,7 @@ const PATIENTS = [
           { usage: "1日3回毎食後", rxDays: 28, days: 21, daysChange: "inquiry", items: [item(D.magmitt, "3")] },
         ],
         inquiries: [{
+          rpNo: 1, drugCode: D.magmitt,
           kind: "leftover",
           content: "マグミット錠が7日分残っている（本人と娘さんに確認。昼の飲み忘れ）。28日分を21日分に減らしてよいか",
           answer: "21日分で可（○○内科 医師）",
@@ -258,6 +259,19 @@ for (const u of USERS) {
     .run();
 }
 
+// デモの薬局の採用薬（処方入力の候補で一番上に出る）。同じ成分・規格の銘柄から1つを決めた（db/migrations/2026-11-13-adopted-drugs.sql と同じ）
+const ADOPTED = [
+  "620007870", // アムロジピン錠５ｍｇ「サワイ」
+  "622588801", // ロスバスタチン錠２．５ｍｇ「サワイ」
+  "620009465", // レバミピド錠１００ｍｇ「サワイ」
+  "622098501", // アトルバスタチン錠１０ｍｇ「サワイ」
+  "610463198", // マグミット錠３３０ｍｇ
+  "620002023", // カロナール錠２００
+];
+for (const code of ADOPTED) {
+  await db.prepare("INSERT INTO adopted_drugs (pharmacy_id, drug_code, adopted_at, adopted_by) VALUES (1, ?1, '2026-04-01T00:00:00.000Z', 1)").bind(code).run();
+}
+
 // 日時は来局日の日中にしておく（実行した日時のままだと、過去の薬歴として不自然になる）
 const at = (date, hhmm) => `${date}T${hhmm}:00.000Z`;
 const patientIds = new Map(); // 氏名 → 患者ID
@@ -344,10 +358,76 @@ await createTracing(db, SATO, endo, {
 });
 await db.prepare("UPDATE tracing_reports SET created_at = ?1").bind(at("2026-09-17", "03:00")).run();
 
+// 回覧板：本部からの通知（pharmacy_id null）と、サンプル薬局の申し送り・連絡・相談。患者の情報は書かない。db/migrations/2026-11-13-notices.sql と同じ
+const NOTICES = [
+  {
+    "id": 1,
+    "pharmacyId": null,
+    "kind": "hq",
+    "sender": "本部 薬事部",
+    "createdBy": null,
+    "createdAt": "2026-11-04T00:30:00.000Z",
+    "body": "11月1日から一部の品目の薬価が変わっています（年度の途中の変更）。\n各店で「マスター取込」に最新の改定分（.csv）を取り込み、調剤日が11月1日以降の処方で金額が新しくなっていることを確かめてください。"
+  },
+  {
+    "id": 2,
+    "pharmacyId": null,
+    "kind": "periodic",
+    "sender": "本部 営業部",
+    "createdBy": null,
+    "createdAt": "2026-11-05T08:00:00.000Z",
+    "body": "10月の月報を出しました。今月から、店ごとの後発医薬品の使用割合も並べています。\n自店の数字は左のメニューの「薬局の数字」で見られます。"
+  },
+  {
+    "id": 3,
+    "pharmacyId": null,
+    "kind": "pr",
+    "sender": "本部 広報",
+    "createdBy": null,
+    "createdAt": "2026-11-10T01:00:00.000Z",
+    "body": "インフルエンザの流行期に入りました 🍵\n待合のポスターを11月版に差し替えます。今週中に各店へ届きます。古いポスターは外して捨ててください。"
+  },
+  {
+    "id": 4,
+    "pharmacyId": 1,
+    "kind": "handover",
+    "sender": null,
+    "createdBy": 2,
+    "createdAt": "2026-11-12T04:05:00.000Z",
+    "body": "午前→午後の申し送りです。\n・卸の午後便で、在庫が切れていた錠剤が入ります。届いたら棚の補充をお願いします\n・14時ごろ、近くのクリニックから処方日数の件で折り返しの電話があります（内容は薬歴に書きました）"
+  },
+  {
+    "id": 5,
+    "pharmacyId": 1,
+    "kind": "contact",
+    "sender": null,
+    "createdBy": 1,
+    "createdAt": "2026-11-12T09:10:00.000Z",
+    "body": "分包紙の在庫が残り1箱です。明日の発注に入れました。"
+  },
+  {
+    "id": 6,
+    "pharmacyId": 1,
+    "kind": "consult",
+    "sender": null,
+    "createdBy": 2,
+    "createdAt": "2026-11-13T00:12:00.000Z",
+    "body": "年末年始の営業時間の貼り紙、去年の文面を使い回してもいいでしょうか？ 休みの日は本部の案内（12/29〜1/3）のとおりです。"
+  }
+];
+const NOTICE_READS = [{"noticeId": 1, "userId": 1, "readAt": "2026-11-04T01:00:00.000Z"}, {"noticeId": 2, "userId": 1, "readAt": "2026-11-05T09:00:00.000Z"}, {"noticeId": 4, "userId": 1, "readAt": "2026-11-12T04:30:00.000Z"}, {"noticeId": 5, "userId": 1, "readAt": "2026-11-12T09:10:00.000Z"}, {"noticeId": 1, "userId": 2, "readAt": "2026-11-04T02:00:00.000Z"}, {"noticeId": 3, "userId": 2, "readAt": "2026-11-10T02:00:00.000Z"}, {"noticeId": 4, "userId": 2, "readAt": "2026-11-12T04:05:00.000Z"}, {"noticeId": 5, "userId": 2, "readAt": "2026-11-13T00:05:00.000Z"}, {"noticeId": 6, "userId": 2, "readAt": "2026-11-13T00:12:00.000Z"}];
+for (const n of NOTICES) {
+  await db.prepare("INSERT INTO notices (id, pharmacy_id, kind, body, sender, created_at, created_by) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)")
+    .bind(n.id, n.pharmacyId, n.kind, n.body, n.sender, n.createdAt, n.createdBy).run();
+}
+for (const r of NOTICE_READS) {
+  await db.prepare("INSERT INTO notice_reads (notice_id, user_id, read_at) VALUES (?1, ?2, ?3)").bind(r.noticeId, r.userId, r.readAt).run();
+}
+
 // 作った行を INSERT 文にして書き出す。アクセスログは本物の操作だけを残したいので書き出さない
-const TABLES = ["pharmacies", "pharmacy_facility", "users", "patients", "patient_notes", "prescriptions", "prescription_rps",
+const TABLES = ["pharmacies", "pharmacy_facility", "users", "adopted_drugs", "patients", "patient_notes", "prescriptions", "prescription_rps",
   "prescription_items", "inquiries", "prescription_fees", "conversations", "guidance_records", "measurements", "guidance_templates",
-  "tracing_reports", "facilities", "home_patients", "care_plans", "visit_schedules", "visit_records", "line_messages"];
+  "tracing_reports", "facilities", "home_patients", "care_plans", "visit_schedules", "visit_records", "line_messages", "notices", "notice_reads"];
 const lines = ["DELETE FROM access_logs;", "DELETE FROM sessions;", "DELETE FROM mfa_challenges;", "DELETE FROM inspection_scans;", "DELETE FROM inspections;",
   "DELETE FROM reception_steps;", "UPDATE prescriptions SET reception_id = NULL;", "DELETE FROM receptions;", ...[...TABLES].reverse().map((t) => `DELETE FROM ${t};`)];
 for (const t of TABLES) {
@@ -357,6 +437,9 @@ for (const t of TABLES) {
     lines.push(`INSERT INTO ${t} (${cols.join(", ")}) VALUES (${cols.map((c) => sqlValue(row[c])).join(", ")});`);
   }
 }
+// 在庫：全部の薬局・全部の薬を 100 から始める（薬は約1万3千品目あるので、行を書き出さず SQL 1本で入れる）
+lines.unshift("DELETE FROM drug_stock;");
+lines.push("INSERT INTO drug_stock (pharmacy_id, drug_code, qty_milli, updated_at) SELECT p.id, d.code, 100000, '2026-11-13T00:00:00.000Z' FROM pharmacies p CROSS JOIN drugs d;");
 writeFileSync(OUT, lines.join("\n") + "\n", "utf8");
 
 const n = async (t) => (await db.prepare(`SELECT COUNT(*) AS n FROM ${t}`).first()).n;

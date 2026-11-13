@@ -29,7 +29,6 @@ export const SOAP = [
 ];
 
 export const LEFTOVER = { none: "残薬なし", some: "残薬あり", unchecked: "残薬未確認" };
-export const NOTEBOOK = { used: "手帳あり", not_used: "手帳なし", unchecked: "手帳未確認" };
 
 export const NOTE_MAX = 300;
 export const SOAP_MAX = 1000;

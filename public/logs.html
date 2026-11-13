@@ -8,7 +8,8 @@
 <link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="/assets/css/app.css">
 <link rel="stylesheet" href="/assets/css/tour.css">
-<script type="module" src="/assets/js/logs.js"></script>
+<link rel="modulepreload" href="/assets/js/logs.js">
+<script type="module" src="/assets/js/router.js" data-page="/assets/js/logs.js"></script>
 <style>
   .logs { height: 100%; display: flex; flex-direction: column; }
   .logs .scroll { flex: 1; min-height: 0; overflow: auto; }

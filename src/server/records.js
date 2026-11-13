@@ -1,6 +1,6 @@
 // 患者メモ・指導記録（SOAP）・会話の文字起こし・指導記録のテンプレート。どれも追記だけで、書き込みはアクセスログと同じトランザクションに入れる。
 import { HttpError, nowIso } from "./http.js";
-import { NOTE_LABEL, SOAP, LEFTOVER, NOTEBOOK, NOTE_MAX, SOAP_MAX } from "../../public/assets/js/record-kinds.js";
+import { NOTE_LABEL, SOAP, LEFTOVER, NOTE_MAX, SOAP_MAX } from "../../public/assets/js/record-kinds.js";
 import { auditStatement } from "./audit.js";
 import { transcribe } from "./ai-stub.js";
 import { extractNotes } from "../rules/soap-draft.js";
@@ -56,12 +56,11 @@ export function validateRecord(body) {
   }
   if (SOAP.every(({ key }) => record[key] === "")) errors.push({ path: "subjective", message: "S・O・A・P のどれかを入力してください" });
   if (!Object.hasOwn(LEFTOVER, body.leftover ?? "")) errors.push({ path: "leftover", message: "残薬の確認結果を選んでください" });
-  if (!Object.hasOwn(NOTEBOOK, body.notebook ?? "")) errors.push({ path: "notebook", message: "お薬手帳の確認結果を選んでください" });
   const conversationId = body.conversationId ?? null;
   if (conversationId !== null && !Number.isInteger(conversationId)) errors.push({ path: "conversationId", message: "会話の指定が不正です" });
   if (typeof (body.drafted ?? false) !== "boolean") errors.push({ path: "drafted", message: "下書きの印が不正です" });
   if (errors.length > 0) throw new HttpError(422, "入力に誤りがあります", errors);
-  return { ...record, leftover: body.leftover, notebook: body.notebook, conversationId, drafted: body.drafted ?? false };
+  return { ...record, leftover: body.leftover, conversationId, drafted: body.drafted ?? false };
 }
 
 // 指導記録は来局（処方）にひも付ける。患者は処方から引くので、画面から患者IDは受け取らない
@@ -77,9 +76,9 @@ export async function createRecord(db, user, prescriptionId, body) {
   const [inserted] = await db.batch([
     db.prepare(
       `INSERT INTO guidance_records
-         (prescription_id, patient_id, subjective, objective, assessment, plan, leftover, notebook, conversation_id, drafted, created_at, created_by)
-       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12) RETURNING id`,
-    ).bind(rx.id, rx.patient_id, r.subjective, r.objective, r.assessment, r.plan, r.leftover, r.notebook,
+         (prescription_id, patient_id, subjective, objective, assessment, plan, leftover, conversation_id, drafted, created_at, created_by)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11) RETURNING id`,
+    ).bind(rx.id, rx.patient_id, r.subjective, r.objective, r.assessment, r.plan, r.leftover,
       r.conversationId, r.drafted ? 1 : 0, now, user.id),
     auditStatement(db, user.id, "record.create", rx.patient_id, `調剤日 ${rx.dispensed_on} の指導記録${r.drafted ? "（下書きから）" : ""}`),
   ]);
@@ -170,7 +169,6 @@ export async function recordsByPrescription(db, patientId) {
     assessment: g.assessment,
     plan: g.plan,
     leftover: g.leftover,
-    notebook: g.notebook,
     conversationId: g.conversation_id,
     drafted: g.drafted === 1,
     createdAt: g.created_at,

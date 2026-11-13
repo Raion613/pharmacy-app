@@ -4,19 +4,21 @@ import { api, escapeHtml, formatDate, today } from "./app.js";
 import { formatQuantity } from "./format.js";
 import { burdenText, burdenLongText } from "./burden-text.js";
 
-const id = new URLSearchParams(location.search).get("id");
-const { patient, prescription: rx, pharmacy } = await api(`/api/prescriptions/${id}?purpose=receipt`);
-document.title = `領収証・明細書 ${patient.name} ${rx.dispensedOn}`;
+// 画面を開くたびに router.js が呼ぶ（画面は中身だけを差し替えるので、画面の処理はこの関数の中に置く）
+export default async function mount() {
+  const id = new URLSearchParams(location.search).get("id");
+  const { patient, prescription: rx, pharmacy } = await api(`/api/prescriptions/${id}?purpose=receipt`);
+  document.title = `領収証・明細書 ${patient.name} ${rx.dispensedOn}`;
 
-const SECTION = { tech: "調剤技術料", mgmt: "薬学管理料", other: "その他" };
-const sum = (s) => rx.fees.filter((f) => f.section === s).reduce((t, f) => t + f.points * f.count, 0);
-const special = rx.specialFeeYen ?? 0;
-const tax = special - (special * 100) / 110; // 特別の料金は消費税込み（10円単位 × 1.1 なので割り切れる）
-const unit = (u) => (u === "" ? "規格単位" : u);
-const pt = (n) => `${n.toLocaleString()}<small>点</small>`;
-const yen = (n) => `${n.toLocaleString()}<small>円</small>`;
+  const SECTION = { tech: "調剤技術料", mgmt: "薬学管理料", other: "その他" };
+  const sum = (s) => rx.fees.filter((f) => f.section === s).reduce((t, f) => t + f.points * f.count, 0);
+  const special = rx.specialFeeYen ?? 0;
+  const tax = special - (special * 100) / 110; // 特別の料金は消費税込み（10円単位 × 1.1 なので割り切れる）
+  const unit = (u) => (u === "" ? "規格単位" : u);
+  const pt = (n) => `${n.toLocaleString()}<small>点</small>`;
+  const yen = (n) => `${n.toLocaleString()}<small>円</small>`;
 
-document.querySelector("#sheet").innerHTML = `
+  document.querySelector("#sheet").innerHTML = `
   <section class="receipt">
     <h1>領　収　証</h1>
     <table class="r-head">
@@ -76,4 +78,5 @@ document.querySelector("#sheet").innerHTML = `
     </table>
   </section>` : ""}`;
 
-document.querySelector("#print").addEventListener("click", () => print());
+  document.querySelector("#print").addEventListener("click", () => print());
+}

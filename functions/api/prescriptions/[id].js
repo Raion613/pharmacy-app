@@ -1,10 +1,10 @@
 // 1回の調剤：領収証・明細書・お薬手帳（紙に貼る内容・電子版のデータ）・調剤監査に要るもの。患者の情報を返すのでアクセスログを残す
-import { json, HttpError } from "../../../src/server/http.js";
+import { json, HttpError, readJson } from "../../../src/server/http.js";
 import { getPatient } from "../../../src/server/patients.js";
-import { prescriptionsOf } from "../../../src/server/prescriptions.js";
+import { prescriptionsOf, revisePrescription } from "../../../src/server/prescriptions.js";
 import { auditStatement } from "../../../src/server/audit.js";
 import { notesOf } from "../../../src/server/records.js";
-import { assertPrescription } from "../../../src/server/tenant.js";
+import { assertPrescription, assertBodyPatient } from "../../../src/server/tenant.js";
 import { jahisText, toShiftJis, splitJahis } from "../../../src/rules/okusuri-techo.js";
 
 const PURPOSE = { receipt: "領収証・明細書", handbook: "お薬手帳", inspection: "調剤監査" };
@@ -37,4 +37,12 @@ export async function onRequestGet({ params, request, env, data }) {
     handbook = { parts: splitJahis(text, dataId).map((t) => ({ text: t, sjisBase64: btoa(Array.from(toShiftJis(t), (b) => String.fromCharCode(b)).join("")) })) };
   }
   return json({ patient, notes, prescription, pharmacy: pharmacyJson, handbook });
+}
+
+// 保存した処方を直す（会計の後でも）。直す前の内容は prescription_revisions に残る
+export async function onRequestPut({ params, request, env, data }) {
+  await assertPrescription(env.DB, data.user, params.id);
+  const body = await readJson(request);
+  await assertBodyPatient(env.DB, data.user, body);
+  return json(await revisePrescription(env.DB, data.user, params.id, body));
 }

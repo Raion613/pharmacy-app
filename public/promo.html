@@ -308,7 +308,7 @@ function initAudio() {
   ac = new AudioContext();
   const comp = ac.createDynamicsCompressor();
   out = ac.createGain();
-  out.gain.value = 0.8;
+  out.gain.value = 0.64; // 0.8 の 0.8倍
   out.connect(comp).connect(ac.destination);
   noiseBuf = ac.createBuffer(1, ac.sampleRate, ac.sampleRate);
   const d = noiseBuf.getChannelData(0);
@@ -382,11 +382,15 @@ function scheduleSound(t0) {
 }
 
 // ---------- 再生 ----------
+// ログイン画面に埋め込まれたとき（初回だけの PV、login-intro.js）は、終わったら・Esc でログイン画面に知らせる
+const EMBED = new URLSearchParams(location.search).get("embed") === "1";
+const toLogin = () => parent.postMessage({ type: "pv:end" }, location.origin);
 let t0 = null;
 function frame() {
   const t = ac.currentTime - t0;
   render(Math.max(t, 0));
   if (t < END) requestAnimationFrame(frame);
+  else if (EMBED) setTimeout(toLogin, 400);
   else start.hidden = false;
 }
 async function play() {
@@ -400,6 +404,7 @@ async function play() {
 start.addEventListener("click", play);
 document.addEventListener("keydown", (e) => {
   if ((e.key === "Enter" || e.key === " ") && !start.hidden) { e.preventDefault(); play(); }
+  if (e.key === "Escape" && EMBED) toLogin();
 });
 
 function fit() {

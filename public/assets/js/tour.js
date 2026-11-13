@@ -20,8 +20,10 @@ export function setTour(pageKey, list) {
 }
 
 // 初めてこの画面を開いたときだけ流す
-export function autoStartTour() {
+export async function autoStartTour() {
   if (localStorage.getItem(storageKey(page)) === VERSION) return;
+  // 画面が出そろってから（app.js の page-shown）。浮かび上がる途中の部品を囲うと、穴の位置がずれる
+  if (document.documentElement.dataset.shown !== "1") await new Promise((resolve) => document.addEventListener("page-shown", resolve, { once: true }));
   startTour();
 }
 
@@ -235,6 +237,15 @@ function finish() {
   root.classList.remove("open");
   root.addEventListener("transitionend", () => root.remove(), { once: true });
   if (returnFocus instanceof HTMLElement) returnFocus.focus({ preventScroll: true });
+}
+
+// 画面を移るときに、見終わった扱いにせず閉じる（router.js）
+export function endTour() {
+  if (!run) return;
+  window.removeEventListener("keydown", onKey, true);
+  window.removeEventListener("resize", reposition);
+  run.root.remove();
+  run = null;
 }
 
 export const tourActive = () => run !== null;

@@ -30,6 +30,8 @@
 .note-rows .input { width: 100%; }
 /* 患者メモの行：触れると少し浮き、押すとその場に小さな窓が浮いて直せる */
 .note-item { margin: 0 -4px; padding: 1px 4px; border-radius: 4px; cursor: pointer; transition: transform .12s ease, box-shadow .12s ease, background-color .12s ease; }
+/* 1行ずつ色を変えて、行の境目を見やすく（注意点は区分の行ごと。ほかの箱は1件ずつ） */
+.cautions tr:nth-child(even) th, .cautions tr:nth-child(even) td, .pbox-body:not(#cautions) .note-item:nth-child(even) { background: rgba(0, 40, 60, .045); }
 .note-item:hover, .note-item:focus-visible { transform: translateY(-1px); background: #fff; box-shadow: 0 2px 8px rgba(0, 0, 0, .12); outline: none; }
 .note-pop { position: fixed; margin: 0; padding: 8px; border: 1px solid var(--border); border-radius: 6px; box-shadow: 0 8px 24px rgba(0, 0, 0, .18); animation: note-pop .14s ease-out; }
 .note-pop::backdrop { background: transparent; }
@@ -219,6 +221,20 @@ dialog.wide { width: 780px; }
 .vc-inquiries { display: grid; gap: 4px; margin-top: 6px; font-size: 12.5px; }
 .vc-inquiry { border-left: 3px solid #e0b44a; padding: 2px 8px; background: #fffbef; }
 .vc-inquiry .answer { color: var(--sub); }
+.vc-inquiry .about { margin-left: 8px; font-weight: 700; }
+.vc-compare { margin-top: 10px; border-top: 1px dashed var(--border); padding-top: 8px; display: grid; gap: 6px; }
+.vc-compare .compare-head { display: flex; align-items: center; gap: 12px; }
+.vc-compare h4 { font-size: 13px; font-weight: 700; }
+.vc-compare label { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--sub); }
+.compare-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.compare-table th { font-weight: 400; color: var(--sub); text-align: left; padding: 2px 6px; }
+.compare-table td { padding: 2px 6px; border-top: 1px solid var(--border); }
+.compare-table tr.changed td { background: var(--changed); }
+.compare-table .rp-sum td, .compare-table tfoot td { font-weight: 700; }
+.compare-table .ng { color: var(--danger); }
+.compare-diff { margin: 0; font-size: 13px; }
+.compare-diff .up { color: var(--danger); }
+.compare-diff .down { color: var(--ok); }
 .vc-total { color: var(--sub); font-size: 12px; }
 .fee-lines { width: 100%; border-collapse: collapse; font-size: 12.5px; margin: 4px 0; }
 .fee-lines td { padding: 3px 6px; border-bottom: 1px solid var(--border); }
@@ -230,8 +246,7 @@ dialog.wide { width: 780px; }
 @container (max-width: 700px) { .timeline:not(.band) .visit-card[aria-selected="true"] { grid-column: auto; } }
 
 /* メモ帳：書いたままの改行で出す。押すと書ける */
-.memo-body { white-space: pre-wrap; cursor: pointer; }
-.memo-body:hover { background: #f7fbfd; }
+.memo-body { white-space: pre-wrap; cursor: text; } /* 触れても色を変えない（ほかの入力欄と同じ白のまま） */
 .memo-dialog .textarea { width: 100%; }
 
 /* 処方の推移の折り返し：幅に入る来局ずつの表を、新しい表を上にして縦に並べる */
@@ -259,6 +274,9 @@ button.hc:hover, button.hc:focus-visible { border-color: var(--accent); }
 .hc.auto { border-style: dashed; color: var(--sub); }
 .hc.auto.done { border-style: solid; background: var(--accent-soft); color: var(--accent-strong); border-color: var(--accent-line); }
 .visit-bar .btn[disabled] { opacity: .45; cursor: default; }
+/* 処方を直した記録 */
+.vc-revisions { list-style: none; margin: 0; padding: 4px 12px; display: grid; gap: 2px; font-size: 12px; border-bottom: 1px solid var(--border); }
+.vc-revisions li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; }
 .pt-grid.editing .visit-bar { pointer-events: none; }
 
 /* 押すと入力が開く箱 */

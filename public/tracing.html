@@ -10,7 +10,8 @@
 <link rel="stylesheet" href="/assets/css/tour.css">
 <link rel="stylesheet" href="/assets/css/print.css">
 <link rel="stylesheet" href="/assets/css/features.css">
-<script type="module" src="/assets/js/tracing.js"></script>
+<link rel="modulepreload" href="/assets/js/tracing.js">
+<script type="module" src="/assets/js/router.js" data-page="/assets/js/tracing.js"></script>
 </head>
 <body class="app" id="page">
 <nav class="sidebar"></nav>
@@ -39,7 +40,6 @@
         <div class="tracing-sections" id="sections"></div>
       </div>
       <div class="panel-foot">
-        <a class="btn" id="back">薬歴へ戻る</a>
         <span class="spacer"></span>
         <button type="submit" class="btn btn-primary">保存して印刷する <kbd>Ctrl+Enter</kbd></button>
       </div>

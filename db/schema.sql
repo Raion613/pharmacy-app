@@ -2,6 +2,8 @@
 -- 金額は全て「銭（1/100円）の整数」、1日量は「1/1000単位の整数」で持つ（小数の誤差を持ち込まない）。
 -- 日付は 'YYYY-MM-DD' の文字列。文字列のまま大小比較できる。
 
+DROP TABLE IF EXISTS notice_reads;
+DROP TABLE IF EXISTS notices;
 DROP TABLE IF EXISTS user_layouts;
 DROP TABLE IF EXISTS patient_memos;
 DROP TABLE IF EXISTS access_logs;
@@ -77,7 +79,7 @@ CREATE TABLE drugs (
   sentei             INTEGER NOT NULL CHECK (sentei IN (0, 1, 2)), -- 選定療養区分
   pair_code          TEXT,              -- sentei = 2 のとき、対になる sentei = 1 のコード
   narcotic           INTEGER NOT NULL CHECK (narcotic IN (0, 1, 2, 3, 5)), -- 1 麻薬 2 毒薬 3 覚醒剤原料 5 向精神薬（薬剤調製料の加算）
-  name_key           TEXT NOT NULL,     -- 検索用（全角半角・ひらがなカタカナを揃えた品名）
+  name_key           TEXT NOT NULL,     -- 検索用（全角半角・ひらがなカタカナを揃え、濁点・半濁点を外した品名。text.js の searchKey）
   general_key        TEXT NOT NULL,     -- 検索用（同じく一般名）
   attrs_published_on TEXT NOT NULL      -- 名称などを取ったマスターの公表日
 );
@@ -229,6 +231,29 @@ CREATE TABLE users (
   totp_last_step      INTEGER           -- 最後に使った6桁の時刻の区切り（同じ数字を2回使わせない）
 );
 
+-- 薬局の採用薬（棚に置いている銘柄）。処方入力の薬の候補で一番上に出す。
+-- 一般名処方では同じ成分・規格の銘柄が20以上並ぶが、薬局が置くのは1〜2銘柄。採用していない薬も候補からは消さない（供給不足で他の銘柄を使うため）
+-- drugs への外部キーは付けない（npm run db:import はマスターを消して入れ直すため）
+CREATE TABLE adopted_drugs (
+  pharmacy_id INTEGER NOT NULL REFERENCES pharmacies(id),
+  drug_code   TEXT NOT NULL,
+  adopted_at  TEXT NOT NULL,
+  adopted_by  INTEGER NOT NULL REFERENCES users(id),
+  PRIMARY KEY (pharmacy_id, drug_code)
+);
+
+-- 薬局の在庫（計算上の数）。処方を保存すると、渡した量（1日量 × 調剤した日数）を引く（prescriptions.js）。
+-- 入荷・棚卸・発注は扱わない（卸の納品データの形式が公開されていないため。ワークフロー定義書 工程25）。デモは全部の薬を 100 から始める。
+-- 行の無い薬は「在庫を記録していない薬」。引きすぎてマイナスになっても止めない（実物を数え直すまでの計算上の数なので、渡すのを止める理由にはしない）
+-- drugs への外部キーは付けない（adopted_drugs と同じ理由）
+CREATE TABLE drug_stock (
+  pharmacy_id INTEGER NOT NULL REFERENCES pharmacies(id),
+  drug_code   TEXT NOT NULL,
+  qty_milli   INTEGER NOT NULL,         -- 薬価の単位（錠・g・mL …）の 1/1000
+  updated_at  TEXT NOT NULL,
+  PRIMARY KEY (pharmacy_id, drug_code)
+);
+
 -- パスワードが合って、6桁の数字を待っている状態（5分）。Cookie にはトークン、DB にはそのハッシュだけを置く
 CREATE TABLE mfa_challenges (
   token_hash TEXT PRIMARY KEY,
@@ -258,6 +283,7 @@ CREATE TABLE patients (
   burden_checked_on TEXT,               -- 負担割合を資格確認で最後に確かめた日。この日より後に年齢で割合が変わる日が来たら、確認の窓を出す
   burden_reason TEXT CHECK (burden_reason IN ('disability', 'exempt', 'welfare')), -- 年齢の標準から外れる理由（burden.js）。NULL＝年齢の標準
   burden_until  TEXT,                  -- 一部負担金の免除の期限（burden_reason = 'exempt' のとき）
+  handbook_kind TEXT CHECK (handbook_kind IN ('paper', 'electronic', 'none')), -- お薬手帳の形態（紙・電子版・持っていない）。NULL＝まだ聞いていない。処方の保存で更新し、処方入力の既定値にする
   UNIQUE (pharmacy_id, patient_no)
 );
 
@@ -336,6 +362,8 @@ CREATE TABLE inquiries (
   answer          TEXT NOT NULL,        -- 処方医の回答
   changed         INTEGER NOT NULL CHECK (changed IN (0, 1)), -- 処方が変わったか
   short_reason    TEXT,                 -- 残薬調整で6日分以下の変更をした理由（加算を算定するときに明細書へ書く）
+  rp_no           INTEGER,              -- どの剤についての照会か（prescription_rps.rp_no）。NULL＝処方全体
+  drug_code       TEXT,                 -- その剤のどの薬か。NULL＝剤全体
   created_at      TEXT NOT NULL,
   created_by      INTEGER NOT NULL REFERENCES users(id)
 );
@@ -353,6 +381,22 @@ CREATE TABLE prescription_fees (
 );
 
 CREATE INDEX idx_prescription_fees_code ON prescription_fees(code);
+
+-- 処方の訂正。直すたびに、直す前の処方（剤・薬・疑義照会・算定・公費・会計・受付の段階）を丸ごと JSON で残す。
+-- 処方の行（prescriptions とその子の行）は今の内容に差し替えるので、ID・監査・指導記録のつながりは変わらない。
+-- 直す前の内容は消えずに残る（誰が・いつ・何を直したかが追える。安全管理ガイドラインの「真正性」）
+CREATE TABLE prescription_revisions (
+  id              INTEGER PRIMARY KEY,
+  prescription_id TEXT NOT NULL REFERENCES prescriptions(id),
+  before_json     TEXT NOT NULL,        -- 直す前の処方（prescriptionsOf の形）と受付の段階
+  summary         TEXT NOT NULL,        -- 何が変わったか（画面に出す文）
+  content_changed INTEGER NOT NULL CHECK (content_changed IN (0, 1)), -- 渡す薬・量が変わったか（変わったら監査からやり直す）
+  received_yen    INTEGER,              -- 直した時点で、窓口でもう受け取っていた額（会計の前なら NULL）
+  created_at      TEXT NOT NULL,
+  created_by      INTEGER NOT NULL REFERENCES users(id)
+);
+
+CREATE INDEX idx_prescription_revisions_rx ON prescription_revisions(prescription_id, id);
 
 -- 来局ごとの引き継ぎの確認（薬剤師が付ける項目）。付ける・外すたびに行を足し、項目ごとに最後の行が今の状態
 --   plan：前回の申し送り（P）に今日応えた／cautions：アレルギー・副作用歴・併用薬を今日の処方と照らした／change：処方が変わった理由を聞いた
@@ -454,7 +498,6 @@ CREATE TABLE guidance_records (
   assessment      TEXT NOT NULL,      -- A：薬剤師の評価
   plan            TEXT NOT NULL,      -- P：指導内容・次回の留意点
   leftover        TEXT NOT NULL CHECK (leftover IN ('none', 'some', 'unchecked')),   -- 残薬
-  notebook        TEXT NOT NULL CHECK (notebook IN ('used', 'not_used', 'unchecked')), -- お薬手帳の活用
   conversation_id INTEGER REFERENCES conversations(id), -- 会話の文字起こしから下書きを作ったとき
   drafted         INTEGER NOT NULL CHECK (drafted IN (0, 1)), -- 下書き（会話・処方から組み立てた文）を元に書いたか
   created_at      TEXT NOT NULL,
@@ -660,3 +703,24 @@ CREATE TABLE patient_memos (
 );
 
 CREATE INDEX idx_patient_memos_patient ON patient_memos(patient_id, id);
+
+-- 回覧板：薬局の中の伝達（本部からの通知・日報月報・広報、午前と午後の申し送り、報告・連絡・相談）。患者の情報は書かない（薬歴の申し送りへ）。
+-- 追記だけで、直さない・消さない。pharmacy_id が NULL の行は本部からの全部の薬局あて（本部の側の画面は作らない。デモの種データだけ）
+CREATE TABLE notices (
+  id          INTEGER PRIMARY KEY,
+  pharmacy_id INTEGER REFERENCES pharmacies(id),
+  kind        TEXT NOT NULL CHECK (kind IN ('hq', 'periodic', 'pr', 'handover', 'report', 'contact', 'consult')),
+  body        TEXT NOT NULL,
+  sender      TEXT,                              -- 本部の投稿の差出人（created_by が無いとき）
+  created_at  TEXT NOT NULL,
+  created_by  INTEGER REFERENCES users(id)       -- 薬局の人の投稿
+);
+CREATE INDEX idx_notices_pharmacy ON notices(pharmacy_id, id);
+
+-- 回覧板の「確認した」（紙の回覧板の判子）。1人1回、取り消さない
+CREATE TABLE notice_reads (
+  notice_id INTEGER NOT NULL REFERENCES notices(id),
+  user_id   INTEGER NOT NULL REFERENCES users(id),
+  read_at   TEXT NOT NULL,
+  PRIMARY KEY (notice_id, user_id)
+);

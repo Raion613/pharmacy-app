@@ -9,7 +9,8 @@
 <link rel="stylesheet" href="/assets/css/app.css">
 <link rel="stylesheet" href="/assets/css/tour.css">
 <link rel="stylesheet" href="/assets/css/master.css">
-<script type="module" src="/assets/js/master.js"></script>
+<link rel="modulepreload" href="/assets/js/master.js">
+<script type="module" src="/assets/js/router.js" data-page="/assets/js/master.js"></script>
 </head>
 <body class="app">
 <nav class="sidebar"></nav>
@@ -56,7 +57,6 @@
     </section>
   </main>
   <footer class="actionbar">
-    <div class="keys"><span><kbd>Ctrl</kbd>+<kbd>Enter</kbd>反映する</span><span><kbd>Esc</kbd>中止</span></div>
     <span class="spacer"></span>
     <button type="button" class="btn" id="cancel" hidden>中止 <kbd>Esc</kbd></button>
     <button type="button" class="btn btn-primary" id="commit" disabled>反映する</button>

@@ -10,7 +10,8 @@
 <link rel="stylesheet" href="/assets/css/tour.css">
 <link rel="stylesheet" href="/assets/css/patient.css">
 <link rel="stylesheet" href="/assets/css/assist.css">
-<script type="module" src="/assets/js/patient.js"></script>
+<link rel="modulepreload" href="/assets/js/patient.js">
+<script type="module" src="/assets/js/router.js" data-page="/assets/js/patient.js"></script>
 </head>
 <body class="app">
 <nav class="sidebar"></nav>
@@ -76,6 +77,10 @@
         <span class="visit-label" id="visit-label">選んだ来局</span>
         <div class="handover" id="handover" aria-label="この来局の引き継ぎ"></div>
         <span class="spacer"></span>
+        <button type="button" class="btn" id="to-revise" title="選んだ来局の処方を直す（会計の後でも。直す前の内容は残ります）">処方を直す <kbd>Alt+U</kbd></button>
+        <button type="button" class="btn" id="to-inspect" title="この来局の調剤監査（済んだ監査の記録も出ます）">調剤監査</button>
+        <button type="button" class="btn" id="to-handbook" title="この来局のお薬手帳（紙に貼る内容・電子版の QR コード）">お薬手帳</button>
+        <button type="button" class="btn" id="to-receipt" title="この来局の領収証・明細書（再発行）">領収証・明細書</button>
         <button type="button" class="btn" id="to-tracing">トレーシングレポート <kbd>Alt+T</kbd></button>
         <button type="button" class="btn btn-primary" id="write-record">指導記録を書く <kbd>Alt+K</kbd></button>
       </div>
@@ -136,10 +141,6 @@
         <div class="field">
           <span class="label" id="leftover-label">残薬</span>
           <div class="radio-row" role="radiogroup" aria-labelledby="leftover-label" id="leftover"></div>
-        </div>
-        <div class="field">
-          <span class="label" id="notebook-label">お薬手帳</span>
-          <div class="radio-row" role="radiogroup" aria-labelledby="notebook-label" id="notebook"></div>
         </div>
       </div>
       <span class="error-text" data-error="subjective"></span>

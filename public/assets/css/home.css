@@ -1,0 +1,110 @@
+/* 回覧板：SNS のホームのような、軽く読める1列。業務の画面より余白を広く、角を丸く、線を少なく。
+   読み物なので、文字は薬歴の記録と同じ読みやすい書体（--font-read） */
+.home { overflow-y: auto; padding: 0 16px 48px; background: linear-gradient(180deg, #eef6fb 0, var(--bg) 220px); }
+.feed-col { max-width: 640px; margin: 0 auto; }
+
+/* あいさつ */
+.hello { padding: 28px 4px 18px; font-family: var(--font-read); }
+.hello-date { margin: 0; font-size: 12px; font-weight: 700; letter-spacing: .08em; color: var(--accent); }
+.hello-title { margin: 2px 0 0; font-size: 22px; font-weight: 700; letter-spacing: .01em; }
+.hello-sub { margin: 4px 0 0; color: var(--sub); font-size: 13px; }
+
+/* 顔の丸：名前の1文字と、名前で決まる色 */
+.avatar {
+  --hue: 205;
+  flex-shrink: 0; width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center;
+  background: hsl(var(--hue) 70% 92%); color: hsl(var(--hue) 45% 32%); font-weight: 700; font-size: 16px; font-family: var(--font-read);
+}
+.avatar.hq { background: linear-gradient(135deg, #0a7fb3, #35b6d9); color: #fff; }
+
+/* 書く */
+.compose {
+  display: flex; gap: 12px; padding: 14px 16px; background: var(--panel); border-radius: 18px;
+  box-shadow: 0 1px 2px rgba(20, 40, 60, .06), 0 4px 16px rgba(20, 40, 60, .05);
+  transition: box-shadow .2s ease;
+}
+.compose.writing { box-shadow: 0 0 0 2px var(--accent-line), 0 8px 24px rgba(10, 127, 179, .12); }
+.compose-main { flex: 1; min-width: 0; }
+.compose textarea {
+  width: 100%; min-height: 40px; padding: 9px 2px; border: 0; resize: none; outline: none; background: transparent;
+  font: 15px/1.7 var(--font-read); color: var(--text); field-sizing: content; max-height: 40vh;
+}
+.compose textarea::placeholder { color: #8a979f; }
+.compose-foot { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+.compose-foot .spacer { flex: 1; }
+.compose .count { font-size: 12px; color: var(--sub); font-variant-numeric: tabular-nums; }
+.compose .error-text { margin: 6px 0 0; color: var(--danger); font-size: 12px; }
+.kinds { display: flex; gap: 6px; flex-wrap: wrap; }
+.kind-chip {
+  height: 28px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--border); background: #fff;
+  font-size: 12px; font-weight: 700; color: var(--sub); cursor: pointer; transition: background-color .15s ease, color .15s ease, border-color .15s ease;
+}
+.kind-chip:hover { border-color: var(--border-strong); }
+.kind-chip[aria-checked="true"] { background: var(--tone-bg); color: var(--tone-fg); border-color: transparent; }
+.kind-chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.post-btn {
+  height: 34px; padding: 0 20px; border: 0; border-radius: 999px; background: var(--accent); color: #fff;
+  font-weight: 700; cursor: pointer; transition: background-color .15s ease, opacity .15s ease;
+}
+.post-btn:hover { background: var(--accent-strong); }
+.post-btn:disabled { opacity: .35; cursor: default; background: var(--accent); }
+.post-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* 種類の色（淡い地に濃い文字）。本部は青、広報は桃、申し送りは緑、報告は藍、連絡は橙、相談は紫 */
+.tone-hq { --tone-bg: #e1f1fa; --tone-fg: #08668f; }
+.tone-pr { --tone-bg: #fde7ef; --tone-fg: #a8285a; }
+.tone-handover { --tone-bg: #e2f5e8; --tone-fg: #1d7537; }
+.tone-report { --tone-bg: #e8eafc; --tone-fg: #3a44a8; }
+.tone-contact { --tone-bg: #fff0dc; --tone-fg: #a4570a; }
+.tone-consult { --tone-bg: #f1e6fb; --tone-fg: #7a3aa8; }
+
+/* 投稿 */
+.feed { list-style: none; margin: 18px 0 0; padding: 0; display: grid; gap: 12px; }
+.feed-empty { padding: 40px 0; text-align: center; color: var(--sub); }
+.post {
+  position: relative; display: flex; gap: 12px; padding: 16px; background: var(--panel); border-radius: 18px;
+  box-shadow: 0 1px 2px rgba(20, 40, 60, .06), 0 4px 16px rgba(20, 40, 60, .05);
+}
+.post-main { flex: 1; min-width: 0; }
+.post-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13px; }
+.post-head .who { font-weight: 700; font-family: var(--font-read); }
+.post-head time { color: var(--sub); font-size: 12px; }
+.kind-tag { padding: 1px 9px; border-radius: 999px; background: var(--tone-bg); color: var(--tone-fg); font-size: 11px; font-weight: 700; }
+.new-dot { width: 8px; height: 8px; border-radius: 50%; background: #ff5a4f; }
+.post-body { margin: 6px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; font: 15px/1.75 var(--font-read); }
+.post-foot { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+.post-foot .spacer { flex: 1; }
+
+/* 確認した人：小さな顔を重ねて並べる */
+.readers { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--sub); }
+.readers.none { color: #8a979f; }
+.readers .faces { display: inline-flex; }
+.readers .mini {
+  --hue: 205;
+  width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; margin-left: -5px;
+  background: hsl(var(--hue) 70% 90%); color: hsl(var(--hue) 45% 30%); font-size: 10px; font-weight: 700; box-shadow: 0 0 0 2px #fff;
+}
+.readers .mini:first-child { margin-left: 0; }
+.readers .of { font-variant-numeric: tabular-nums; color: #8a979f; }
+
+.read-btn {
+  display: inline-flex; align-items: center; gap: 5px; height: 30px; padding: 0 14px; border-radius: 999px;
+  border: 1px solid var(--accent-line); background: #fff; color: var(--accent-strong); font-size: 12px; font-weight: 700; cursor: pointer;
+  transition: background-color .15s ease;
+}
+.read-btn:hover { background: var(--accent-soft); }
+.read-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.read-btn.done { border-color: transparent; background: var(--ok-soft); color: var(--ok); cursor: default; }
+
+/* 動き：書いた投稿は上から降りてくる。判子を押すと、ボタンが一度弾む */
+.post.arrive { animation: post-arrive .5s var(--spring-open) both; }
+.post.stamped .read-btn { animation: stamp .4s var(--spring-open) both; }
+@keyframes post-arrive { from { opacity: 0; transform: translateY(-12px) scale(.98); } }
+@keyframes stamp { 0% { transform: scale(.8); } 60% { transform: scale(1.08); } 100% { transform: none; } }
+@media (prefers-reduced-motion: reduce) { .post.arrive, .post.stamped .read-btn { animation: none; } }
+
+@media (max-width: 600px) {
+  .home { padding: 0 10px 32px; }
+  .post, .compose { padding: 12px; gap: 10px; border-radius: 14px; }
+  .avatar { width: 34px; height: 34px; font-size: 14px; }
+}

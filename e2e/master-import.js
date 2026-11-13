@@ -13,9 +13,12 @@ const CHANNEL = process.env.BROWSER === "chrome" ? "chrome" : "msedge";
 const browser = await chromium.launch({ channel: CHANNEL, headless: true });
 const context = await browser.newContext({ locale: "ja-JP", timezoneId: "Asia/Tokyo", viewport: { width: 1366, height: 768 } });
 await context.addInitScript(() => {
+  localStorage.setItem("pv-seen", "1"); // 初回だけの紹介の PV（login-intro.js）は見終わった状態にしておく
   for (const k of ["login", "patients", "master"]) localStorage.setItem(`tour:${k}`, "3"); // tour.js の VERSION と揃える
 });
 const page = await context.newPage();
+// ファイル選択の窓を受け取る仕組みは、受け取りを待ち始めた時点で入る（入るまでに押すと、窓が受け取られずに素通りする）。最初から入れておく
+page.on("filechooser", () => {});
 const errors = [];
 page.on("pageerror", (e) => errors.push(e.message));
 // 通信を切る確認で、わざと失敗させた要求のエラーは除く
@@ -42,7 +45,7 @@ step(`ログイン（${CHANNEL}）`);
 await page.goto(`${BASE}/login`);
 await page.fill("#login-id", "demo");
 await page.fill("#password", "pharmacy-demo");
-await Promise.all([page.waitForURL(/\/patients$/), page.click("#login-form button[type=submit]")]);
+await Promise.all([page.waitForURL(/\/board$/), page.click("#login-form button[type=submit]")]);
 await page.goto(`${BASE}/master`);
 await page.waitForSelector("#import-rows tr");
 const before = await imports();

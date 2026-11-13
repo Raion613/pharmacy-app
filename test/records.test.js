@@ -5,6 +5,7 @@ import { openD1 } from "../src/dev/sqlite-d1.js";
 import { createNotes, updateNote, createRecord, notesOf } from "../src/server/records.js";
 import { prescriptionsOf } from "../src/server/prescriptions.js";
 import { getPatient, searchPatients } from "../src/server/patients.js";
+import { searchKey } from "../public/assets/js/text.js";
 import { HttpError } from "../src/server/http.js";
 
 const FIXTURE = `
@@ -53,6 +54,8 @@ test("患者メモ：分類と内容を検証する", async () => {
 
 test("患者メモ：保存するとアクセスログも残り、新しい順に返る", async () => {
   await createNote(db, user, 1, { category: "allergy", body: "  セフェム系で発疹  " });
+  // 同じミリ秒に保存すると「同時に登録した行（書いた順）」の扱いになるので、別々の保存として時刻をずらす
+  await new Promise((resolve) => setTimeout(resolve, 2));
   await createNote(db, user, 1, { category: "handover", body: "説明は短く" });
   const notes = await notesOf(db, 1);
   assert.deepEqual(notes.map((n) => [n.category, n.body]), [["handover", "説明は短く"], ["allergy", "セフェム系で発疹"]]);
@@ -67,6 +70,15 @@ test("アレルギー歴・副作用歴のメモがある患者は、一覧と�
   assert.deepEqual((await getPatient(db, 1)).alertCategories, ["allergy"]);
   const list = await searchPatients(db, 1, "カクウ");
   assert.deepEqual(list.map((p) => [p.patientNo, p.alertCategories]), [["000001", ["allergy"]], ["000002", []]]);
+});
+
+test("検索は濁点・半濁点を取り違えても当たる（薬の検索キーも同じ揃え方）", async () => {
+  for (const q of ["かくう", "がくう", "かぐう", "ガクウ"]) {
+    assert.deepEqual((await searchPatients(db, 1, q)).map((p) => p.patientNo), ["000001", "000002"], q);
+  }
+  assert.equal(searchKey("ぱるぷろ"), searchKey("バルプロ"));
+  assert.equal(searchKey("はるぷろ"), searchKey("ﾊﾞﾙﾌﾟﾛ"));
+  assert.equal(searchKey("ヴォリコナゾール"), "ウォリコナソール");
 });
 
 test("患者メモ：1件ずつ分けてまとめて登録する（同じ分類を何件でも）", async () => {
@@ -98,12 +110,12 @@ test("患者メモ：直してアレルギー歴でなくなれば、注意の�
 });
 
 const soap = (overrides = {}) => ({
-  subjective: "", objective: "", assessment: "", plan: "", leftover: "none", notebook: "used", ...overrides,
+  subjective: "", objective: "", assessment: "", plan: "", leftover: "none", ...overrides,
 });
 
-test("指導記録：S・O・A・P のどれも空なら保存しない。残薬と手帳は選択肢から", async () => {
+test("指導記録：S・O・A・P のどれも空なら保存しない。残薬は選択肢から", async () => {
   assert.deepEqual(await pathsOf(createRecord(db, user, "rx-1", soap())), ["subjective"]);
-  assert.deepEqual(await pathsOf(createRecord(db, user, "rx-1", soap({ plan: "x", leftover: "x", notebook: undefined }))), ["leftover", "notebook"]);
+  assert.deepEqual(await pathsOf(createRecord(db, user, "rx-1", soap({ plan: "x", leftover: "x" }))), ["leftover"]);
   assert.deepEqual(await pathsOf(createRecord(db, user, "rx-1", soap({ objective: "あ".repeat(1001) }))), ["objective"]);
   await assert.rejects(createRecord(db, user, "rx-x", soap({ plan: "x" })), (e) => e.status === 404);
   assert.equal(await count("guidance_records"), 0);
